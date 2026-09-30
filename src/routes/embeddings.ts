@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from "uuid";
 import { resolveModel } from "../models.js";
 import { OLLAMA_URL } from "../config.js";
 import { insertPendingRequest, completeRequest } from "../services/historyService.js";
+import { logOperationalError } from "../services/operationalLogger.js";
 
 const router = Router();
 
@@ -49,10 +50,6 @@ router.post("/embeddings", async (req: Request, res: Response) => {
       }
     }
 
-    // Build a prompt preview for logging
-    const inputTexts = Array.isArray(input) ? input : [input];
-    const promptPreview = inputTexts[0].slice(0, 200);
-
     // Log pending request
     const logId = insertPendingRequest({
       apiKeyId: req.apiKeyId ?? null,
@@ -60,8 +57,6 @@ router.post("/embeddings", async (req: Request, res: Response) => {
       requestedModel,
       resolvedModel,
       isStream: false,
-      promptPreview,
-      fullPrompt: inputTexts.join("\n---\n"),
     });
 
     // Forward to Ollama's OpenAI-compatible endpoint
@@ -116,30 +111,16 @@ router.post("/embeddings", async (req: Request, res: Response) => {
     const usage = (data as { usage?: { prompt_tokens?: number; total_tokens?: number } }).usage;
     const promptTokens = usage?.prompt_tokens ?? 0;
 
-    // Build a readable summary of the embedding response for the detail view
-    const embeddingData = (data as { data?: Array<{ embedding?: number[]; index?: number }> }).data;
-    let responseSummary = "";
-    if (embeddingData && Array.isArray(embeddingData)) {
-      for (const item of embeddingData) {
-        const vec = item.embedding;
-        if (vec && Array.isArray(vec)) {
-          const preview = vec.slice(0, 10).map((v) => v.toFixed(6)).join(", ");
-          responseSummary += `[${item.index ?? 0}] ${vec.length} dimensions: [${preview}, ...]\n`;
-        }
-      }
-    }
-
     completeRequest(logId, "success", {
       inputTokens: promptTokens,
       outputTokens: 0,
       totalCostUsd: 0, // local model, no cost
       durationMs: Date.now() - startTime,
-      fullResponse: responseSummary || JSON.stringify(data),
     });
 
     res.json(data);
   } catch (error: unknown) {
-    console.error("Error in /v1/embeddings:", error);
+    logOperationalError("embedding_failed", error);
     const message = error instanceof Error ? error.message : "Internal server error";
     res.status(500).json({
       error: { message, type: "server_error" },

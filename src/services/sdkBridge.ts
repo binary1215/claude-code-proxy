@@ -4,7 +4,8 @@ import { insertPendingRequest, completeRequest } from "./historyService.js";
 import { recordTokensForRateLimit } from "../middleware/rateLimiter.js";
 import { invalidateBudgetCache } from "../middleware/budgetCheck.js";
 import { getOAuthToken } from "./settingsService.js";
-import { attachUpstreamText } from "./errorClassifier.js";
+import { attachUpstreamText, classifyUpstreamError } from "./errorClassifier.js";
+import { ALLOW_SERVER_SIDE_TOOLS } from "../config.js";
 
 const STDERR_TAIL_CHARS = 4000;
 
@@ -36,17 +37,19 @@ interface TrackedQueryResult {
 export function trackedQuery(params: TrackedQueryParams): TrackedQueryResult {
   const startTime = Date.now();
 
-  const promptStr = typeof params.prompt === "string" ? params.prompt : "(multi-modal input)";
+  const requestedBuiltins = params.builtInTools;
+  if (!ALLOW_SERVER_SIDE_TOOLS && requestedBuiltins &&
+      (!Array.isArray(requestedBuiltins) || requestedBuiltins.length > 0)) {
+    throw new Error("Server-side tools are disabled in gateway adapter mode");
+  }
 
-  // Insert pending request log (with full prompt for detail view)
+  // Metadata only. Conversation content belongs to the LiteLLM log store.
   const logId = insertPendingRequest({
     apiKeyId: params.apiKeyId,
     completionId: params.completionId,
     requestedModel: params.requestedModel,
     resolvedModel: params.resolvedModel,
     isStream: params.isStreaming,
-    promptPreview: promptStr.slice(0, 200),
-    fullPrompt: promptStr,
   });
 
   // Assemble SDK options. maxTurns defaults to 1 (existing contract); callers
@@ -56,6 +59,8 @@ export function trackedQuery(params: TrackedQueryParams): TrackedQueryResult {
     model: params.resolvedModel,
     maxTurns: params.maxTurns ?? 1,
     settingSources: [],
+    persistSession: false,
+    tools: params.builtInTools ?? [],
   };
   // Capture the CLI's stderr so failures are logged with the real cause instead of
   // just "process exited with code 1". Only the tail is kept to bound memory.
@@ -102,7 +107,7 @@ export function trackedQuery(params: TrackedQueryParams): TrackedQueryResult {
     {
       id: params.completionId,
       model: params.resolvedModel,
-      promptPreview: typeof params.prompt === "string" ? params.prompt.slice(0, 200) : "(multi-modal input)",
+      promptPreview: "",
       apiKeyId: params.apiKeyId,
       apiKeyName: params.apiKeyName,
       startedAt: new Date().toISOString(),
@@ -112,25 +117,22 @@ export function trackedQuery(params: TrackedQueryParams): TrackedQueryResult {
     () => sdkQuery.interrupt()
   );
 
-  // Wrap the generator to handle cleanup and capture full response
+  // Retain bounded, ephemeral text only for upstream error classification.
   async function* wrappedGenerator() {
     let inputTokens = 0;
     let outputTokens = 0;
     let totalCostUsd = 0;
-    const responseChunks: string[] = [];
+    let responseTail = "";
 
     try {
       for await (const message of sdkQuery) {
-        // Capture text from assistant messages for full_response logging
+        // Never retain tool arguments for diagnostics.
         if (message.type === "assistant") {
           const content = message.message?.content;
           if (Array.isArray(content)) {
             for (const block of content) {
               if ((block as { type: string }).type === "text") {
-                responseChunks.push((block as { text: string }).text);
-              } else if ((block as { type: string }).type === "tool_use") {
-                const tu = block as { name?: string; input?: unknown };
-                responseChunks.push(`[tool_use: ${tu.name}(${JSON.stringify(tu.input)})]`);
+                responseTail = (responseTail + (block as { text: string }).text).slice(-STDERR_TAIL_CHARS);
               }
             }
           }
@@ -140,10 +142,6 @@ export function trackedQuery(params: TrackedQueryParams): TrackedQueryResult {
           inputTokens = message.usage?.input_tokens ?? 0;
           outputTokens = message.usage?.output_tokens ?? 0;
           totalCostUsd = message.total_cost_usd ?? 0;
-          // Also capture result text if available
-          if (message.subtype === "success" && message.result && responseChunks.length === 0) {
-            responseChunks.push(message.result as string);
-          }
         }
         yield message;
       }
@@ -153,7 +151,6 @@ export function trackedQuery(params: TrackedQueryParams): TrackedQueryResult {
         outputTokens,
         totalCostUsd,
         durationMs: Date.now() - startTime,
-        fullResponse: responseChunks.join("\n"),
       });
 
       // Record token usage for rate limiting and invalidate budget cache
@@ -163,20 +160,13 @@ export function trackedQuery(params: TrackedQueryParams): TrackedQueryResult {
       }
     } catch (err: any) {
       // Hand the CLI's own words to the route layer so it can pick a status code.
-      attachUpstreamText(err, [responseChunks.join("\n"), stderrTail].join("\n"));
+      attachUpstreamText(err, [responseTail, stderrTail].join("\n"));
       completeRequest(logId, "error", {
         inputTokens,
         outputTokens,
         totalCostUsd,
         durationMs: Date.now() - startTime,
-        // The CLI reports API failures (404 model, usage limits) as assistant text
-        // before exiting 1, so include that text and stderr alongside the exit error.
-        errorMessage: [
-          err.message ?? "Unknown error",
-          responseChunks.join("\n").trim(),
-          stderrTail.trim() && `--- stderr ---\n${stderrTail.trim()}`,
-        ].filter(Boolean).join("\n"),
-        fullResponse: responseChunks.length > 0 ? responseChunks.join("\n") : undefined,
+        errorMessage: classifyUpstreamError(err).type,
       });
       throw err;
     } finally {

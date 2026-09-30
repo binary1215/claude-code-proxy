@@ -20,11 +20,12 @@ app.use("/api/admin", adminApiRoutes);
 
 // /v1/* routes — protected by API key auth + budget check + rate limiting
 // OpenAI-compatible: GET /v1/models, POST /v1/chat/completions
-app.use("/v1", apiKeyAuth, budgetCheckMiddleware, rateLimitMiddleware, proxyRoutes);
+app.use("/v1", apiKeyAuth, budgetCheckMiddleware, rateLimitMiddleware);
+app.use("/v1", proxyRoutes);
 // Native Anthropic Messages: POST /v1/messages
-app.use("/v1", apiKeyAuth, budgetCheckMiddleware, rateLimitMiddleware, anthropicRoutes);
+app.use("/v1", anthropicRoutes);
 // Embeddings: POST /v1/embeddings (proxied to Ollama)
-app.use("/v1", apiKeyAuth, budgetCheckMiddleware, rateLimitMiddleware, embeddingsRoutes);
+app.use("/v1", embeddingsRoutes);
 
 // Centralized error handler
 app.use(errorHandler);

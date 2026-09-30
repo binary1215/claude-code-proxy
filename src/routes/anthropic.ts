@@ -3,6 +3,8 @@ import { v4 as uuidv4 } from "uuid";
 import { mkdirSync } from "fs";
 import type { Request, Response } from "express";
 import { classifyUpstreamError } from "../services/errorClassifier.js";
+import { logOperationalError } from "../services/operationalLogger.js";
+import { ALLOW_SERVER_SIDE_TOOLS } from "../config.js";
 import { trackedQuery } from "../services/sdkBridge.js";
 import { cancelTask } from "../services/taskTracker.js";
 import { resolveModel } from "../models.js";
@@ -414,6 +416,10 @@ router.post("/messages", async (req: Request, res: Response) => {
     // Check for built-in tools request (Claude Code's native tools)
     const enableBuiltins = req.headers["x-enable-builtin-tools"] === "true";
     if (enableBuiltins) {
+      if (!ALLOW_SERVER_SIDE_TOOLS) {
+        anthropicError(res, 403, "permission_error", "Server-side tools are disabled in gateway adapter mode.");
+        return;
+      }
       if (!req.allowBuiltinTools) {
         anthropicError(
           res,
@@ -481,7 +487,7 @@ router.post("/messages", async (req: Request, res: Response) => {
       await handleNonStreamingPlain(req, res, messageId, requestedModel, resolvedModel, fullPrompt);
     }
   } catch (error: unknown) {
-    console.error("Error in /v1/messages:", error);
+    logOperationalError("anthropic_message_failed", error);
     if (!res.headersSent) anthropicUpstreamError(res, error);
   }
 });
@@ -531,6 +537,14 @@ async function handleWithTools(
 
   const hasServerTools = serverBuiltins.length > 0;
   const hasUserTools = bridge !== null;
+
+  // Server-tool mapping must have exactly the same authorization boundary as
+  // x-enable-builtin-tools. LAN placement is not a permission check.
+  if (p.clientTools.some((t) => isServerTool(t as unknown as Record<string, unknown>)) &&
+      (!ALLOW_SERVER_SIDE_TOOLS || !req.allowBuiltinTools)) {
+    anthropicError(res, 403, "permission_error", "Server-side tools require explicit proxy and API-key permission.");
+    return;
+  }
 
   // When server tools are present, we need higher maxTurns so the SDK can
   // run the tool, feed the result back to Claude, and get a final answer.

@@ -37,3 +37,6 @@ Thumbs.db
 
 # SSH keys and other secrets
 secrets/
+
+# Local verification output
+*.log

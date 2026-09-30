@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
+    "test": "npm run build && node --experimental-test-module-mocks --test tests/adapter.test.mjs tests/server-tools.test.mjs",
     "start": "node dist/server.js",
     "dev": "tsx src/server.ts",
     "postinstall": "npm rebuild better-sqlite3"

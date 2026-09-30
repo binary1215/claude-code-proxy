@@ -1,0 +1,28 @@
+# Standalone backend; LiteLLM is on another LAN host. No gateway/admin UI here.
+services:
+  claude-proxy:
+    build: .
+    environment:
+      PORT: "3456"
+      DATABASE_PATH: /app/data/proxy.db
+      ADMIN_API_SECRET: ${ADMIN_API_SECRET:?Set a dedicated proxy admin secret}
+      AUTH_DISABLED: "false"
+      ALLOW_SERVER_SIDE_TOOLS: "false"
+      HOME: /app/data/runtime
+      OLLAMA_URL: ${OLLAMA_URL:-http://127.0.0.1:11434}
+    ports:
+      - "${PROXY_BIND_IP:?Set the proxy host LAN IP}:${PROXY_PORT:-13456}:3456"
+    volumes:
+      - claude-proxy-data:/app/data
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    restart: unless-stopped
+
+volumes:
+  claude-proxy-data:

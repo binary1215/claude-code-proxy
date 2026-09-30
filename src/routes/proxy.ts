@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { v4 as uuidv4 } from "uuid";
 import type { Request, Response } from "express";
-import { sendClassifiedError } from "../services/errorClassifier.js";
+import { classifyUpstreamError, sendClassifiedError } from "../services/errorClassifier.js";
+import { logOperationalError } from "../services/operationalLogger.js";
 import { trackedQuery } from "../services/sdkBridge.js";
 import { cancelTask } from "../services/taskTracker.js";
 import { AVAILABLE_MODELS, resolveModel } from "../models.js";
@@ -166,7 +167,7 @@ router.post("/chat/completions", async (req: Request, res: Response) => {
       await handleNonStreamingRequest(req, res, completionId, requestedModel, resolvedModel, prompt);
     }
   } catch (error: any) {
-    console.error("Error in /v1/chat/completions:", error);
+    logOperationalError("chat_completion_failed", error);
     if (!res.headersSent) sendClassifiedError(res, error);
   }
 });
@@ -435,16 +436,33 @@ async function handleStreamingRequest(
   };
   res.write(`data: ${JSON.stringify(initialChunk)}\n\n`);
 
-  for await (const message of generator) {
-    if (clientDisconnected) break;
+  try {
+    for await (const message of generator) {
+      if (clientDisconnected) break;
 
-    if (message.type === "stream_event") {
-      const event = message.event as any;
-      if (
-        event.type === "content_block_delta" &&
-        event.delta?.type === "text_delta"
-      ) {
-        const chunk = {
+      if (message.type === "stream_event") {
+        const event = message.event as any;
+        if (
+          event.type === "content_block_delta" &&
+          event.delta?.type === "text_delta"
+        ) {
+          const chunk = {
+            id: completionId,
+            object: "chat.completion.chunk",
+            created: Math.floor(Date.now() / 1000),
+            model: resolvedModel,
+            choices: [
+              {
+                index: 0,
+                delta: { content: event.delta.text },
+                finish_reason: null,
+              },
+            ],
+          };
+          res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+        }
+      } else if (message.type === "result") {
+        const finalChunk = {
           id: completionId,
           object: "chat.completion.chunk",
           created: Math.floor(Date.now() / 1000),
@@ -452,28 +470,21 @@ async function handleStreamingRequest(
           choices: [
             {
               index: 0,
-              delta: { content: event.delta.text },
-              finish_reason: null,
+              delta: {},
+              finish_reason: "stop",
             },
           ],
         };
-        res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+        res.write(`data: ${JSON.stringify(finalChunk)}\n\n`);
       }
-    } else if (message.type === "result") {
-      const finalChunk = {
-        id: completionId,
-        object: "chat.completion.chunk",
-        created: Math.floor(Date.now() / 1000),
-        model: resolvedModel,
-        choices: [
-          {
-            index: 0,
-            delta: {},
-            finish_reason: "stop",
-          },
-        ],
-      };
-      res.write(`data: ${JSON.stringify(finalChunk)}\n\n`);
+    }
+  } catch (err: unknown) {
+    // Headers are already sent: terminate with an SSE error instead of leaving
+    // LiteLLM waiting on an open response after an upstream failure.
+    logOperationalError("chat_stream_failed", err);
+    if (!clientDisconnected) {
+      const { type, message } = classifyUpstreamError(err);
+      res.write(`data: ${JSON.stringify({ error: { type, message } })}\n\n`);
     }
   }
 

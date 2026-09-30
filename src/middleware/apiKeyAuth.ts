@@ -66,9 +66,9 @@ export function apiKeyAuth(req: Request, res: Response, next: NextFunction): voi
     return;
   }
 
-  // If no keys exist yet, allow all requests (backward compatible)
+  // An unprovisioned proxy must not expose an unauthenticated upstream.
   if (!hasAnyKeys()) {
-    next();
+    sendAuthError(req, res, "Proxy API key is not configured. Provision a key through the authenticated admin API.");
     return;
   }
 

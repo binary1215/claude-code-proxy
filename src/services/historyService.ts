@@ -7,7 +7,7 @@ export function insertPendingRequest(params: {
   requestedModel: string;
   resolvedModel: string;
   isStream: boolean;
-  promptPreview: string | null;
+  promptPreview?: string | null;
   fullPrompt?: string | null;
 }): number {
   const result = db.prepare(`
@@ -19,8 +19,8 @@ export function insertPendingRequest(params: {
     params.requestedModel,
     params.resolvedModel,
     params.isStream ? 1 : 0,
-    params.promptPreview,
-    params.fullPrompt ?? null
+    null,
+    null
   );
   return result.lastInsertRowid as number;
 }
@@ -54,10 +54,20 @@ export function completeRequest(
     data.outputTokens ?? 0,
     data.totalCostUsd ?? 0,
     data.durationMs ?? 0,
-    data.errorMessage ?? null,
-    data.fullResponse ?? null,
+    status === "error" ? safeErrorType(data.errorMessage) : null,
+    null,
     logId
   );
+}
+
+// Keep only known operational categories, never SDK text/stderr or caller data.
+const ERROR_TYPES = new Set([
+  "rate_limit_error", "not_found_error", "authentication_error",
+  "permission_error", "billing_error", "server_error", "upstream_error",
+]);
+
+function safeErrorType(value?: string): string {
+  return value && ERROR_TYPES.has(value) ? value : "upstream_error";
 }
 
 export function getRequestDetail(id: number): (RequestLog & { full_prompt: string | null; full_response: string | null }) | null {

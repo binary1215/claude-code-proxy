@@ -4,3 +4,8 @@ dist
 *.md
 admin
 data
+*.log
+.env
+.env.*
+tests
+docs
