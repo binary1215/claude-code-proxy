@@ -1,615 +1,249 @@
-# Claude Code Proxy
+# Claude Code Proxy — LiteLLM Backend Adapter
 
-An OpenAI-compatible API proxy server that routes requests through the [Claude Code Agent SDK](https://docs.anthropic.com/en/docs/claude-code/sdk). Any application or tool that speaks the OpenAI API format -- Cursor, Continue, the `openai` Python/JS SDK, or any HTTP client -- can point at this proxy and use Claude as the backend.
+A standalone HTTP adapter built on the [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk-typescript), forked from [MehdiMohseni82/claude-code-proxy](https://github.com/MehdiMohseni82/claude-code-proxy).
 
-It also exposes the native Anthropic Messages API (`/v1/messages`), so Anthropic SDK clients work too.
+This fork's primary deployment is an API-only Docker container behind a **separate LiteLLM gateway**. It exposes OpenAI-compatible chat completions and Anthropic-style Messages; it is not a complete implementation of either provider's API.
 
-## Why This Exists
-
-The Claude Code Agent SDK authenticates via OAuth tokens from a Claude Pro/Max subscription -- not standard API keys. This proxy wraps the SDK behind a standard API interface, adding the management layer you'd expect from a production service: API keys, rate limits, budgets, request logging, and an admin dashboard.
-
-## Features
-
-- **Dual API support** -- OpenAI `/v1/chat/completions` and Anthropic `/v1/messages` endpoints
-- **Embeddings** -- OpenAI-compatible `/v1/embeddings` endpoint backed by local Ollama (nomic-embed-text)
-- **Model mapping** -- Send `gpt-4o` and it routes to `claude-sonnet-4-6`; `text-embedding-3-small` routes to `nomic-embed-text`
-- **Full streaming** -- Server-sent events on both endpoints
-- **Tool use** -- User-defined tools (function calling), Anthropic server tools (`web_search`, etc.), and Claude Code built-in tools (`Bash`, `Read`, `Edit`, `Grep`, ...)
-- **API key management** -- Create, revoke, and configure keys through the admin UI
-- **Per-key controls** -- Rate limits (RPM/TPM), monthly spending budgets, model restrictions, custom system prompts
-- **Request history** -- Full prompt/response logging with search, filtering, and CSV/JSON export
-- **Live task monitoring** -- See and cancel active requests in real time
-- **Admin dashboard** -- Next.js web UI for managing everything
-- **Token management via UI** -- Set the Claude OAuth token through the dashboard, no environment variables required
-- **Docker deployment** -- Ready-to-deploy with Docker Compose, nginx, and Let's Encrypt SSL
-
----
-
-## Architecture
-
-```
-                                 +-----------------+
-  OpenAI SDK / Cursor / etc. --->|                 |---> Claude Code Agent SDK ---> Claude
-                                 |  Express Server |
-  Anthropic SDK / HTTP --------->|  (port 3456)    |---> Ollama (local embeddings)
-                                 |                 |
-                                 +-----------------+
-                                        |
-                                   SQLite DB
-                                 (keys, history,
-                                   settings)
-
-                                 +-----------------+
-  Browser ---------------------->|  Next.js Admin  |---> Express Admin API
-                                 |  (port 3000)    |
-                                 +-----------------+
+```text
+Client → LiteLLM gateway (separate container/host)
+       → Claude Code Proxy → Agent SDK / bundled Claude Code → Claude
+                          ↘ SQLite: keys, settings, request metadata
+                          ↘ Ollama: optional embeddings backend
 ```
 
-The Express server handles all API traffic. The Next.js admin dashboard is a separate service that calls the Express admin API internally. In production, nginx sits in front and routes traffic to the right service.
+The dependency is pinned to **Agent SDK 0.3.285**, which packages **Claude Code 2.1.285**. Updating a host's global `claude` installation does not update the SDK bundled into an existing image.
 
----
+## What this fork changes
 
-## Quick Start
+- Authentication fails closed: a fresh database denies `/v1/*` until a proxy API key is provisioned.
+- The adapter Compose file disables server-side tools, even if a key has the legacy built-in-tool grant. Plain text requests also receive `tools: []`.
+- Caller-defined function tools are intercepted and returned to the caller for execution. This does not grant tools access to the proxy host.
+- New request-history writes retain metadata and allowlisted error categories, not prompt previews, full prompts, full responses, or raw SDK diagnostics.
+- SDK session transcript persistence is disabled through `persistSession: false`. This is not a universal audit of all SDK caches, telemetry, or runtime files.
+- The image runs as `node`; the adapter profile uses a read-only root filesystem, writable data volume and `/tmp`, dropped capabilities, and `no-new-privileges`.
+- `CLAUDE_CODE_OAUTH_TOKEN` can be supplied through a private Compose `.env` file. No interactive login service or token-refresh manager is included.
 
-### Prerequisites
+Subscription authentication being technically configurable does **not** establish permission to relay a subscription through a third-party gateway. Account eligibility and current provider terms need separate review. This is not an officially endorsed subscription gateway.
 
-- [Node.js](https://nodejs.org/) 22+
-- A Claude OAuth token (from `claude setup-token` with a Pro/Max subscription) or an Anthropic API key
+## Quick start: API-only Docker adapter
 
-### Local Development
+Prerequisites: Docker with Compose v2, an assigned host LAN address, and backend credentials you are authorized to use. Obtain a subscription token separately with the official `claude setup-token` workflow; do not run it through this proxy.
 
 ```bash
-# Clone the repo
-git clone https://github.com/MehdiMohseni82/claude-code-proxy.git
+git clone --branch master https://github.com/binary1215/claude-code-proxy.git
 cd claude-code-proxy
 
-# Install dependencies
-npm install
-cd admin && npm install && cd ..
+cp .env.adapter.example .env
+chmod 600 .env
+# Edit .env privately; fill in the values described below.
 
-# Configure the Express server
-cp .env.example .env
-# Edit .env -- at minimum set ADMIN_API_SECRET
-
-# Configure the admin dashboard
-cp admin/.env.local.example admin/.env.local
-# Edit admin/.env.local -- set matching ADMIN_API_SECRET and passwords
-
-# Start the Express server
-npm run dev
-
-# In a second terminal, start the admin dashboard
-cd admin && npm run dev
+docker compose -p claude-code-adapter --env-file .env -f compose.adapter.yml config --quiet
+docker compose -p claude-code-adapter --env-file .env -f compose.adapter.yml up -d --build
 ```
 
-The API is now available at `http://localhost:3456` and the admin dashboard at `http://localhost:3000/admin`.
+On Windows, use equivalent copy commands and restrict the file's ACL instead of `chmod`.
 
-> **Note:** You can set the Claude token either as the `CLAUDE_CODE_OAUTH_TOKEN` environment variable or through the admin dashboard Settings page after startup.
+### Adapter environment
 
-### Docker Compose (with SSL)
+| Variable | Meaning |
+|---|---|
+| `PROXY_BIND_IP` | Required: an address actually assigned to the proxy host. Avoid wildcard/public exposure. |
+| `PROXY_PORT` | Host port; defaults to `13456`. Container port is `3456`. |
+| `ADMIN_API_SECRET` | Required: a dedicated random secret for `/api/admin/*`. |
+| `CLAUDE_CODE_OAUTH_TOKEN` | Optional at startup: paste the official setup-token output privately. Required for subscription-backed calls unless a database credential takes precedence. |
+| `OLLAMA_URL` | Optional: reachable Ollama base URL for embeddings. The adapter default is `http://127.0.0.1:11434` **inside the container**, not the host. |
+
+`compose.adapter.yml` starts only the proxy, not LiteLLM, Ollama, nginx, certbot, or the Next.js dashboard. It fixes `AUTH_DISABLED=false` and `ALLOW_SERVER_SIDE_TOOLS=false`.
+
+The volume is `claude-code-adapter_claude-proxy-data` with the project name above. Keep the same project name and volume when updating; changing them can create an empty database with different credentials. Back up data before upgrades. Existing root-owned volumes may need a deliberate ownership migration for the non-root image; do not delete the volume to solve a permission error.
+
+Keep `.env`, tokens, keys, database backups, and deployment records outside Git. Do not print resolved Compose configuration or dump container environment variables after configuring real credentials. Docker administrators can inspect environment values: this is not secret encryption. Plain HTTP should stay on a trusted LAN; use TLS and appropriate access controls for other exposure.
+
+### Provision a proxy API key
+
+| Credential | Where it belongs |
+|---|---|
+| Claude OAuth token / Anthropic API key | Proxy backend configuration only |
+| Proxy API key | LiteLLM's backend model entry, or a direct client of this proxy |
+| Admin API secret | Proxy administration only; never a normal model credential |
+| LiteLLM virtual key | Client → LiteLLM authentication; not this proxy's backend key |
+
+Use the authenticated admin API to create a dedicated key. Replace these placeholders locally; **the response contains the newly generated raw key**, so keep it private and do not commit its output.
 
 ```bash
-cp .env.example .env
-# Edit .env with your domain, passwords, and secrets
-
-# Get SSL certificate
-chmod +x init-letsencrypt.sh
-./init-letsencrypt.sh yourdomain.com you@email.com
-
-# Start everything
-docker-compose up -d
+curl http://YOUR_PROXY_HOST:13456/api/admin/keys \
+  -H 'Authorization: Bearer YOUR_PRIVATE_ADMIN_SECRET' \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"litellm-backend"}'
 ```
 
-This starts four containers: the Express API server, Next.js admin, nginx reverse proxy, and certbot for automatic SSL renewal.
+All `/v1/*` routes accept either `Authorization: Bearer YOUR_PROXY_API_KEY` or `x-api-key: YOUR_PROXY_API_KEY`. A new installation without a provisioned key returns 401 rather than allowing unauthenticated access. `/health` is unauthenticated; the admin API shares the listener but requires its own secret.
 
----
+### Backend token precedence
 
-## Environment Variables
+The server chooses credentials in this order:
 
-### Express Server (`.env`)
+1. SQLite setting `claude_oauth_token`.
+2. `CLAUDE_CODE_OAUTH_TOKEN` environment variable.
+3. `ANTHROPIC_API_KEY` environment variable.
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `PORT` | No | `3456` | Server port |
-| `DATABASE_PATH` | No | `./data/proxy.db` | SQLite database path |
-| `ADMIN_API_SECRET` | Yes | | Shared secret for admin API authentication |
-| `AUTH_DISABLED` | No | `false` | Set to `true` to disable API key checks |
-| `CLAUDE_CODE_OAUTH_TOKEN` | No* | | OAuth token from `claude setup-token` |
-| `ANTHROPIC_API_KEY` | No* | | Standard Anthropic API key |
+OAuth-prefixed credentials are forwarded as `CLAUDE_CODE_OAUTH_TOKEN`; other credentials are forwarded as `ANTHROPIC_API_KEY`. The server supports both, but the adapter Compose profile only forwards the OAuth variable. An API-key deployment needs an explicit Compose override forwarding `ANTHROPIC_API_KEY`, or deliberate admin configuration.
 
-*At least one token must be configured -- either via environment variable or through the admin Settings page.
+A stale database token overrides a new environment token. To switch to environment-only configuration, deliberately remove the database token through the authenticated `DELETE /api/admin/settings/token` endpoint. This does not remove the environment value. Changing `.env` requires **container recreation**, not just `docker restart`:
 
-### Admin Dashboard (`admin/.env.local`)
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `NEXTAUTH_SECRET` | Yes | | JWT signing secret (`openssl rand -base64 32`) |
-| `NEXTAUTH_URL` | Yes | | Dashboard URL (e.g., `http://localhost:3000/admin`) |
-| `ADMIN_USER` | Yes | | Admin login username |
-| `ADMIN_PASSWORD` | Yes | | Admin login password |
-| `INTERNAL_API_URL` | No | `http://localhost:3456` | Express server URL (internal) |
-| `ADMIN_API_SECRET` | Yes | | Must match the Express server value |
-
-### Docker Compose (`.env`)
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `DOMAIN` | Yes | Your domain name (used by nginx and NextAuth) |
-| `ADMIN_API_SECRET` | Yes | Shared secret between services |
-| `NEXTAUTH_SECRET` | Yes | JWT signing secret |
-| `ADMIN_USER` | Yes | Dashboard login username |
-| `ADMIN_PASSWORD` | Yes | Dashboard login password |
-| `CLAUDE_CODE_OAUTH_TOKEN` | No | Optional -- can be set via admin UI instead |
-
----
-
-## API Reference
-
-### Authentication
-
-All `/v1/*` endpoints require an API key in one of two formats:
-
-```
-Authorization: Bearer sk-your-api-key
-```
-```
-x-api-key: sk-your-api-key
+```bash
+docker compose -p claude-code-adapter --env-file .env -f compose.adapter.yml up -d --force-recreate
 ```
 
-Create API keys through the admin dashboard at `/admin/keys`.
+Do not clear or replace an existing credential store without a backup. Token expiry and replacement are operator responsibilities; the proxy does not implement OAuth login or refresh.
 
-### Models
+## Connect the separate LiteLLM gateway
 
-| Client Sends | Routes To |
+For an **Anthropic provider** model entry, use the proxy's root URL as `api_base`:
+
+```yaml
+model_list:
+  - model_name: claude-sonnet
+    litellm_params:
+      model: anthropic/claude-sonnet-4-6
+      api_base: http://YOUR_PROXY_HOST:13456
+      api_key: os.environ/CLAUDE_PROXY_API_KEY
+```
+
+Set `CLAUDE_PROXY_API_KEY` privately **in the LiteLLM container's environment** to the provisioned proxy key, not the Claude token. If managing models in LiteLLM's UI, enter the equivalent provider/model, root API Base, and backend key fields. Do not store real keys in a public config file.
+
+LiteLLM's Anthropic provider [automatically appends `/v1/messages`](https://docs.litellm.ai/docs/providers/anthropic#custom-api-base). With its normal suffix behavior, **do not append `/v1` or `/v1/messages` to `api_base`**:
+
+```text
+Correct: http://YOUR_PROXY_HOST:13456 → /v1/messages
+Wrong:   http://YOUR_PROXY_HOST:13456/v1 → /v1/v1/messages
+```
+
+Use an address reachable from the LiteLLM container. On another host, `localhost` and a proxy-only Docker service name will not reach the proxy.
+
+Direct OpenAI SDK clients use a different convention: their base URL is `http://YOUR_PROXY_HOST:13456/v1`. Direct Anthropic SDK clients use the root URL. Do not copy these settings interchangeably.
+
+## Endpoints and models
+
+| Endpoint | Implemented scope |
 |---|---|
+| `GET /health` | Liveness/configuration, database check, active-task count, token source, Ollama status |
+| `GET /v1/models` | Static advertised model/alias list; **not** an account-entitlement query |
+| `POST /v1/chat/completions` | Text chat, caller-defined tools, and SSE, with the limitations below |
+| `POST /v1/messages` | Anthropic-style text Messages, caller-defined tools, and SSE; not full native API parity |
+| `POST /v1/embeddings` | Ollama forwarding; needs a reachable Ollama service and pulled model |
+| `/api/admin/*` | Authenticated key, task, history, and token administration |
+
+There is no native `/v1/responses` endpoint. LiteLLM Responses conversion and individual client compatibility require separate testing.
+
+Static mappings in [`src/models.ts`](src/models.ts):
+
+| Client model | Backend model |
+|---|---|
+| `claude-sonnet-4-6` | Unchanged |
+| `claude-opus-4-6` | Unchanged |
+| `claude-haiku-4-5` | Unchanged |
 | `gpt-4o`, `gpt-4`, `gpt-4-turbo` | `claude-sonnet-4-6` |
 | `gpt-3.5-turbo` | `claude-haiku-4-5` |
-| `claude-opus-4-6` | `claude-opus-4-6` |
-| `claude-sonnet-4-6` | `claude-sonnet-4-6` |
-| `claude-haiku-4-5` | `claude-haiku-4-5` |
-| `text-embedding-ada-002` | `nomic-embed-text` (via Ollama) |
-| `text-embedding-3-small` | `nomic-embed-text` (via Ollama) |
-| `text-embedding-3-large` | `nomic-embed-text` (via Ollama) |
-| `nomic-embed-text` | `nomic-embed-text` (via Ollama) |
-| Any other string | Passed through as-is |
+| `text-embedding-ada-002`, `text-embedding-3-small`, `text-embedding-3-large` | `nomic-embed-text` through Ollama |
+| Any unrecognized model ID | Passed through unchanged |
 
-### OpenAI-Compatible Endpoints
+Newer Claude IDs, including Fable models, can be supplied as passthrough IDs even if absent from `/v1/models`. Passthrough is not validation: access depends on the backend, account, SDK/CLI version, and per-key model restrictions. This fork has not established live access to every model family.
 
-#### `GET /v1/models`
+## Tools, streaming, and data retention
 
-Returns the list of available models in OpenAI format.
+- Caller tools return names, IDs, and arguments to the client; the client executes them and can submit results in a subsequent request.
+- Tool histories are reconstructed as text, not a native resumed Claude conversation. Tool-path SSE is buffered; plain-text SSE forwards deltas.
+- Server tools and `x-enable-builtin-tools` are denied with 403 in the adapter profile, before SDK dispatch. Legacy tool execution requires both a global opt-in and the API key's built-in-tool grant; it is outside the default configuration and its live execution is not validated here.
+- New SQLite request rows preserve model/key metadata, timing, usage/cost, status, and allowlisted error categories. They discard conversation content. Active-task previews are empty; operational error logs omit raw diagnostics.
+- Raw error details may still be returned to authenticated callers. This is not an output-redaction service; operators remain responsible for LiteLLM's own logging policy.
+- Existing historical rows are not scrubbed. SQLite token settings are still retained. The upstream dashboard can display metadata, but new full-prompt/response fields will be empty.
 
-#### `POST /v1/chat/completions`
+Per-key rate limits, model restrictions, system prompts, budgets, and task cancellation remain available through the admin API. SDK-reported cost metadata is not proof of subscription billing or remaining subscription quota.
 
-Standard OpenAI chat completion. Supports streaming, tool/function calling, and multi-turn conversations.
+## Verification and operation
 
-```bash
-curl https://your-domain/v1/chat/completions \
-  -H "Authorization: Bearer sk-your-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gpt-4o",
-    "messages": [{"role": "user", "content": "Hello!"}],
-    "stream": false
-  }'
-```
-
-**With tool/function calling:**
+Basic probes do not invoke Claude:
 
 ```bash
-curl https://your-domain/v1/chat/completions \
-  -H "Authorization: Bearer sk-your-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gpt-4o",
-    "messages": [{"role": "user", "content": "What is the weather in Paris?"}],
-    "tools": [{
-      "type": "function",
-      "function": {
-        "name": "get_weather",
-        "description": "Get current weather for a location",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "location": {"type": "string"}
-          },
-          "required": ["location"]
-        }
-      }
-    }]
-  }'
+curl http://YOUR_PROXY_HOST:13456/health
+
+# Expect 401 without a proxy key.
+curl -i http://YOUR_PROXY_HOST:13456/v1/models
+
+# Expect 200 with a provisioned key.
+curl http://YOUR_PROXY_HOST:13456/v1/models \
+  -H 'Authorization: Bearer YOUR_PROXY_API_KEY'
 ```
 
-### Anthropic Native Endpoints
+`token_configured: true` only means a credential exists. `/health` returns HTTP 200 even when a reported subsystem is unavailable; inspect the JSON fields. An unreachable optional Ollama backend does not itself establish a Claude failure. A successful model listing does not establish Claude authentication or model access.
 
-#### `POST /v1/messages`
+Recorded verification on **2026-09-30**:
 
-Native Anthropic Messages API with full support for content blocks, tools, and streaming.
+- TypeScript build and mocked regression tests: **21/21 passed** on Windows and in an isolated Linux container.
+- Docker image built; its packaged Linux executable reported **2.1.285 (Claude Code)** via `--version`, including after container replacement.
+- Real SDK MCP registration was constructed offline, without a provider query.
+- The deployed adapter passed health/authenticated model-list probes; unauthenticated requests returned 401 and disabled server tools returned 403. Existing secrets and the volume were preserved.
+- No successful live Claude inference or LiteLLM inference E2E was established by these checks. Subscription eligibility and all-model compatibility remain unverified.
+- The latest recorded production audit still reported three affected packages: `body-parser` (low), `qs` and `uuid` (moderate). These were not blindly upgraded as part of the SDK fix; rerun `npm audit --omit=dev` and assess reachability before broader deployment.
+
+For future SDK updates, change the pinned dependency and lockfile, run tests, rebuild, and verify the **packaged executable** before replacing the service. Preserve the prior image/configuration and back up the volume for rollback. Use the same Compose project/volume. Never use `down -v` for an ordinary upgrade.
+
+### Common failures
+
+| Failure | Check |
+|---|---|
+| `Cannot POST /v1/v1/messages` | Remove `/v1` from LiteLLM's Anthropic `api_base`. |
+| `claude_code_version_too_old` | Rebuild with a sufficiently new pinned SDK; a host-only CLI update is insufficient. This error maps to HTTP 400 `invalid_request_error`. |
+| 401 from this proxy | Provision a key and check the proxy key, not the Claude token or LiteLLM client key. |
+| Backend authentication failure | Check token expiry and database-over-environment precedence. |
+| 403 for server tools | Expected in the adapter profile; remove the server-side tool request. |
+| SSE error after HTTP 200 | Headers may already have been sent; inspect the SSE error, not just HTTP status. |
+
+## Known compatibility limits
+
+- No OAuth login/refresh manager, native Responses API, or guarantee of subscription eligibility.
+- `tool_choice`, sampling options, and output-token limits are not fully enforced; some accepted fields are ignored by upstream code.
+- Image/document inputs are not forwarded as native multimodal input; thinking requests are not fully supported.
+- Caller-tool schemas and conversation reconstruction are intentionally limited; test actual clients before relying on complex workflows.
+- Mocked tests validate adapter mechanics, not real model behavior or universal SDK/client compatibility.
+
+## Local development and optional upstream services
+
+Node.js 22+ is used for the runtime image. `npm test` requires a release supporting `--experimental-test-module-mocks` (recorded Docker tests used Node 22; Windows used Node 24).
 
 ```bash
-curl https://your-domain/v1/messages \
-  -H "x-api-key: sk-your-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "claude-sonnet-4-6",
-    "max_tokens": 1024,
-    "messages": [{"role": "user", "content": "Hello!"}]
-  }'
-```
-
-**With server-side tools (web search, etc.):**
-
-```bash
-curl https://your-domain/v1/messages \
-  -H "x-api-key: sk-your-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "claude-sonnet-4-6",
-    "max_tokens": 4096,
-    "tools": [{"type": "web_search_20260209", "name": "web_search"}],
-    "messages": [{"role": "user", "content": "What are the latest Mars rover discoveries?"}]
-  }'
-```
-
-**With Claude Code built-in tools:**
-
-```bash
-curl https://your-domain/v1/messages \
-  -H "x-api-key: sk-your-key" \
-  -H "x-enable-builtin-tools: true" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "claude-sonnet-4-6",
-    "max_tokens": 4096,
-    "messages": [{"role": "user", "content": "List files in the current directory and summarize any README"}]
-  }'
-```
-
-> Built-in tools must be enabled per API key through the admin dashboard.
-
-### Embeddings
-
-#### `POST /v1/embeddings`
-
-OpenAI-compatible embeddings endpoint, backed by a local Ollama instance running `nomic-embed-text`. Accepts OpenAI model names -- they're mapped to the local model automatically.
-
-```bash
-curl https://your-domain/v1/embeddings \
-  -H "Authorization: Bearer sk-your-key" \
-  -H "Content-Type: application/json" \
-  -d '{"model": "text-embedding-3-small", "input": "Hello world"}'
-```
-
-**Batch embeddings:**
-
-```bash
-curl https://your-domain/v1/embeddings \
-  -H "Authorization: Bearer sk-your-key" \
-  -H "Content-Type: application/json" \
-  -d '{"model": "nomic-embed-text", "input": ["First text", "Second text", "Third text"]}'
-```
-
-Response follows the OpenAI format:
-```json
-{
-  "object": "list",
-  "data": [
-    {"object": "embedding", "embedding": [0.123, -0.456, ...], "index": 0}
-  ],
-  "model": "nomic-embed-text",
-  "usage": {"prompt_tokens": 2, "total_tokens": 2}
-}
-```
-
-> Requires Ollama running with the model pulled. See [Ollama Setup](#ollama-setup-embeddings) below.
-
-### Health Check
-
-#### `GET /health`
-
-```json
-{
-  "status": "ok",
-  "backend": "claude-code-sdk",
-  "db_status": "ok",
-  "active_tasks": 0,
-  "token_configured": true,
-  "token_source": "database"
-}
-```
-
----
-
-## Tool Support
-
-The proxy supports three levels of tool use:
-
-### 1. User-Defined Tools (Function Calling)
-
-Works on both `/v1/chat/completions` (OpenAI format) and `/v1/messages` (Anthropic format). The proxy intercepts tool calls and returns them to the client for execution -- standard multi-turn function calling.
-
-### 2. Server-Side Tools
-
-Anthropic's built-in tools like `web_search` and `code_execution`. When these tools are in the request, the proxy lets Claude execute them internally and returns the final answer. No client-side tool handling needed.
-
-### 3. Claude Code Built-In Tools
-
-The full Claude Code toolset: `Bash`, `Read`, `Edit`, `Write`, `Glob`, `Grep`, `WebFetch`, `WebSearch`, `NotebookEdit`, and `Agent`. Enable per API key in the admin dashboard, then send the `x-enable-builtin-tools: true` header. Each key gets its own isolated workspace directory.
-
----
-
-## Per-Key Settings
-
-Every API key can be independently configured through the admin dashboard:
-
-| Setting | Description | Default |
-|---|---|---|
-| **Built-in Tools** | Allow Claude Code native tools | Off |
-| **Rate Limit (RPM)** | Max requests per minute | 30 |
-| **Rate Limit (TPM)** | Max tokens per minute | Unlimited |
-| **Monthly Budget** | Cost ceiling per calendar month (USD) | Unlimited |
-| **Allowed Models** | Restrict to specific models | All models |
-| **System Prompt** | Prepended to every request | None |
-| **Cache TTL** | Cache identical requests (seconds) | No caching |
-
-When a limit is exceeded:
-- **Rate limit** returns `429 Too Many Requests` with a `Retry-After` header
-- **Budget exceeded** returns `402 Payment Required`
-- **Model not allowed** returns `403 Forbidden`
-
----
-
-## Admin Dashboard
-
-Access at `/admin` (login required).
-
-### Dashboard
-Overview stats: active tasks, requests today, token usage, cost, breakdown by model and status.
-
-### API Keys
-Create, configure, and revoke keys. Click any key row to expand its settings panel with inline editing for all per-key options.
-
-### Active Tasks
-Real-time view of running requests. Auto-refreshes every 3 seconds. Cancel any task with one click.
-
-### Request History
-Searchable, filterable, paginated log of all requests. Click any row to expand and see the full prompt, full response, error messages, and metadata. Export filtered results as CSV or JSON.
-
-### Settings
-Manage the Claude authentication token. Set it through the browser instead of SSH-ing into the server to edit environment variables. Shows token status, source (database vs. environment), and a masked preview.
-
----
-
-## Production Deployment
-
-### Option 1: Self-Contained (Docker Compose with nginx + SSL)
-
-Uses the included `docker-compose.yml` which runs nginx and certbot alongside the app:
-
-```bash
-cp .env.example .env
-# Edit .env with production values
-
-./init-letsencrypt.sh yourdomain.com you@email.com
-docker-compose up -d
-```
-
-### Option 2: Existing Server (Docker Compose + external nginx)
-
-Uses `docker-compose.prod.yml` for servers that already have nginx and SSL configured:
-
-```bash
-# On the server
-docker-compose -f docker-compose.prod.yml up -d --build
-
-# Copy the nginx config
-cp deploy/nginx-claudeproxy.conf /etc/nginx/sites-enabled/
-nginx -t && systemctl reload nginx
-```
-
-The app container listens on `127.0.0.1:9026` and the admin on `127.0.0.1:9027`.
-
----
-
-## Ollama Setup (Embeddings)
-
-The proxy uses [Ollama](https://ollama.com) for local embeddings. The Ollama container is included in Docker Compose but starts empty -- you need to pull the embedding model once:
-
-```bash
-# After docker-compose up
-docker exec claudeproxy-ollama ollama pull nomic-embed-text
-```
-
-This downloads ~274MB. The model is cached in the `ollama-data` volume and persists across restarts.
-
-**For local development** (without Docker), install Ollama directly and pull the model:
-
-```bash
-# Install Ollama (see https://ollama.com/download)
-ollama pull nomic-embed-text
-
-# Set the URL in .env
-OLLAMA_URL=http://localhost:11434
-```
-
-**Model quality:** `nomic-embed-text` scores 62.39 on the [MTEB benchmark](https://huggingface.co/spaces/mteb/leaderboard), matching OpenAI's `text-embedding-3-small` (62.3). It runs on CPU without requiring a GPU.
-
----
-
-## Using with Popular Tools
-
-### OpenAI Python SDK
-
-```python
-from openai import OpenAI
-
-client = OpenAI(
-    base_url="https://your-domain/v1",
-    api_key="sk-your-proxy-key"
-)
-
-response = client.chat.completions.create(
-    model="gpt-4o",  # maps to claude-sonnet-4-6
-    messages=[{"role": "user", "content": "Hello!"}]
-)
-print(response.choices[0].message.content)
-
-# Embeddings
-embeddings = client.embeddings.create(
-    model="text-embedding-3-small",  # maps to nomic-embed-text
-    input=["Hello world", "How are you?"]
-)
-print(len(embeddings.data[0].embedding))  # 768 dimensions
-```
-
-### OpenAI Node.js SDK
-
-```typescript
-import OpenAI from "openai";
-
-const client = new OpenAI({
-  baseURL: "https://your-domain/v1",
-  apiKey: "sk-your-proxy-key",
-});
-
-const response = await client.chat.completions.create({
-  model: "gpt-4o",
-  messages: [{ role: "user", content: "Hello!" }],
-});
-```
-
-### Anthropic Python SDK
-
-```python
-import anthropic
-
-client = anthropic.Anthropic(
-    base_url="https://your-domain/v1",
-    api_key="sk-your-proxy-key"
-)
-
-message = client.messages.create(
-    model="claude-sonnet-4-6",
-    max_tokens=1024,
-    messages=[{"role": "user", "content": "Hello!"}]
-)
-```
-
-### Cursor / Continue
-
-Set the API base URL to `https://your-domain/v1` and use your proxy API key. Model names like `gpt-4o` are automatically mapped to Claude.
-
-### curl
-
-```bash
-# OpenAI format
-curl https://your-domain/v1/chat/completions \
-  -H "Authorization: Bearer sk-your-key" \
-  -H "Content-Type: application/json" \
-  -d '{"model":"gpt-4o","messages":[{"role":"user","content":"Hi"}]}'
-
-# Anthropic format
-curl https://your-domain/v1/messages \
-  -H "x-api-key: sk-your-key" \
-  -H "Content-Type: application/json" \
-  -d '{"model":"claude-sonnet-4-6","max_tokens":1024,"messages":[{"role":"user","content":"Hi"}]}'
-```
-
----
-
-## Database
-
-SQLite via [better-sqlite3](https://github.com/WiseLibs/better-sqlite3). The database file is created automatically on first startup. Migrations run automatically.
-
-**Tables:**
-
-- `api_keys` -- Keys, permissions, and per-key settings
-- `request_log` -- Full request/response history with token counts and cost
-- `settings` -- Server configuration (OAuth token)
-
-Default location: `./data/proxy.db` (configurable via `DATABASE_PATH`).
-
----
-
-## Project Structure
-
-```
-claude-code-proxy/
-  src/
-    server.ts              # Entry point
-    app.ts                 # Express app setup and middleware pipeline
-    config.ts              # Environment variable loading
-    models.ts              # Model name mapping
-    db/
-      connection.ts        # SQLite connection
-      migrations.ts        # Schema DDL and migrations
-    middleware/
-      apiKeyAuth.ts        # API key validation
-      adminAuth.ts         # Admin secret validation
-      rateLimiter.ts       # RPM/TPM rate limiting
-      budgetCheck.ts       # Monthly spending limits
-      errorHandler.ts      # Centralized error responses
-    routes/
-      proxy.ts             # /v1/chat/completions, /v1/models
-      anthropic.ts         # /v1/messages
-      embeddings.ts        # /v1/embeddings (proxied to Ollama)
-      adminApi.ts          # /api/admin/* (keys, tasks, history, settings)
-      health.ts            # /health
-    services/
-      sdkBridge.ts         # Claude Code SDK wrapper
-      toolBridge.ts        # MCP tool interception
-      openaiToolTranslator.ts  # OpenAI <-> Anthropic format conversion
-      apiKeyService.ts     # Key CRUD and validation
-      historyService.ts    # Request logging and queries
-      settingsService.ts   # Token and settings management
-      taskTracker.ts       # Active task registry
-    types/
-      index.ts             # Core type definitions
-      toolBridge.ts        # Tool-related types
-  admin/                   # Next.js admin dashboard
-    app/admin/
-      login/               # Login page
-      (authenticated)/
-        page.tsx            # Dashboard
-        keys/               # API key management
-        tasks/              # Active task monitoring
-        history/            # Request history
-        settings/           # Token configuration
-    components/
-      Sidebar.tsx           # Navigation sidebar
-    lib/
-      api.ts               # Server-side API client
-      client-api.ts        # Browser-side API client
-      auth.ts              # NextAuth configuration
-  deploy/
-    nginx-claudeproxy.conf # Production nginx config
-  docker-compose.yml       # Full stack (app + admin + nginx + certbot)
-  docker-compose.prod.yml  # App + admin only (for existing nginx setups)
-  Dockerfile               # Express server image
-  admin/Dockerfile          # Next.js admin image
-  init-letsencrypt.sh      # SSL certificate bootstrapping
-```
-
----
-
-## Development
-
-```bash
-# Type-check the Express server
-npx tsc --noEmit
-
-# Type-check the admin dashboard
-cd admin && npx tsc --noEmit
-
-# Build the Express server
+npm ci
 npm run build
+npm test
 
-# Run in dev mode (auto-reload)
-npm run dev
+# Configure real environment values privately, then start locally:
+node --env-file=.env dist/server.js
 ```
 
----
+The server does not automatically load `.env` for `npm start` or `npm run dev`; export the variables or use Node's `--env-file` above. A Compose `.env` is not automatically read by a directly launched Node process.
+
+The dashboard under `admin/`, full-stack [`docker-compose.yml`](docker-compose.yml), and [`docker-compose.prod.yml`](docker-compose.prod.yml) are retained from upstream. They are optional, are **not** started by `compose.adapter.yml`, and their full-stack TLS/dashboard deployment was not revalidated by this adapter work. Install/administer those separately if needed, with matching admin secrets and restricted credentials.
+
+For embeddings, run Ollama separately, pull `nomic-embed-text`, and configure an `OLLAMA_URL` reachable from the proxy container. No Ollama service is installed by the adapter profile.
+
+## Source layout
+
+```text
+src/app.ts                 API middleware and routes
+src/models.ts              Static model aliases and passthrough
+src/routes/                Chat, Messages, embeddings, health, admin API
+src/services/sdkBridge.ts  SDK invocation, auth forwarding, task/history tracking
+src/services/toolBridge.ts Caller-tool MCP bridge
+src/services/              Keys, settings, metadata, error classification
+src/db/                    SQLite connection and migrations
+tests/                     Mocked SDK regression tests
+compose.adapter.yml        API-only Docker deployment
+.env.adapter.example       Empty-secret adapter configuration template
+admin/                     Optional upstream Next.js dashboard
+docs/ADAPTER-PATCH.md       Patch details and historical initial verification notes
+```
 
 ## License
 
-MIT
+MIT for this repository; SDK and other dependencies retain their own licenses and applicable terms.
