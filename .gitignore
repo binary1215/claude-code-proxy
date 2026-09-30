@@ -12,6 +12,9 @@ admin/out/
 .env.local
 .env.production
 .env.*.local
+.env.*
+!.env.example
+!.env.adapter.example
 
 # Database and runtime data
 data/

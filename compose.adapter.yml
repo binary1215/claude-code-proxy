@@ -6,6 +6,8 @@ services:
       PORT: "3456"
       DATABASE_PATH: /app/data/proxy.db
       ADMIN_API_SECRET: ${ADMIN_API_SECRET:?Set a dedicated proxy admin secret}
+      # Official `claude setup-token` output; never put the real token in Git.
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
       AUTH_DISABLED: "false"
       ALLOW_SERVER_SIDE_TOOLS: "false"
       HOME: /app/data/runtime

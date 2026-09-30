@@ -63,7 +63,7 @@ export function completeRequest(
 // Keep only known operational categories, never SDK text/stderr or caller data.
 const ERROR_TYPES = new Set([
   "rate_limit_error", "not_found_error", "authentication_error",
-  "permission_error", "billing_error", "server_error", "upstream_error",
+  "permission_error", "billing_error", "server_error", "upstream_error", "invalid_request_error",
 ]);
 
 function safeErrorType(value?: string): string {

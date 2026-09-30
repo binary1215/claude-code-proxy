@@ -114,7 +114,7 @@ export function trackedQuery(params: TrackedQueryParams): TrackedQueryResult {
       isStreaming: params.isStreaming,
       requestLogId: logId,
     },
-    () => sdkQuery.interrupt()
+    async () => { await sdkQuery.interrupt(); }
   );
 
   // Retain bounded, ephemeral text only for upstream error classification.

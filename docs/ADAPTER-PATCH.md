@@ -93,15 +93,45 @@ the authenticated `/api/admin/keys` endpoint before any `/v1/*` request works.
 The admin API remains on the same authenticated listener; it is not network-hidden.
 The caller's key must never be the Claude token.
 
+For environment-based subscription authentication, copy `.env.adapter.example`
+to a private `.env`, set `CLAUDE_CODE_OAUTH_TOKEN` to the output of the official
+`claude setup-token`, then recreate the service with
+`docker compose --env-file .env -f compose.adapter.yml up -d`.
+The Compose file passes this variable to the container; leaving it empty permits
+deployment without performing subscription authentication. Never commit the
+filled `.env`, print `docker compose config` without `--quiet`, or dump container
+environment variables after a real token has been configured.
+
+Existing database token settings take precedence over the environment variable.
+An environment-only installation should not set a database token. To switch an
+existing installation, explicitly remove its database token through the
+authenticated `DELETE /api/admin/settings/token` endpoint; this does not remove
+an environment token. Environment updates require container recreation.
+Docker administrators can still inspect environment secrets: this is a
+configuration path, not encryption or a secret-manager integration.
+
 LiteLLM is on another host: use `http://<proxy-host-LAN-IP>:13456`, not a Docker service
-name. The intended provider is `anthropic/claude-sonnet-4-6`; inspect and test
-LiteLLM's actual `api_base` joining and Responses conversion before registration.
+name, as the Anthropic provider's `api_base`. Do not append `/v1` or
+`/v1/messages`: LiteLLM appends `/v1/messages` automatically; including `/v1`
+produces the invalid route `/v1/v1/messages`.
+The intended provider is `anthropic/claude-sonnet-4-6`; actual subscription
+model access and LiteLLM Responses conversion still require end-to-end testing.
 Proxy `/health` is a configuration/liveness report, not proof of Claude auth.
 
 Existing volumes containing historical conversations are NOT scrubbed. This
 patch prevents new writes; old data needs a separately authorized cleanup. Old
 root-owned data volumes require deliberate permission migration before using
 the non-root image. Do not delete or reset credential volumes.
+
+## SDK upgrade (2026-09-30)
+
+The SDK is pinned to `0.3.285` (bundled Claude Code `2.1.285`), replacing
+`0.1.77` / `2.0.77`. A host-level `claude update` does not update the SDK bundle.
+Verify the packaged executable with `--version` inside the built image before
+replacement. `claude_code_version_too_old` is returned as HTTP 400
+`invalid_request_error` in both API formats, with only that category persisted.
+The SDK interrupt response is deliberately discarded by the task callback.
+Mocked tests and health/model-list probes do not establish real model/auth success.
 
 ## Known limitations retained from upstream
 

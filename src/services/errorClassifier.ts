@@ -57,6 +57,11 @@ export function classifyUpstreamError(err: unknown, now: Date = new Date()): Cla
   const message = upstream || base;
   const haystack = `${base}\n${upstream}`;
 
+  // An outdated bundled CLI is a permanent request failure, not a gateway 500.
+  if (/claude_code_version_too_old/i.test(haystack)) {
+    return { status: 400, type: "invalid_request_error", message };
+  }
+
   if (/out of (extra )?usage|usage limit|rate[ _-]?limit|too many requests|\b429\b/i.test(haystack)) {
     return {
       status: 429,

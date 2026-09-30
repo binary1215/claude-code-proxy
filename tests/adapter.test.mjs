@@ -22,6 +22,10 @@ mock.module('@anthropic-ai/claude-agent-sdk', {
       sdkCalls.push(params);
       const current = scenario;
       const generator = (async function* () {
+        if (current === 'version-error') {
+          params.options.stderr?.(`API Error: 400 {"error":{"type":"invalid_request_error","details":{"error_code":"claude_code_version_too_old"}}} ${secretText}`);
+          throw new Error('Claude Code process exited with code 1');
+        }
         params.options.stderr?.(`diagnostic ${secretText}`);
         if (params.options.includePartialMessages) {
           for (const event of [
@@ -238,6 +242,26 @@ test('upstream failure is classified without raw DB or console logs', async () =
   } finally { logger.mock.restore(); scenario = 'text'; }
 });
 
+test('outdated bundled CLI returns 400 in both formats without raw stored diagnostics', async () => {
+  scenario = 'version-error';
+  const captured = [];
+  const logger = mock.method(console, 'error', (...args) => captured.push(args));
+  try {
+    for (const [path, body] of [['/v1/chat/completions', chat()], ['/v1/messages', messages()]]) {
+      const res = await request(path, body, auth());
+      assert.equal(res.status, 400);
+      const data = await res.json();
+      assert.equal(data.error.type, 'invalid_request_error');
+      assert.match(data.error.message, /claude_code_version_too_old/);
+      const row = db.prepare('SELECT * FROM request_log ORDER BY id DESC LIMIT 1').get();
+      assert.equal(row.error_message, 'invalid_request_error');
+      assert.ok(!JSON.stringify(row).includes(secretText));
+    }
+    assert.ok(!JSON.stringify(captured).includes(secretText));
+    assert.deepEqual(listTasks(), []);
+  } finally { logger.mock.restore(); scenario = 'text'; }
+});
+
 test('history storage boundary discards content even from legacy writers', () => {
   const id = history.insertPendingRequest({ apiKeyId: backendKey.id, completionId: 'legacy', requestedModel: 'sonnet', resolvedModel: 'sonnet', isStream: false, fullPrompt: secretText, promptPreview: secretText });
   history.completeRequest(id, 'error', { fullResponse: secretText, errorMessage: secretText });
@@ -297,4 +321,24 @@ test('credential storage and SDK environment mapping preserve auth only', async 
 test('revoked backend key is denied', async () => {
   keys.revokeApiKey(backendKey.id);
   assert.equal((await request('/v1/models', undefined, auth())).status, 401);
+});
+
+test('environment OAuth token is forwarded; database override remains explicit', async () => {
+  const envToken = 'sk-ant-oat-synthetic-environment-only';
+  process.env.CLAUDE_CODE_OAUTH_TOKEN = envToken;
+  try {
+    assert.equal(settings.getOAuthToken(), envToken);
+    assert.equal(settings.getTokenStatus().source, 'environment');
+    const { generator } = trackedQuery({ completionId: 'env-auth-test', prompt: 'mock only', requestedModel: 'sonnet', resolvedModel: 'sonnet', isStreaming: false, apiKeyId: null, apiKeyName: null });
+    for await (const message of generator) { /* mocked SDK only */ }
+    assert.equal(sdkCalls.at(-1).options.env.CLAUDE_CODE_OAUTH_TOKEN, envToken);
+    assert.equal(settings.getSetting('claude_oauth_token'), null);
+    settings.setSetting('claude_oauth_token', 'sk-ant-oat-synthetic-db-override');
+    assert.equal(settings.getOAuthToken(), 'sk-ant-oat-synthetic-db-override');
+    settings.deleteSetting('claude_oauth_token');
+    assert.equal(settings.getOAuthToken(), envToken);
+  } finally {
+    settings.deleteSetting('claude_oauth_token');
+    delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
+  }
 });
