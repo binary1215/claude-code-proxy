@@ -1,0 +1,181 @@
+--- a/litellm/llms/anthropic/chat/handler.py
++++ b/litellm/llms/anthropic/chat/handler.py
+@@ -700,22 +700,8 @@
+                 ]
+                 provider_specific_fields["thinking_blocks"] = thinking_blocks
+ 
+-            signature: Final = content_block["delta"].get("signature")
+-            if isinstance(signature, str) and signature:
+-                thinking_blocks = [
+-                    ChatCompletionThinkingBlock(
+-                        type="thinking",
+-                        thinking="".join(
+-                            cast(str, block["delta"].get("thinking"))
+-                            for block in self.content_blocks
+-                            if isinstance(block["delta"].get("thinking"), str)
+-                        ),
+-                        signature=signature,
+-                    )
+-                ]
+-                provider_specific_fields["thinking_blocks"] = thinking_blocks
+-                if reasoning_content is None:
+-                    reasoning_content = ""
++            # Signature fragments remain in self.content_blocks. Emit the full
++            # signature only at the native thinking block's stop boundary.
+         elif "content" in content_block["delta"] and content_block["delta"].get("type") == "compaction_delta":
+             # Handle compaction delta
+             provider_specific_fields["compaction_delta"] = {
+@@ -937,6 +923,18 @@
+ 
+             elif type_chunk == "content_block_stop":
+                 ContentBlockStop(**chunk)
++                if self.current_content_block_type == "thinking":
++                    complete_signature = "".join(
++                        cast(str, block["delta"]["signature"])
++                        for block in self.content_blocks
++                        if isinstance(block["delta"].get("signature"), str)
++                    )
++                    if complete_signature:
++                        thinking_blocks = [ChatCompletionThinkingBlock(
++                            type="thinking", thinking="", signature=complete_signature,
++                        )]
++                        provider_specific_fields["thinking_blocks"] = thinking_blocks
++                        reasoning_content = ""
+                 # check if tool call content block - only for tool_use and server_tool_use blocks
+                 if self.current_content_block_type in ("tool_use", "server_tool_use"):
+                     is_empty: Final = self.check_empty_tool_call_args()
+--- a/litellm/litellm_core_utils/streaming_chunk_builder_utils.py
++++ b/litellm/litellm_core_utils/streaming_chunk_builder_utils.py
+@@ -673,7 +673,7 @@
+ 
+         def _flush_thinking_block() -> None:
+             nonlocal current_thinking_text_parts, current_signature
+-            if len(current_thinking_text_parts) > 0 and current_signature:
++            if current_signature:
+                 thinking_blocks.append(
+                     ChatCompletionThinkingBlock(
+                         type="thinking",
+--- a/litellm/llms/anthropic/common_utils.py
++++ b/litellm/llms/anthropic/common_utils.py
+@@ -3,6 +3,7 @@
+ """
+ 
+ import copy
++import os
+ import re
+ from collections.abc import Mapping, MutableMapping, Sequence
+ from datetime import datetime, timezone
+@@ -1207,6 +1208,15 @@
+     return messages
+ 
+ 
++def strict_native_anthropic_thinking(model: str = "", custom_llm_provider: str | None = None) -> bool:
++    """Opt in only for direct Anthropic; translated providers keep their defaults."""
++    if os.getenv("LITELLM_NATIVE_ANTHROPIC_STRICT_THINKING") != "1":
++        return False
++    if custom_llm_provider is not None:
++        return custom_llm_provider == "anthropic"
++    return model.startswith("anthropic/") or model.startswith("claude-")
++
++
+ def is_anthropic_invalid_thinking_block_error(error_text: str) -> bool:
+     """
+     Detect Anthropic 400 errors caused by invalid thinking blocks in replayed
+--- a/litellm/llms/anthropic/experimental_pass_through/messages/handler.py
++++ b/litellm/llms/anthropic/experimental_pass_through/messages/handler.py
+@@ -18,6 +18,7 @@
+     flatten_unencrypted_web_search_results_in_anthropic_messages,
+     sanitize_tool_use_ids_in_anthropic_messages,
+     strip_empty_content_blocks_from_anthropic_messages,
++    strict_native_anthropic_thinking,
+     strip_provider_specific_fields_from_anthropic_messages,
+ )
+ from litellm.llms.base_llm.anthropic_messages.transformation import (
+@@ -262,11 +263,11 @@
+     # 400.  /v1/chat/completions already handles this in
+     # anthropic_messages_pt; sanitize the native Anthropic Messages path
+     # here for the same guarantee.  See #22930.
+-    messages = strip_empty_content_blocks_from_anthropic_messages(messages)
+-    # Replay of cross-provider tool history (e.g. kimi -> Anthropic) may carry
+-    # ids like ``functions.Bash:0`` that violate Anthropic's id pattern.
+-    messages = sanitize_tool_use_ids_in_anthropic_messages(messages)
+-    messages = flatten_unencrypted_web_search_results_in_anthropic_messages(messages)
++    if not strict_native_anthropic_thinking(model, custom_llm_provider):
++        messages = strip_empty_content_blocks_from_anthropic_messages(messages)
++        # Translated history may require provider-specific normalization.
++        messages = sanitize_tool_use_ids_in_anthropic_messages(messages)
++        messages = flatten_unencrypted_web_search_results_in_anthropic_messages(messages)
+ 
+     from litellm.integrations.anthropic_cache_control_hook import (
+         AnthropicCacheControlHook,
+@@ -460,7 +461,8 @@
+     # does not reassign messages before dispatch, so it sets
+     # ``_litellm_messages_presanitized`` to skip this redundant second
+     # full-messages scan. Pop it so it never leaks into provider params.
+-    if not kwargs.pop("_litellm_messages_presanitized", False):
++    presanitized = kwargs.pop("_litellm_messages_presanitized", False)
++    if not presanitized and not strict_native_anthropic_thinking(model, custom_llm_provider):
+         messages = strip_empty_content_blocks_from_anthropic_messages(messages)
+         messages = sanitize_tool_use_ids_in_anthropic_messages(messages)
+         messages = flatten_unencrypted_web_search_results_in_anthropic_messages(messages)
+--- a/litellm/llms/anthropic/experimental_pass_through/messages/transformation.py
++++ b/litellm/llms/anthropic/experimental_pass_through/messages/transformation.py
+@@ -26,6 +26,7 @@
+     optionally_handle_anthropic_oauth,
+     strip_advisor_blocks_from_messages,
+     strip_encrypted_reasoning_blocks_from_anthropic_messages,
++    strict_native_anthropic_thinking,
+ )
+ from .mid_conversation_system import (
+     as_system_content_blocks,
+@@ -59,6 +60,20 @@
+     @property
+     def _resolved_provider(self) -> str:
+         return self.custom_llm_provider or "anthropic"
++
++    def should_filter_anthropic_beta_headers(self) -> bool:
++        # Native Anthropic owns validation of its beta headers.
++        return self._resolved_provider != "anthropic"
++
++    def should_retry_anthropic_messages_on_http_error(self, e: httpx.HTTPStatusError, litellm_params: dict) -> bool:
++        if strict_native_anthropic_thinking(custom_llm_provider=self._resolved_provider):
++            return False
++        return super().should_retry_anthropic_messages_on_http_error(e, litellm_params)
++
++    def transform_anthropic_messages_request_on_http_error(self, e: httpx.HTTPStatusError, request_data: dict) -> dict:
++        if strict_native_anthropic_thinking(custom_llm_provider=self._resolved_provider):
++            return request_data
++        return super().transform_anthropic_messages_request_on_http_error(e, request_data)
+ 
+     def get_supported_anthropic_messages_params(self, model: str) -> list:
+         return [
+@@ -550,11 +565,12 @@
+         # Prevents Anthropic 400: advisor_tool_result in history requires advisor tool.
+         _tools: Final = anthropic_messages_optional_request_params.get("tools") or []
+         _has_advisor: Final = any(isinstance(t, dict) and t.get("type") == ANTHROPIC_ADVISOR_TOOL_TYPE for t in _tools)
+-        if not _has_advisor:
++        strict_native = strict_native_anthropic_thinking(custom_llm_provider=self._resolved_provider)
++        if not _has_advisor and not strict_native:
+             messages = strip_advisor_blocks_from_messages(messages)
+ 
+         anthropic_messages_request: Final[AnthropicMessagesRequest] = AnthropicMessagesRequest(
+-            messages=strip_encrypted_reasoning_blocks_from_anthropic_messages(messages),
++            messages=messages if strict_native else strip_encrypted_reasoning_blocks_from_anthropic_messages(messages),
+             max_tokens=max_tokens,
+             model=model,
+             **anthropic_messages_optional_request_params,
+--- a/litellm/responses/litellm_completion_transformation/streaming_iterator.py
++++ b/litellm/responses/litellm_completion_transformation/streaming_iterator.py
+@@ -936,7 +936,11 @@
+         self.sent_output_item_added_event = True
+ 
+         # Reasoning-first
+-        if hasattr(delta, "reasoning_content") and delta.reasoning_content:
++        signed_thinking = any(
++            isinstance(block, dict) and (block.get("signature") or block.get("data"))
++            for block in (getattr(delta, "thinking_blocks", None) or ())
++        )
++        if (hasattr(delta, "reasoning_content") and delta.reasoning_content) or signed_thinking:
+             self._reasoning_active = True
+             if self._cached_reasoning_item_id is None:
+                 self._cached_reasoning_item_id = f"rs_{uuid.uuid4()}"

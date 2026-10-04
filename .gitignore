@@ -43,3 +43,6 @@ secrets/
 
 # Local verification output
 *.log
+__pycache__/
+*.py[cod]
+.venv/
