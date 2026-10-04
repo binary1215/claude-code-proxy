@@ -236,7 +236,8 @@ test('raw request/reply and next-turn thinking, signature, redacted/tool/future 
   const followup = messages({ tools: input.tools, messages: [input.messages[0],
     { role: 'assistant', content: JSON.parse(response.body).content },
     { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tool_unchanged',
-      content: [{ type: 'text', text: privateText }], cache_control: { type: 'ephemeral', ttl: '1h' } }] },
+      content: [{ type: 'text', text: privateText }], is_error: true,
+      cache_control: { type: 'ephemeral', ttl: '1h' } }] },
   ] });
   const followupBytes = Buffer.from(JSON.stringify(followup));
   assert.equal((await request('/v1/messages', followupBytes)).status, 200);

@@ -8,6 +8,7 @@ import { insertPendingRequest, completeRequest } from "./historyService.js";
 import { registerTask, unregisterTask } from "./taskTracker.js";
 import { recordTokensForRateLimit } from "../middleware/rateLimiter.js";
 import { UsageObserver } from "./usageObserver.js";
+import { logOperationalError } from "./operationalLogger.js";
 
 const HOP_HEADERS = new Set(["connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
   "te", "trailer", "transfer-encoding", "upgrade"]);
@@ -75,8 +76,13 @@ export function relayNative(req: Request, res: Response, endpoint: string): void
     clearTimeout(deadline);
     unregisterTask(id);
     const usage = observer.snapshot();
-    completeRequest(logId, status, { ...usage, usageComplete: status === "success" && usage.usageComplete,
-      durationMs: Date.now() - start, errorMessage: status === "error" ? "upstream_error" : undefined });
+    try {
+      completeRequest(logId, status, { ...usage, usageComplete: status === "success" && usage.usageComplete,
+        durationMs: Date.now() - start, errorMessage: status === "error" ? "upstream_error" : undefined });
+    } catch (error) {
+      // A full/unavailable log DB must not crash HTTP event handlers or corrupt delivery.
+      logOperationalError("request_history_write_failed", error);
+    }
     if (req.apiKeyId && endpoint === "/messages") {
       recordTokensForRateLimit(req.apiKeyId, (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0) +
         (usage.cacheCreationInputTokens ?? 0) + (usage.cacheReadInputTokens ?? 0));

@@ -26,7 +26,7 @@ export default async function DashboardPage() {
           color="gray"
         />
         <StatCard
-          label="Tokens Today"
+          label="Tokens Today (excl. cache)"
           value={formatTotalTokens(stats.total_input_tokens, stats.total_output_tokens)}
           color="purple"
         />

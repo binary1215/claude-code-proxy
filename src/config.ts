@@ -7,8 +7,8 @@ export const ADMIN_API_SECRET = process.env.ADMIN_API_SECRET || "";
 export const AUTH_DISABLED = process.env.AUTH_DISABLED === "true";
 export const ANTHROPIC_BASE_URL = process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com";
 export const UPSTREAM_TIMEOUT_MS = Number(process.env.UPSTREAM_TIMEOUT_MS || 300_000);
-if (!Number.isFinite(UPSTREAM_TIMEOUT_MS) || UPSTREAM_TIMEOUT_MS <= 0) {
-  throw new Error("UPSTREAM_TIMEOUT_MS must be positive");
+if (!Number.isSafeInteger(UPSTREAM_TIMEOUT_MS) || UPSTREAM_TIMEOUT_MS <= 0 || UPSTREAM_TIMEOUT_MS > 2_147_483_647) {
+  throw new Error("UPSTREAM_TIMEOUT_MS must be an integer between 1 and 2147483647");
 }
 export const OLLAMA_URL = process.env.OLLAMA_URL || "http://ollama:11434";
 
