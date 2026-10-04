@@ -19,11 +19,11 @@ Implementation commit: `0ca75751d407b0bce2f9c15675b1e0d8fd8075c4`.
 
 | Check | Result |
 | --- | --- |
-| Local TypeScript build + Node HTTP/SQLite tests | 44/44 passed |
+| Local TypeScript build + Node HTTP/SQLite/diagnostic-tool tests | 54/54 passed, including later test-only additions |
 | Same tests in the actual Node 22 Docker image, network disabled | 44/44 passed |
 | Admin TypeScript + Next.js production build | Passed |
 | Independent bounded observer/storage/lifecycle/migration review | Findings fixed and rechecked |
-| Stock FastAPI audit | 26 expected-behavior scenarios passed; includes known lossy default-route behavior |
+| Stock FastAPI audit | 26 baseline + 6 synthetic replay observations verified; known losses explicitly separated |
 | Test deployment health / SQLite integrity / active tasks | Healthy / ok / zero pending |
 | Runtime npm audit during image build | 0 production vulnerabilities reported; build/dev set reported 1 low |
 
@@ -87,6 +87,53 @@ minimal raw requests are not identical. [Issue #87420](https://github.com/anthro
 describes a similar difference but is a user report, not Anthropic-confirmed root
 cause. This relay does not inject official-client identity/system blocks.
 
+## Same-host request-shape comparison
+
+On 2026-10-05 KST, four sequential generation requests used the same server,
+OAuth credential and `claude-opus-5-5`. Raw probes bracketed unmodified official
+Claude Code 2.1.289 controls. A temporary loopback observer retained only closed
+shape enums/counts and safe diagnostics, never request/response text or secrets.
+The CLI ran with tools/MCP disabled and no project mount or persisted session.
+
+| Phase | HTTP / result | Cache read / creation | Fresh input / output |
+| --- | --- | --- | --- |
+| Minimal raw, before | 429, `unknown_429` | Unknown | Unknown |
+| Official CLI directly through observer | 200, exact `OK`, Opus 5.5 only | 0 / 2031, CLI counters | 2 / 4, CLI counters |
+| Official CLI through observer and existing native test relay | 200, exact `OK`, Opus 5.5 only | 2031 / 0 | 2 / 4 |
+| Minimal raw, after | 429, `unknown_429` | Unknown | Unknown |
+
+Exactly one generation request per phase was observed: no observed retry or
+model transition. The relay-selected credential was privately compared with the
+control credential and matched; no database override or API-key fallback was
+configured. Relay history independently matched HTTP 200, cache read 2031,
+input 2/output 4, complete usage and null prompt/response content. No pending
+tasks remained. Direct response compression prevented observer token parsing;
+that row's counters are explicitly from the official CLI, not the observer.
+
+Both CLI request projections had 11701 body bytes, three system text blocks,
+two messages, adaptive thinking, zero tools, metadata, context management,
+output configuration and three 1-hour cache markers. The minimal raw request
+had 107 bytes, one user message, no system/thinking/metadata/cache markers and
+only the OAuth beta. CLI projections included additional known beta flags and
+unknown-beta counts; unknown names/values and system text were not collected.
+Matching projections are **not** proof of identical complete requests.
+
+This demonstrates that the current native relay can carry a real official
+Opus request and preserve a real cache hit. It weighs against generic proxy
+breakage or whole-account quota exhaustion as explanations for this raw 429.
+It does **not** isolate which body/header/authorization-context difference is
+decisive, prove arbitrary clients are eligible, or verify the `.7` gateway path.
+There is no patch to impersonate Claude Code, transplant its system blocks,
+restore an SDK backend or silently change models.
+
+The first observer startup attempt timed out reading Docker logs before any
+generation phase; owned containers were removed. Increasing that bounded log
+read timeout allowed the complete four-request comparison. Both existing test
+and production container ID/image/start time remained unchanged, and all
+temporary comparison containers were removed afterward. Safe detailed evidence
+is private on the test host; [observer code and offline checks](../integration/diagnostics/README.md)
+are reproducible without real credentials.
+
 ## Stock LiteLLM HTTP gateway
 
 Pinned 1.103.1 at `580bde9a2d148714889ec1c04a9872819e78a778`: actual FastAPI
@@ -108,6 +155,27 @@ The actual gateway UI also reports 1.103.1, not proof of its source integrity.
 
 See [stock gateway audit](../integration/litellm/README.md). Colliding a custom
 route with `/v1/messages` was an isolated experiment, not recommended deployment.
+
+### Strengthened synthetic acceptance audit
+
+The updated stock audit separates **expected observations**, **preservation
+successes**, **known losses**, and **not tested**. A passing process must not be
+reported as full native fidelity. In addition to 26 baseline scenarios, six
+actual HTTP-issued SSE-to-tool-result round trips reconstruct fragmented UTF-8,
+thinking/signatures, signed-empty and redacted blocks, then replay only the
+received assistant content. Success/error tool results and 5m/1h TTLs are checked.
+
+The normal Messages path loses signed-empty history; a fake upstream rejects
+both reconstructed continuations. Built-in and custom pass-through preserve
+the tested opaque history and succeed in all four continuations. Fake-oracle
+mutation checks ensure corrupted/dropped opaque blocks would fail. This is a
+synthetic client, **not** actual coding-client certification or real signature
+validation. Model ACLs, budgets, UI accounting and real cache savings remain
+explicitly untested by this offline audit.
+
+Local TypeScript build and the expanded Node suite pass 54/54, including ten
+request-shape/transport safety tests. These additions change test/diagnostic
+tooling and documentation, not production relay transport or LiteLLM sources.
 
 ### Live stock-gateway-to-relay check
 

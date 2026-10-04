@@ -81,3 +81,20 @@ Keep evidence outside the repo. The JSON report separates preservation from
 known transformations. Audit completion is not universal client compatibility,
 provider authorization, real cache savings, production rollout or verified
 financial controls. See [project verification](../../docs/VERIFICATION.md).
+
+The audit now includes 26 baseline scenarios and six real HTTP-issued synthetic
+multi-turn replays: fragmented SSE is assembled into signed/empty/redacted/tool
+blocks and returned with successful or failed tool results. It checks 5m/1h
+cache TTLs and uses a mutation-checked fake validation oracle. The normal route's
+history loss is expected to be **detected**, not counted as fidelity success.
+
+Report schema 2 includes `semantic_capabilities` per route, explicit
+`observed_known_loss` versus `fidelity_success`, an `acceptance` summary, and
+`not_tested` for actual coding clients, real signatures/cache, managed-model
+ACLs, budgets and UI/spend accounting. No tested route is declared whole-request
+lossless: pass-through still strips metadata and reserializes JSON. Keep these
+limitations in deployment decisions even when every expected observation matches.
+The optional `--collision` probe is explicitly marked experimental/not asserted
+for the colliding route; its exit status is not compatibility acceptance.
+Credential isolation checks every upstream request, including retries and
+multi-turn seed/replay calls, for the local random gateway key.

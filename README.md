@@ -37,6 +37,14 @@ Database credentials starting with `sk-ant-oat` and the OAuth environment variab
 
 The proxy API key given to LiteLLM, the admin secret, and the upstream credential are three different secrets. Database upstream credentials are stored in plaintext in the mounted volume; protect the volume and backups. New history records retain operational metadata only, never request/reply bodies or raw upstream error text. Historical rows are preserved by migration, so old data may still exist.
 
+A subsequent same-host comparison confirmed that **unmodified official Claude
+Code through this native test relay** also succeeds on Opus 5.5, with a real
+2031-token cache read; raw probes immediately before/after still returned 429.
+This narrows the difference to request/client context, without identifying the
+provider's exact rule. It does not establish arbitrary-client OAuth eligibility
+or the deployed LiteLLM path. The [test-only shape observer](integration/diagnostics/README.md)
+records no system text, tokens or thinking/signature content.
+
 ## Standalone Docker deployment
 
 `compose.adapter.yml` runs only this backend; LiteLLM remains a separate container/host. It uses a read-only filesystem, non-root user, dropped capabilities, and a writable data volume.
