@@ -36,6 +36,9 @@ test('legacy history/key/settings migration preserves rows, permits NULL usage a
     const migrated = db.prepare('SELECT * FROM request_log WHERE id = 42').get();
     for (const [column, value] of Object.entries(oldRow)) assert.equal(migrated[column], value);
     assert.equal(migrated.usage_complete, 0);
+    for (const column of ['upstream_http_status', 'upstream_error_type', 'upstream_error_code',
+      'upstream_request_id', 'upstream_retry_after', 'upstream_quota_headers', 'upstream_auth_kind',
+      'upstream_diagnostic', 'upstream_body_observation']) assert.equal(migrated[column], null);
     for (const column of ['cache_creation_input_tokens', 'cache_read_input_tokens',
       'cache_creation_5m_tokens', 'cache_creation_1h_tokens']) assert.equal(migrated[column], null);
     assert.equal(db.prepare('SELECT name FROM api_keys WHERE id = 7').get().name, 'existing-key');

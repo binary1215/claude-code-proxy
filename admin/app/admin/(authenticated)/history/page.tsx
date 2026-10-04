@@ -29,6 +29,17 @@ interface RequestDetail extends RequestLog {
   full_response: string | null;
   completion_id: string;
   error_message: string | null;
+  upstream_http_status?: number | null;
+  upstream_error_type?: string | null;
+  upstream_error_code?: string | null;
+  upstream_request_id?: string | null;
+  upstream_retry_after?: string | null;
+  upstream_quota_headers?: string | null;
+  upstream_auth_kind?: "oauth" | "api_key" | null;
+  upstream_diagnostic?: "success" | "provider_error" | "unknown_429" | "http_error" |
+    "network_error" | "timeout" | "cancelled" | "truncated_stream" | null;
+  upstream_body_observation?: "not_received" | "observed" | "empty" | "invalid_json" |
+    "compressed" | "unsupported_content_type" | "too_large" | "incomplete" | null;
 }
 
 export default function HistoryPage() {
@@ -337,6 +348,8 @@ function DetailPanel({
         </div>
       </div>
 
+      <UpstreamDiagnostics detail={detail} />
+
       {detail.error_message && (
         <div>
           <h4 className="text-xs font-medium text-red-700 mb-1">Error</h4>
@@ -371,6 +384,69 @@ function DetailPanel({
       </div>
     </div>
   );
+}
+
+function UpstreamDiagnostics({ detail }: { detail: RequestDetail }) {
+  const quotaHeaders = quotaHeaderEntries(detail.upstream_quota_headers);
+  const fields = [
+    ["HTTP Status", detail.upstream_http_status],
+    ["Diagnostic", detail.upstream_diagnostic === "unknown_429" ? "Unknown 429 (cause unconfirmed)" : detail.upstream_diagnostic],
+    ["Error Type", detail.upstream_error_type],
+    ["Error Code", detail.upstream_error_code],
+    ["Request ID", detail.upstream_request_id],
+    ["Retry-After", detail.upstream_retry_after],
+    ["Authentication Kind", detail.upstream_auth_kind],
+    ["Body Observation", detail.upstream_body_observation],
+  ] as const;
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg p-3 space-y-3">
+      <h4 className="text-xs font-medium text-gray-700">Upstream Diagnostics</h4>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-gray-500">
+        {fields.map(([label, value]) => (
+          <div key={label} className="break-words">
+            <span className="font-medium text-gray-700">{label}: </span>
+            <span className="font-mono">{value ?? "Unknown / not recorded"}</span>
+          </div>
+        ))}
+      </div>
+      {(detail.upstream_http_status === 429 || detail.upstream_diagnostic === "unknown_429") && (
+        <p className="text-xs text-amber-800">
+          HTTP 429 alone does not establish quota exhaustion or missing entitlement. If the diagnostic is unknown, the cause is unconfirmed.
+        </p>
+      )}
+      <div className="text-xs text-gray-500">
+        <h5 className="font-medium text-gray-700 mb-1">Allowlisted Quota Headers</h5>
+        {quotaHeaders.length ? (
+          <dl className="space-y-1 font-mono break-words">
+            {quotaHeaders.map(([name, value]) => (
+              <div key={name}>
+                <dt className="inline">{name}: </dt>
+                <dd className="inline">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : "Unknown / not recorded"}
+      </div>
+    </div>
+  );
+}
+
+function quotaHeaderEntries(serialized: string | null | undefined): [string, string | number][] {
+  if (!serialized || serialized.length > 4096) return [];
+  let parsed: unknown;
+  try { parsed = JSON.parse(serialized); } catch { return []; }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
+  return Object.entries(parsed).filter(([name, value]) => {
+    const match = /^anthropic-ratelimit-unified-(?:5h-|7d-|overage-)?(status|reset|utilization)$/.exec(name);
+    if (!match) return false;
+    if (match[1] === "status") return ["allowed", "allowed_warning", "rejected"].includes(value);
+    if (match[1] === "utilization") return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100;
+    if (typeof value === "number") return Number.isSafeInteger(value) && value >= 0 && value <= 4102444800;
+    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) return false;
+    const date = new Date(value);
+    return Number.isFinite(date.valueOf()) && date.getUTCFullYear() >= 1970 && date.getUTCFullYear() <= 2100 && date.toISOString() === value;
+  });
 }
 
 function StatusBadge({ status }: { status: string }) {

@@ -1,5 +1,6 @@
 import { db } from "../db/connection.js";
 import type { RequestLog, HistoryQuery, HistoryStats } from "../types/index.js";
+import { sanitizeDiagnostics, type UpstreamDiagnostics } from "./upstreamDiagnostics.js";
 
 export function insertPendingRequest(params: {
   apiKeyId: number | null;
@@ -40,8 +41,10 @@ export function completeRequest(
     durationMs?: number;
     errorMessage?: string;
     fullResponse?: string;
+    diagnostics?: Partial<UpstreamDiagnostics>;
   }
 ): void {
+  const diagnostic = sanitizeDiagnostics(data.diagnostics);
   db.prepare(`
     UPDATE request_log
     SET status = ?,
@@ -56,6 +59,9 @@ export function completeRequest(
         duration_ms = ?,
         error_message = ?,
         full_response = ?,
+        upstream_http_status = ?, upstream_error_type = ?, upstream_error_code = ?,
+        upstream_request_id = ?, upstream_retry_after = ?, upstream_quota_headers = ?,
+        upstream_auth_kind = ?, upstream_diagnostic = ?, upstream_body_observation = ?,
         completed_at = datetime('now')
     WHERE id = ? AND status = 'pending'
   `).run(
@@ -71,6 +77,9 @@ export function completeRequest(
     data.durationMs ?? 0,
     status === "error" ? safeErrorType(data.errorMessage) : null,
     null,
+    diagnostic.upstream_http_status, diagnostic.upstream_error_type, diagnostic.upstream_error_code,
+    diagnostic.upstream_request_id, diagnostic.upstream_retry_after, diagnostic.upstream_quota_headers,
+    diagnostic.upstream_auth_kind, diagnostic.upstream_diagnostic, diagnostic.upstream_body_observation,
     logId
   );
 }

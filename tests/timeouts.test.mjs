@@ -102,6 +102,9 @@ test('upstream deadline before headers returns 502 and finalizes once as error',
   assert.equal(response.ended, true);
   assert.equal(JSON.parse(response.body).error.type, 'api_error');
   const row = await assertFinalizedOnce('no-headers');
+  assert.equal(row.upstream_diagnostic, 'timeout');
+  assert.equal(row.upstream_http_status, null);
+  assert.equal(row.upstream_body_observation, 'not_received');
   assert.equal(row.input_tokens, null);
   assert.equal(row.output_tokens, null);
 });
@@ -112,6 +115,9 @@ test('held SSE deadline disconnects without synthetic bytes and finalizes error/
   assert.equal(response.ended, false);
   assert.deepEqual(response.body, startBytes);
   const row = await assertFinalizedOnce('held-sse');
+  assert.equal(row.upstream_diagnostic, 'timeout');
+  assert.equal(row.upstream_http_status, 200);
+  assert.equal(row.upstream_body_observation, 'incomplete');
   assert.equal(row.input_tokens, 11);
   assert.equal(row.output_tokens, 0);
 });
@@ -121,5 +127,6 @@ test('upstream socket abort cleans up task/history once, never overwrites error 
   assert.equal(response.status, 200);
   assert.equal(response.ended, false);
   assert.deepEqual(response.body, startBytes);
-  await assertFinalizedOnce('socket-abort');
+  const row = await assertFinalizedOnce('socket-abort');
+  assert.equal(row.upstream_diagnostic, 'network_error');
 });

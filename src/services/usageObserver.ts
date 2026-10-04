@@ -95,7 +95,8 @@ export class UsageObserver {
       this.data = []; this.eventBytes = 0;
     } else if (line.startsWith("data:")) {
       const value = line.slice(5).replace(/^ /, "");
-      this.eventBytes += value.length;
+      // Include framing so an endless event made of empty data lines is bounded too.
+      this.eventBytes += Buffer.byteLength(value) + 1;
       if (this.eventBytes > 1024 * 1024) { this.disable(); return; }
       this.data.push(value);
     }

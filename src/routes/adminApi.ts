@@ -196,6 +196,8 @@ router.get("/history/export", (req, res) => {
       "input_tokens", "output_tokens", "total_cost_usd", "duration_ms",
       "cache_creation_input_tokens", "cache_read_input_tokens", "cache_creation_5m_tokens", "cache_creation_1h_tokens", "usage_complete",
       "status", "prompt_preview", "created_at", "completed_at",
+      "upstream_http_status", "upstream_error_type", "upstream_error_code", "upstream_request_id",
+      "upstream_retry_after", "upstream_quota_headers", "upstream_auth_kind", "upstream_diagnostic", "upstream_body_observation",
     ];
     const csvRows = [headers.join(",")];
     for (const row of result.rows) {

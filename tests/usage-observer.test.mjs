@@ -32,3 +32,12 @@ test('observer leaves invalid/unreported counters unknown and cannot fabricate t
   assert.equal(observer.snapshot().inputTokens, null);
   assert.equal(observer.snapshot().outputTokens, null);
 });
+
+test('usage observer bounds events consisting only of empty data lines', () => {
+  const observer = new UsageObserver(true);
+  observer.write(Buffer.from('data:\n'.repeat(1024 * 1024 + 1)));
+  observer.write(Buffer.from('\ndata: {"type":"message_stop"}\n\n'));
+  observer.end();
+  assert.equal(observer.canObserve, false);
+  assert.equal(observer.snapshot().usageComplete, false);
+});

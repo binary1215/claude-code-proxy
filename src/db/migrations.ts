@@ -125,4 +125,10 @@ export function runMigrations(db: Database.Database): void {
     if (!nativeCols.has(column)) db.exec(`ALTER TABLE request_log ADD COLUMN ${column} INTEGER`);
   }
   if (!nativeCols.has("usage_complete")) db.exec("ALTER TABLE request_log ADD COLUMN usage_complete INTEGER NOT NULL DEFAULT 0");
+  // Passive, allowlisted upstream diagnostics. Existing history remains unknown (NULL).
+  for (const column of ["upstream_http_status", "upstream_error_type", "upstream_error_code",
+    "upstream_request_id", "upstream_retry_after", "upstream_quota_headers", "upstream_auth_kind",
+    "upstream_diagnostic", "upstream_body_observation"]) {
+    if (!nativeCols.has(column)) db.exec(`ALTER TABLE request_log ADD COLUMN ${column} ${column === "upstream_http_status" ? "INTEGER" : "TEXT"}`);
+  }
 }

@@ -58,6 +58,15 @@ export interface RequestLog {
   duration_ms: number;
   status: "pending" | "success" | "error" | "cancelled";
   error_message: string | null;
+  upstream_http_status: number | null;
+  upstream_error_type: string | null;
+  upstream_error_code: string | null;
+  upstream_request_id: string | null;
+  upstream_retry_after: string | null;
+  upstream_quota_headers: string | null;
+  upstream_auth_kind: "oauth" | "api_key" | null;
+  upstream_diagnostic: string | null;
+  upstream_body_observation: string | null;
   prompt_preview: string | null;
   created_at: string;
   completed_at: string | null;

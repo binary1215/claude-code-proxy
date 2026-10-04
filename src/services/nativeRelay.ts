@@ -9,6 +9,7 @@ import { registerTask, unregisterTask } from "./taskTracker.js";
 import { recordTokensForRateLimit } from "../middleware/rateLimiter.js";
 import { UsageObserver } from "./usageObserver.js";
 import { logOperationalError } from "./operationalLogger.js";
+import { UpstreamDiagnosticsObserver, type DiagnosticReason } from "./upstreamDiagnostics.js";
 
 const HOP_HEADERS = new Set(["connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
   "te", "trailer", "transfer-encoding", "upgrade"]);
@@ -65,12 +66,14 @@ export function relayNative(req: Request, res: Response, endpoint: string): void
   const logId = insertPendingRequest({ apiKeyId: req.apiKeyId ?? null, completionId: id,
     requestedModel: model, resolvedModel: model, isStream: streaming });
   let observer = new UsageObserver(false, false);
+  const diagnostics = new UpstreamDiagnosticsObserver(credential.kind);
   let upstream: IncomingMessage | undefined;
   let done = false;
   let ended = false;
   let responseStatus: "success" | "error" = "success";
+  let responseIsSse = false;
 
-  const finish = (status: "success" | "error" | "cancelled") => {
+  const finish = (status: "success" | "error" | "cancelled", reason?: DiagnosticReason) => {
     if (done) return;
     done = true;
     clearTimeout(deadline);
@@ -78,7 +81,8 @@ export function relayNative(req: Request, res: Response, endpoint: string): void
     const usage = observer.snapshot();
     try {
       completeRequest(logId, status, { ...usage, usageComplete: status === "success" && usage.usageComplete,
-        durationMs: Date.now() - start, errorMessage: status === "error" ? "upstream_error" : undefined });
+        durationMs: Date.now() - start, errorMessage: status === "error" ? "upstream_error" : undefined,
+        diagnostics: diagnostics.snapshot(reason) });
     } catch (error) {
       // A full/unavailable log DB must not crash HTTP event handlers or corrupt delivery.
       logOperationalError("request_history_write_failed", error);
@@ -88,9 +92,9 @@ export function relayNative(req: Request, res: Response, endpoint: string): void
         (usage.cacheCreationInputTokens ?? 0) + (usage.cacheReadInputTokens ?? 0));
     }
   };
-  const fail = () => {
+  const fail = (reason: DiagnosticReason = "network_error") => {
     if (done) return;
-    finish("error");
+    finish("error", reason);
     if (res.headersSent) res.destroy();
     else res.status(502).json({ type: "error", error: { type: "api_error", message: "Upstream connection failed or timed out." } });
     upstream?.destroy();
@@ -102,8 +106,10 @@ export function relayNative(req: Request, res: Response, endpoint: string): void
     if (done) { incoming.destroy(); return; }
     upstream = incoming;
     const code = incoming.statusCode || 502;
+    diagnostics.receive(code, incoming.headers);
     responseStatus = code >= 200 && code < 300 ? "success" : "error";
-    const sse = String(incoming.headers["content-type"] || "").includes("text/event-stream");
+    const mime = String(incoming.headers["content-type"] || "").split(";")[0].trim().toLowerCase();
+    const sse = responseIsSse = mime === "text/event-stream";
     observer = new UsageObserver(sse, !incoming.headers["content-encoding"] || incoming.headers["content-encoding"] === "identity");
     res.status(code);
     const blocked = excludedHeaders(incoming.headers);
@@ -115,6 +121,7 @@ export function relayNative(req: Request, res: Response, endpoint: string): void
     incoming.on("data", (chunk: Buffer) => {
       if (done) return;
       observer.write(chunk);
+      diagnostics.write(chunk);
       if (!res.write(chunk)) incoming.pause();
     });
     res.on("drain", () => incoming.resume());
@@ -122,18 +129,19 @@ export function relayNative(req: Request, res: Response, endpoint: string): void
       if (done) return;
       ended = true;
       observer.end();
+      diagnostics.end();
       if (observer.hasError || (sse && observer.canObserve && !observer.streamComplete)) responseStatus = "error";
       res.end();
     });
-    incoming.on("error", fail);
-    incoming.on("aborted", fail);
+    incoming.on("error", () => fail());
+    incoming.on("aborted", () => fail());
   });
-  const deadline = setTimeout(fail, UPSTREAM_TIMEOUT_MS);
+  const deadline = setTimeout(() => fail("timeout"), UPSTREAM_TIMEOUT_MS);
   deadline.unref();
-  outgoing.on("error", fail);
+  outgoing.on("error", () => fail());
   const cancel = () => {
     if (done) return;
-    finish("cancelled");
+    finish("cancelled", "cancelled");
     upstream?.destroy();
     outgoing.destroy();
     if (!res.headersSent) res.status(499).json({ type: "error", error: { type: "api_error", message: "Request cancelled." } });
@@ -142,7 +150,11 @@ export function relayNative(req: Request, res: Response, endpoint: string): void
   registerTask({ id, model, promptPreview: "", apiKeyId: req.apiKeyId ?? null,
     apiKeyName: req.apiKeyName ?? null, startedAt: new Date(start).toISOString(),
     isStreaming: streaming, requestLogId: logId }, async () => cancel());
-  res.on("finish", () => { if (ended) finish(responseStatus); });
+  res.on("finish", () => {
+    if (ended) finish(responseStatus, observer.hasError ? "provider_error" : responseStatus === "error" &&
+      responseIsSse &&
+      observer.canObserve && !observer.streamComplete ? "truncated_stream" : undefined);
+  });
   res.on("close", () => { if (!res.writableFinished) cancel(); });
   res.on("error", cancel);
   req.on("aborted", cancel);
