@@ -58,10 +58,10 @@ export default function SettingsClient({
     <div className="space-y-6">
       {/* Current Token Status */}
       <div className="bg-white rounded-xl shadow p-6">
-        <h3 className="text-lg font-semibold mb-4">Claude Authentication</h3>
+        <h3 className="text-lg font-semibold mb-4">Upstream Authentication</h3>
         <p className="text-sm text-gray-500 mb-4">
-          The proxy needs a Claude OAuth token (from a Pro/Max subscription) or an Anthropic API key to make requests.
-          Configure it here instead of setting environment variables.
+          The Messages relay uses this credential to authenticate HTTP requests to its configured Claude upstream.
+          Configure a credential accepted by that upstream here or through environment variables.
         </p>
 
         <div className="flex items-center gap-3 mb-6">
@@ -94,7 +94,7 @@ export default function SettingsClient({
               type="password"
               value={tokenInput}
               onChange={(e) => setTokenInput(e.target.value)}
-              placeholder="sk-ant-oat01-... or sk-ant-api..."
+              placeholder="Upstream API key or token"
               className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-900"
               onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
             />
@@ -108,8 +108,7 @@ export default function SettingsClient({
           </div>
 
           <p className="text-xs text-gray-400">
-            Supports OAuth tokens (<code>sk-ant-oat01-...</code>) from <code>claude setup-token</code> or
-            standard API keys (<code>sk-ant-api...</code>). The token is stored encrypted in the database.
+            Use an API key or token accepted by the configured upstream. The credential is stored in the server database; protect the database and its backups.
           </p>
         </div>
 
@@ -133,7 +132,7 @@ export default function SettingsClient({
       <div className="bg-white rounded-xl shadow p-6">
         <h3 className="text-lg font-semibold mb-3">Token Priority</h3>
         <p className="text-sm text-gray-500 mb-3">
-          The server checks for a valid token in this order:
+          The server selects a configured credential in this order:
         </p>
         <ol className="list-decimal list-inside text-sm space-y-1 text-gray-600">
           <li className={status.source === "database" ? "font-semibold text-gray-900" : ""}>

@@ -19,7 +19,6 @@ interface ApiKey {
   name: string;
   key_prefix: string;
   is_revoked: boolean;
-  allow_builtin_tools: boolean;
   rate_limit_rpm: number | null;
   rate_limit_tpm: number | null;
   monthly_budget_usd: number | null;
@@ -159,7 +158,7 @@ export default function KeysClient({
               <th className="px-4 py-3 font-medium">Status</th>
               <th className="px-4 py-3 font-medium">Models</th>
               <th className="px-4 py-3 font-medium">Rate Limit</th>
-              <th className="px-4 py-3 font-medium">Budget</th>
+              <th className="px-4 py-3 font-medium">Legacy Budget</th>
               <th className="px-4 py-3 font-medium">Last Used</th>
               <th className="px-4 py-3 font-medium">Actions</th>
             </tr>
@@ -205,7 +204,10 @@ export default function KeysClient({
                       {key.rate_limit_rpm != null ? `${key.rate_limit_rpm} RPM` : "Default"}
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-500">
-                      {key.monthly_budget_usd != null ? `$${key.monthly_budget_usd}` : "Unlimited"}
+                      {key.monthly_budget_usd != null ? `$${key.monthly_budget_usd} — blocked` : "None"}
+                      {(key.system_prompt != null || key.cache_ttl_seconds != null) && (
+                        <div className="text-amber-700">Legacy system/cache — blocked</div>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-500">
                       {key.last_used_at ? new Date(key.last_used_at).toLocaleDateString() : "Never"}
@@ -252,16 +254,18 @@ function KeySettings({
 
   return (
     <div className="px-8 py-6 bg-gray-50 border-b space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* Built-in Tools Toggle */}
-        <SettingCard title="Built-in Tools" description="Allow Claude Code tools (Bash, Read, Edit, etc.)">
-          <Toggle
-            checked={apiKey.allow_builtin_tools}
+      {(apiKey.system_prompt != null || apiKey.cache_ttl_seconds != null) && (
+        <SettingCard title="Legacy System / Cache Settings" description="These removed key settings block native requests. Send system and cache_control in your Messages requests, then explicitly clear the legacy settings.">
+          <button
             disabled={disabled}
-            onChange={(v) => onUpdate({ allow_builtin_tools: v })}
-          />
+            onClick={() => onUpdate({ system_prompt: null, cache_ttl_seconds: null })}
+            className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-white disabled:opacity-50"
+          >
+            Clear legacy system/cache settings
+          </button>
         </SettingCard>
-
+      )}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Rate Limit RPM */}
         <SettingCard title="Rate Limit (RPM)" description="Max requests per minute. Empty = default (30)">
           <NumberInput
@@ -282,15 +286,22 @@ function KeySettings({
           />
         </SettingCard>
 
-        {/* Monthly Budget */}
-        <SettingCard title="Monthly Budget (USD)" description="Max spend per month. Empty = unlimited">
-          <NumberInput
-            value={apiKey.monthly_budget_usd}
-            disabled={disabled}
-            placeholder="Unlimited"
-            step="0.01"
-            onSave={(v) => onUpdate({ monthly_budget_usd: v })}
-          />
+        {/* Legacy Monthly Budget */}
+        <SettingCard title="Legacy Budget (USD)" description="Configure budgets in LiteLLM. A legacy budget blocks native requests until cleared.">
+          {apiKey.monthly_budget_usd != null ? (
+            <div className="space-y-2">
+              <p className="text-sm text-gray-700">${apiKey.monthly_budget_usd} configured</p>
+              <button
+                disabled={disabled}
+                onClick={() => onUpdate({ monthly_budget_usd: null })}
+                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-white disabled:opacity-50"
+              >
+                Clear legacy budget
+              </button>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500">No legacy budget</p>
+          )}
         </SettingCard>
 
         {/* Allowed Models */}
@@ -301,26 +312,7 @@ function KeySettings({
             onChange={(models) => onUpdate({ allowed_models: models.length > 0 ? models : null })}
           />
         </SettingCard>
-
-        {/* Cache TTL */}
-        <SettingCard title="Cache TTL (seconds)" description="Cache identical requests. Empty = no caching">
-          <NumberInput
-            value={apiKey.cache_ttl_seconds}
-            disabled={disabled}
-            placeholder="No caching"
-            onSave={(v) => onUpdate({ cache_ttl_seconds: v })}
-          />
-        </SettingCard>
       </div>
-
-      {/* System Prompt (full width) */}
-      <SettingCard title="System Prompt" description="Prepended to all requests from this key. Empty = none">
-        <SystemPromptEditor
-          value={apiKey.system_prompt}
-          disabled={disabled}
-          onSave={(v) => onUpdate({ system_prompt: v })}
-        />
-      </SettingCard>
     </div>
   );
 }
@@ -336,28 +328,6 @@ function SettingCard({ title, description, children }: {
       <p className="text-xs text-gray-400 mb-2">{description}</p>
       {children}
     </div>
-  );
-}
-
-function Toggle({ checked, disabled, onChange }: {
-  checked: boolean;
-  disabled: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  return (
-    <button
-      onClick={() => !disabled && onChange(!checked)}
-      disabled={disabled}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-        disabled ? "bg-gray-200 cursor-not-allowed"
-          : checked ? "bg-blue-600 cursor-pointer"
-          : "bg-gray-300 cursor-pointer hover:bg-gray-400"
-      }`}
-    >
-      <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
-        checked ? "translate-x-[22px]" : "translate-x-[3px]"
-      }`} />
-    </button>
   );
 }
 
@@ -456,68 +426,6 @@ function ModelSelector({ selected, disabled, onChange }: {
           </button>
         );
       })}
-    </div>
-  );
-}
-
-function SystemPromptEditor({ value, disabled, onSave }: {
-  value: string | null;
-  disabled: boolean;
-  onSave: (value: string | null) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value || "");
-
-  if (!editing) {
-    return (
-      <button
-        onClick={() => { if (!disabled) { setDraft(value || ""); setEditing(true); } }}
-        disabled={disabled}
-        className={`w-full text-left px-3 py-2 border border-gray-300 rounded-lg text-sm min-h-[60px] ${
-          disabled ? "bg-gray-100 cursor-not-allowed text-gray-400" : "hover:bg-white cursor-pointer"
-        }`}
-      >
-        {value ? (
-          <span className="text-gray-700 whitespace-pre-wrap">{value.length > 200 ? value.slice(0, 200) + "..." : value}</span>
-        ) : (
-          <span className="text-gray-400">No system prompt set</span>
-        )}
-      </button>
-    );
-  }
-
-  return (
-    <div className="space-y-2">
-      <textarea
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        rows={4}
-        placeholder="Enter a system prompt that will be prepended to all requests from this key..."
-        className="w-full px-3 py-2 border border-blue-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        autoFocus
-      />
-      <div className="flex gap-2">
-        <button
-          onClick={() => { onSave(draft.trim() || null); setEditing(false); }}
-          className="px-3 py-1 bg-blue-600 text-white rounded-lg text-xs"
-        >
-          Save
-        </button>
-        <button
-          onClick={() => setEditing(false)}
-          className="px-3 py-1 border border-gray-300 rounded-lg text-xs"
-        >
-          Cancel
-        </button>
-        {value && (
-          <button
-            onClick={() => { onSave(null); setEditing(false); }}
-            className="px-3 py-1 text-red-600 text-xs hover:text-red-800"
-          >
-            Clear
-          </button>
-        )}
-      </div>
     </div>
   );
 }

@@ -68,7 +68,16 @@ export async function fetchTokenStatus() {
   return res.json();
 }
 
-export async function fetchStats(params?: Record<string, string>) {
+export interface HistoryStats {
+  total_requests: number;
+  total_input_tokens: number | null;
+  total_output_tokens: number | null;
+  total_cost_usd: number | null;
+  by_model: { model: string; count: number; cost_usd: number | null }[];
+  by_status: { status: string; count: number }[];
+}
+
+export async function fetchStats(params?: Record<string, string>): Promise<HistoryStats> {
   const query = params ? `?${new URLSearchParams(params).toString()}` : "";
   const res = await adminFetch(`/history/stats${query}`);
   if (!res.ok) throw new Error("Failed to fetch stats");

@@ -37,14 +37,6 @@ export async function revokeKey(id: number) {
   return res.json();
 }
 
-export async function updateKeyBuiltinTools(id: number, allow: boolean) {
-  const res = await clientFetch(`/keys/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify({ allow_builtin_tools: allow }),
-  });
-  return res.json();
-}
-
 export async function updateKey(id: number, fields: Record<string, unknown>) {
   const res = await clientFetch(`/keys/${id}`, {
     method: "PATCH",

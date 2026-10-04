@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { fetchHistory, fetchRequestDetail, getExportUrl } from "@/lib/client-api";
+import { formatCost, formatTokenCount } from "@/lib/usage";
 
 interface RequestLog {
   id: number;
@@ -9,9 +10,14 @@ interface RequestLog {
   requested_model: string;
   resolved_model: string;
   is_stream: number;
-  input_tokens: number;
-  output_tokens: number;
-  total_cost_usd: number;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  cache_creation_input_tokens: number | null;
+  cache_read_input_tokens: number | null;
+  cache_creation_5m_tokens: number | null;
+  cache_creation_1h_tokens: number | null;
+  usage_complete: boolean | 0 | 1;
+  total_cost_usd: number | null;
   duration_ms: number;
   status: string;
   prompt_preview: string | null;
@@ -216,13 +222,13 @@ export default function HistoryPage() {
                       <StatusBadge status={row.status} />
                     </td>
                     <td className="px-4 py-3 text-right font-mono text-xs">
-                      {row.input_tokens.toLocaleString()}
+                      {formatTokenCount(row.input_tokens)}
                     </td>
                     <td className="px-4 py-3 text-right font-mono text-xs">
-                      {row.output_tokens.toLocaleString()}
+                      {formatTokenCount(row.output_tokens)}
                     </td>
                     <td className="px-4 py-3 text-right font-mono text-xs">
-                      ${row.total_cost_usd.toFixed(4)}
+                      {formatCost(row.total_cost_usd)}
                     </td>
                     <td className="px-4 py-3 text-right text-xs text-gray-500">
                       {formatDuration(row.duration_ms)}
@@ -304,6 +310,30 @@ function DetailPanel({
         <div>
           <span className="font-medium text-gray-700">Requested Model: </span>
           <span className="font-mono">{detail.requested_model}</span>
+        </div>
+        <div>
+          <span className="font-medium text-gray-700">Usage: </span>
+          {detail.usage_complete ? "Complete" : detail.status === "pending" ? "Pending" : "Incomplete"}
+        </div>
+        <div>
+          <span className="font-medium text-gray-700">Cost: </span>
+          {formatCost(detail.total_cost_usd)}
+        </div>
+        <div>
+          <span className="font-medium text-gray-700">Cache Read Tokens: </span>
+          {formatTokenCount(detail.cache_read_input_tokens)}
+        </div>
+        <div>
+          <span className="font-medium text-gray-700">Cache Write Tokens: </span>
+          {formatTokenCount(detail.cache_creation_input_tokens)}
+        </div>
+        <div>
+          <span className="font-medium text-gray-700">Cache Write (5m): </span>
+          {formatTokenCount(detail.cache_creation_5m_tokens)}
+        </div>
+        <div>
+          <span className="font-medium text-gray-700">Cache Write (1h): </span>
+          {formatTokenCount(detail.cache_creation_1h_tokens)}
         </div>
       </div>
 

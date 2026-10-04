@@ -1,5 +1,6 @@
 import { fetchStats } from "@/lib/api";
 import { fetchTasks } from "@/lib/api";
+import { formatCost, formatTotalTokens } from "@/lib/usage";
 
 export const dynamic = "force-dynamic";
 
@@ -26,12 +27,12 @@ export default async function DashboardPage() {
         />
         <StatCard
           label="Tokens Today"
-          value={(stats.total_input_tokens + stats.total_output_tokens).toLocaleString()}
+          value={formatTotalTokens(stats.total_input_tokens, stats.total_output_tokens)}
           color="purple"
         />
         <StatCard
           label="Cost Today"
-          value={`$${stats.total_cost_usd.toFixed(4)}`}
+          value={formatCost(stats.total_cost_usd)}
           color="green"
         />
       </div>
@@ -48,11 +49,11 @@ export default async function DashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {stats.by_model.map((m: any) => (
+              {stats.by_model.map((m) => (
                 <tr key={m.model} className="border-b last:border-0">
                   <td className="py-2 font-mono text-xs">{m.model}</td>
                   <td className="py-2">{m.count}</td>
-                  <td className="py-2">${m.cost_usd.toFixed(4)}</td>
+                  <td className="py-2">{formatCost(m.cost_usd)}</td>
                 </tr>
               ))}
             </tbody>
@@ -64,7 +65,7 @@ export default async function DashboardPage() {
         <div className="bg-white rounded-xl shadow p-6">
           <h3 className="text-lg font-semibold mb-4">Requests by Status</h3>
           <div className="flex gap-4">
-            {stats.by_status.map((s: any) => (
+            {stats.by_status.map((s) => (
               <div
                 key={s.status}
                 className="flex items-center gap-2 px-3 py-1 rounded-full bg-gray-100 text-sm"

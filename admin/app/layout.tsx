@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Claude API Proxy - Admin",
-  description: "Admin dashboard for Claude Code API proxy",
+  description: "Admin dashboard for the Claude Messages relay",
 };
 
 export default function RootLayout({
