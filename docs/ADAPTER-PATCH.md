@@ -14,7 +14,7 @@ This supersedes the historical SDK adapter implementation. The SDK execution pat
 {"monthly_budget_usd":null,"system_prompt":null,"cache_ttl_seconds":null}
 ```
 
-6. Re-run the proxy tests and pinned LiteLLM suite, then test each real coding client's replay behavior before rollout. Preserve reasoning payloads across tool turns. Do not route signed history to a different backend account silently.
+6. Re-run the proxy tests and stock LiteLLM HTTP suite, then test each real coding client's replay behavior before rollout. Do not install the withdrawn LiteLLM source patch. Preserve reasoning payloads across tool turns. Do not route signed history to a different backend account silently.
 
 ## Stored data
 
@@ -28,6 +28,7 @@ Removed key-setting columns may remain as inert/migration metadata so upgrading 
 - Per-key RPM/observed-token TPM and model allowlists remain. TPM is best effort, not a preflight reservation. Count-token requests do not add generation usage to the TPM window.
 - A side-channel parser observes up to 4 MiB JSON or 1 MiB per SSE line/event; it discards its observation buffer if exceeded while transport continues. Compressed upstream bytes are forwarded without decoding or inferred usage.
 - New logs contain operational metadata only. Failure text is reduced to an allowlisted category. DB upstream credentials remain plaintext, not encrypted.
+- Safe diagnostics are added as nullable fields; old rows remain unknown. A separate 64 KiB JSON/SSE-event observer records only validated status/type/code/request-ID/retry/quota/auth metadata. Raw error messages and request/reply bodies are not retained. Generic 429 remains `unknown_429`; headers are observations, not a quota or entitlement verdict.
 - Midstream errors, missing terminal SSE events, client disconnects, administrative cancellation and timeouts do not fabricate a complete successful usage record. No transport retry is performed.
 - Docker files remain non-root and SDK-free. Local Node tests and admin builds do not prove a Docker image build, live OAuth eligibility, real cache hits or production LAN behavior.
 
