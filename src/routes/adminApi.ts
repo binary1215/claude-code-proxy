@@ -42,8 +42,19 @@ router.patch("/keys/:id", (req, res) => {
   const updates: Record<string, unknown> = {};
   const b = req.body;
 
-  if (typeof b.allow_builtin_tools === "boolean") {
-    updates.allow_builtin_tools = b.allow_builtin_tools ? 1 : 0;
+  if (b.allow_builtin_tools !== undefined || ["monthly_budget_usd", "system_prompt", "cache_ttl_seconds"].some(k => b[k] !== undefined && b[k] !== null)) {
+    res.status(400).json({ error: { type: "invalid_request_error", message: "SDK tool/system/cache settings and proxy USD budgets were removed. Existing budget/system/cache fields may only be cleared with null. Configure budgets in LiteLLM." } });
+    return;
+  }
+  for (const field of ["rate_limit_rpm", "rate_limit_tpm"]) {
+    if (b[field] !== undefined && b[field] !== null && (!Number.isSafeInteger(b[field]) || b[field] < 0)) {
+      res.status(400).json({ error: { type: "invalid_request_error", message: "Rate limits must be non-negative integers or null." } });
+      return;
+    }
+  }
+  if (b.allowed_models !== undefined && b.allowed_models !== null && (!Array.isArray(b.allowed_models) || b.allowed_models.some((m: unknown) => typeof m !== "string" || !m))) {
+    res.status(400).json({ error: { type: "invalid_request_error", message: "allowed_models must be an array of model IDs or null." } });
+    return;
   }
   if (b.rate_limit_rpm !== undefined) {
     updates.rate_limit_rpm = b.rate_limit_rpm === null ? null : parseInt(b.rate_limit_rpm);
@@ -104,7 +115,7 @@ router.get("/settings/token", (_req, res) => {
 
 router.post("/settings/token", (req, res) => {
   const { token } = req.body;
-  if (!token || typeof token !== "string" || token.trim().length < 10) {
+  if (!token || typeof token !== "string" || token.trim().length < 10 || /[^\x21-\x7e]/.test(token.trim())) {
     res.status(400).json({
       error: { message: "A valid token is required", type: "invalid_request_error" },
     });
@@ -183,6 +194,7 @@ router.get("/history/export", (req, res) => {
     const headers = [
       "id", "api_key_name", "requested_model", "resolved_model", "is_stream",
       "input_tokens", "output_tokens", "total_cost_usd", "duration_ms",
+      "cache_creation_input_tokens", "cache_read_input_tokens", "cache_creation_5m_tokens", "cache_creation_1h_tokens", "usage_complete",
       "status", "prompt_preview", "created_at", "completed_at",
     ];
     const csvRows = [headers.join(",")];

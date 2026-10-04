@@ -26,7 +26,7 @@ router.get("/health", async (_req, res) => {
 
   res.json({
     status: "ok",
-    backend: "claude-code-sdk",
+    backend: "native-anthropic-http",
     db_status: dbStatus,
     active_tasks: getTaskCount(),
     token_configured: token.configured,

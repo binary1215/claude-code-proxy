@@ -114,7 +114,7 @@ export function rateLimitMiddleware(req: Request, res: Response, next: NextFunct
 }
 
 /**
- * Record token usage for TPM tracking. Called from sdkBridge after the
+ * Record token usage for TPM tracking. Called after the
  * response completes, so the actual token count is known.
  */
 export function recordTokensForRateLimit(keyId: number, tokens: number): void {

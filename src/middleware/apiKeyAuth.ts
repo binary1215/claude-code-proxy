@@ -8,7 +8,7 @@ declare global {
     interface Request {
       apiKeyId?: number;
       apiKeyName?: string;
-      allowBuiltinTools?: boolean;
+      rawBody?: Buffer;
       rateLimitRpm?: number | null;
       rateLimitTpm?: number | null;
       monthlyBudgetUsd?: number | null;
@@ -90,7 +90,6 @@ export function apiKeyAuth(req: Request, res: Response, next: NextFunction): voi
 
   req.apiKeyId = apiKey.id;
   req.apiKeyName = apiKey.name;
-  req.allowBuiltinTools = apiKey.allow_builtin_tools === 1;
   req.rateLimitRpm = apiKey.rate_limit_rpm;
   req.rateLimitTpm = apiKey.rate_limit_tpm;
   req.monthlyBudgetUsd = apiKey.monthly_budget_usd;

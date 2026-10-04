@@ -1,6 +1,6 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID } from "node:crypto";
 import { resolveModel } from "../models.js";
 import { OLLAMA_URL } from "../config.js";
 import { insertPendingRequest, completeRequest } from "../services/historyService.js";
@@ -34,7 +34,7 @@ router.post("/embeddings", async (req: Request, res: Response) => {
 
     const requestedModel = model || "nomic-embed-text";
     const resolvedModel = resolveModel(requestedModel);
-    const completionId = `embd-${uuidv4()}`;
+    const completionId = `embd-${randomUUID()}`;
     const startTime = Date.now();
 
     // Check model restrictions

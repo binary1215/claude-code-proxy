@@ -22,9 +22,8 @@ RUN npm ci --omit=dev
 
 COPY --from=build /app/dist/ ./dist/
 
-# The default gateway adapter does not need root privileges.
-RUN mkdir -p /app/data/runtime && chown -R node:node /app/data
-ENV HOME=/app/data/runtime
+# The relay never starts a CLI or executes caller tools.
+RUN mkdir -p /app/data && chown -R node:node /app/data
 USER node
 
 ENV PORT=3456

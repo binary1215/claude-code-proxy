@@ -24,7 +24,6 @@ export interface ApiKeyPublic {
   created_at: string;
   revoked_at: string | null;
   last_used_at: string | null;
-  allow_builtin_tools: boolean;
   rate_limit_rpm: number | null;
   rate_limit_tpm: number | null;
   monthly_budget_usd: number | null;
@@ -48,9 +47,14 @@ export interface RequestLog {
   requested_model: string;
   resolved_model: string;
   is_stream: number;
-  input_tokens: number;
-  output_tokens: number;
-  total_cost_usd: number;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  cache_creation_input_tokens: number | null;
+  cache_read_input_tokens: number | null;
+  cache_creation_5m_tokens: number | null;
+  cache_creation_1h_tokens: number | null;
+  usage_complete: number;
+  total_cost_usd: number | null;
   duration_ms: number;
   status: "pending" | "success" | "error" | "cancelled";
   error_message: string | null;
@@ -60,7 +64,7 @@ export interface RequestLog {
 }
 
 export interface ActiveTask {
-  id: string; // completionId (chatcmpl-*)
+  id: string;
   model: string;
   promptPreview: string;
   apiKeyId: number | null;
@@ -92,13 +96,13 @@ export interface HistoryQuery {
 
 export interface HistoryStats {
   total_requests: number;
-  total_cost_usd: number;
-  total_input_tokens: number;
-  total_output_tokens: number;
+  total_cost_usd: number | null;
+  total_input_tokens: number | null;
+  total_output_tokens: number | null;
   by_model: Array<{
     model: string;
     count: number;
-    cost_usd: number;
+    cost_usd: number | null;
   }>;
   by_status: Array<{
     status: string;

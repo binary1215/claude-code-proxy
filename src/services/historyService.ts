@@ -29,9 +29,14 @@ export function completeRequest(
   logId: number,
   status: "success" | "error" | "cancelled",
   data: {
-    inputTokens?: number;
-    outputTokens?: number;
-    totalCostUsd?: number;
+    inputTokens?: number | null;
+    outputTokens?: number | null;
+    totalCostUsd?: number | null;
+    cacheCreationInputTokens?: number | null;
+    cacheReadInputTokens?: number | null;
+    cacheCreation5mTokens?: number | null;
+    cacheCreation1hTokens?: number | null;
+    usageComplete?: boolean;
     durationMs?: number;
     errorMessage?: string;
     fullResponse?: string;
@@ -43,16 +48,26 @@ export function completeRequest(
         input_tokens = ?,
         output_tokens = ?,
         total_cost_usd = ?,
+        cache_creation_input_tokens = ?,
+        cache_read_input_tokens = ?,
+        cache_creation_5m_tokens = ?,
+        cache_creation_1h_tokens = ?,
+        usage_complete = ?,
         duration_ms = ?,
         error_message = ?,
         full_response = ?,
         completed_at = datetime('now')
-    WHERE id = ?
+    WHERE id = ? AND status = 'pending'
   `).run(
     status,
-    data.inputTokens ?? 0,
-    data.outputTokens ?? 0,
-    data.totalCostUsd ?? 0,
+    data.inputTokens ?? null,
+    data.outputTokens ?? null,
+    data.totalCostUsd ?? null,
+    data.cacheCreationInputTokens ?? null,
+    data.cacheReadInputTokens ?? null,
+    data.cacheCreation5mTokens ?? null,
+    data.cacheCreation1hTokens ?? null,
+    data.usageComplete ? 1 : 0,
     data.durationMs ?? 0,
     status === "error" ? safeErrorType(data.errorMessage) : null,
     null,
@@ -60,7 +75,7 @@ export function completeRequest(
   );
 }
 
-// Keep only known operational categories, never SDK text/stderr or caller data.
+// Keep only known operational categories, never upstream text or caller data.
 const ERROR_TYPES = new Set([
   "rate_limit_error", "not_found_error", "authentication_error",
   "permission_error", "billing_error", "server_error", "upstream_error", "invalid_request_error",
@@ -135,22 +150,23 @@ export function getStats(from?: string, to?: string): HistoryStats {
   const totals = db.prepare(`
     SELECT
       COUNT(*) as total_requests,
-      COALESCE(SUM(total_cost_usd), 0) as total_cost_usd,
-      COALESCE(SUM(input_tokens), 0) as total_input_tokens,
-      COALESCE(SUM(output_tokens), 0) as total_output_tokens
+      CASE WHEN COUNT(total_cost_usd) = COUNT(*) THEN SUM(total_cost_usd) END as total_cost_usd,
+      CASE WHEN COUNT(input_tokens) = COUNT(*) THEN SUM(input_tokens) END as total_input_tokens,
+      CASE WHEN COUNT(output_tokens) = COUNT(*) THEN SUM(output_tokens) END as total_output_tokens
     FROM request_log ${where}
   `).get(...values) as {
     total_requests: number;
-    total_cost_usd: number;
-    total_input_tokens: number;
-    total_output_tokens: number;
+    total_cost_usd: number | null;
+    total_input_tokens: number | null;
+    total_output_tokens: number | null;
   };
 
   const byModel = db.prepare(`
-    SELECT resolved_model as model, COUNT(*) as count, COALESCE(SUM(total_cost_usd), 0) as cost_usd
+    SELECT resolved_model as model, COUNT(*) as count,
+      CASE WHEN COUNT(total_cost_usd) = COUNT(*) THEN SUM(total_cost_usd) END as cost_usd
     FROM request_log ${where}
     GROUP BY resolved_model ORDER BY count DESC
-  `).all(...values) as Array<{ model: string; count: number; cost_usd: number }>;
+  `).all(...values) as Array<{ model: string; count: number; cost_usd: number | null }>;
 
   const byStatus = db.prepare(`
     SELECT status, COUNT(*) as count

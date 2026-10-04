@@ -9,8 +9,11 @@ export function errorHandler(
 ): void {
   logOperationalError("unhandled_request_error", err);
 
-  const status = err.status || err.statusCode || 500;
+  if (res.headersSent) { res.destroy(); return; }
+  const candidate = err.status || err.statusCode;
+  const status = Number.isInteger(candidate) && candidate >= 400 && candidate <= 599 ? candidate : 500;
   res.status(status).json({
+    type: "error",
     error: {
       message: status >= 500 ? "Internal server error" : "Invalid request",
       type: status >= 500 ? "server_error" : "invalid_request_error",

@@ -5,7 +5,10 @@ services:
       - PORT=3456
       - DATABASE_PATH=/app/data/proxy.db
       - ADMIN_API_SECRET=${ADMIN_API_SECRET}
-      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN}
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
+      - UPSTREAM_TIMEOUT_MS=${UPSTREAM_TIMEOUT_MS:-300000}
       - OLLAMA_URL=http://ollama:11434
     volumes:
       - app-data:/app/data

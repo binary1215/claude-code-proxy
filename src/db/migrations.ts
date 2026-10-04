@@ -92,4 +92,37 @@ export function runMigrations(db: Database.Database): void {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
+
+  // Native upstreams do not report billed USD; missing usage must remain unknown.
+  // Rebuild only the old NOT NULL schema, transactionally preserving every row.
+  const usageCols = db.prepare("PRAGMA table_info(request_log)").all() as Array<{ name: string; notnull: number }>;
+  if (usageCols.some(c => c.name === "input_tokens" && c.notnull === 1)) {
+    db.transaction(() => {
+      db.exec(`
+        CREATE TABLE request_log_native (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          api_key_id INTEGER REFERENCES api_keys(id),
+          completion_id TEXT NOT NULL, requested_model TEXT NOT NULL, resolved_model TEXT NOT NULL,
+          is_stream INTEGER NOT NULL DEFAULT 0,
+          input_tokens INTEGER, output_tokens INTEGER, total_cost_usd REAL,
+          duration_ms INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'pending',
+          error_message TEXT, prompt_preview TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')), completed_at TEXT,
+          full_prompt TEXT, full_response TEXT
+        );
+        INSERT INTO request_log_native SELECT id, api_key_id, completion_id, requested_model, resolved_model,
+          is_stream, input_tokens, output_tokens, total_cost_usd, duration_ms, status, error_message,
+          prompt_preview, created_at, completed_at, full_prompt, full_response FROM request_log;
+        DROP TABLE request_log;
+        ALTER TABLE request_log_native RENAME TO request_log;
+        CREATE INDEX idx_request_log_api_key ON request_log(api_key_id);
+        CREATE INDEX idx_request_log_created ON request_log(created_at);
+      `);
+    })();
+  }
+  const nativeCols = new Set((db.prepare("PRAGMA table_info(request_log)").all() as Array<{ name: string }>).map(c => c.name));
+  for (const column of ["cache_creation_input_tokens", "cache_read_input_tokens", "cache_creation_5m_tokens", "cache_creation_1h_tokens"]) {
+    if (!nativeCols.has(column)) db.exec(`ALTER TABLE request_log ADD COLUMN ${column} INTEGER`);
+  }
+  if (!nativeCols.has("usage_complete")) db.exec("ALTER TABLE request_log ADD COLUMN usage_complete INTEGER NOT NULL DEFAULT 0");
 }

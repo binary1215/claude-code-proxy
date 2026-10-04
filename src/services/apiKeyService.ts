@@ -19,7 +19,6 @@ function toPublic(row: ApiKey): ApiKeyPublic {
     created_at: row.created_at,
     revoked_at: row.revoked_at,
     last_used_at: row.last_used_at,
-    allow_builtin_tools: row.allow_builtin_tools === 1,
     rate_limit_rpm: row.rate_limit_rpm,
     rate_limit_tpm: row.rate_limit_tpm,
     monthly_budget_usd: row.monthly_budget_usd,
@@ -74,16 +73,8 @@ export function validateApiKey(raw: string): ApiKey | null {
   return row ?? null;
 }
 
-export function updateApiKeyBuiltinTools(id: number, allow: boolean): boolean {
-  const result = db.prepare(
-    "UPDATE api_keys SET allow_builtin_tools = ? WHERE id = ?"
-  ).run(allow ? 1 : 0, id);
-  return result.changes > 0;
-}
-
 // Whitelist of columns that can be updated via the generic updater
 const UPDATABLE_COLUMNS = new Set([
-  "allow_builtin_tools",
   "rate_limit_rpm",
   "rate_limit_tpm",
   "monthly_budget_usd",
