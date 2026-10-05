@@ -14,9 +14,9 @@ or modify LiteLLM source/license flags.
 
 | Gate | Required evidence | Current boundary |
 | --- | --- | --- |
-| Reproducible implementation | Exact Git/image revision, native and Responses regression tests | Build and 123 tests pass locally at `1d9bbf7`; earlier 115-test Linux/Node 22 image at `98d26fe` passed. New hoist code is not Docker-qualified or deployed over the existing service |
+| Reproducible implementation | Exact Git/image revision, native and Responses regression tests | Hoist source `f75d75c` builds in Docker and its 123 regressions pass inside the Node 22 image. Real Haiku Responses qualification fails at native `message_start` metadata validation; not deployed over the existing service |
 | Actual clients | Claude Code and Codex on each selected gateway route, streaming, tool execution/result, further user turns | Codex synthetic chain passes; Claude Code single-signature-event state subset passes, but split-event client loss and gateway metadata removal remain; no deployed `.7` client acceptance |
-| Reasoning continuity | Ordered thinking/signatures, signed-empty/redacted blocks and tool IDs survive replay; corruption fails explicitly | Proxy and Codex fake-provider evidence exists; real provider acceptance remains a separate gate |
+| Reasoning continuity | Ordered thinking/signatures, signed-empty/redacted blocks and tool IDs survive replay; corruption fails explicitly | Proxy and Codex fake-provider evidence exists; 2026-10-06 direct Haiku probe fails before reasoning mint/replay, so real Responses replay remains unverified |
 | Cache accounting | Repeated eligible native prefix, provider cache read/write/fresh/output counts and matching relay history | Prior native/temporary-gateway Haiku cache hits exist; new Responses/deployed gateway measurements do not |
 | Gateway authorization | Missing/expired/revoked keys, allowed/denied routes, relay model ACL, caller/provider secret separation | Stock source/helper audit exists; actual gateway DB-backed virtual-key acceptance remains |
 | Gateway accounting | Stream completion/failure/cancellation usage and persisted spend compared with known source counters | Generic pass-through accounting is not verified; unknown cost must not be presented as zero or a saving |

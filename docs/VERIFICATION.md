@@ -600,6 +600,82 @@ not establish instruction hierarchy equivalence or cache savings. See the
 No installed client, LiteLLM source or `.7`/`.64` deployment was changed. Earlier
 Docker qualification applies to `98d26fe`, not this new mode.
 
+### Hoist Docker build and real-provider gate (2026-10-06)
+
+Exact archived source `f75d75c8030871fa3c39f29c0d11bbd4129c8426` (hoist code
+`1d9bbf7`) was built using the repository Dockerfile on `.64`, producing
+`sha256:1a54131ea9569e3c60c533adb729f95b40d3e13f5b4c9abbd9b7d0811b95974f`.
+The source archive SHA-256 is
+`d04e7fd3ff521ec41bca625508ab09d61208aac3b28b012a022d56775fd1c5fe`.
+All **123 existing Node regressions pass inside that image**, with network disabled,
+non-root/read-only runtime and synthetic credentials. This is not a lifecycle
+upgrade qualification or a cutover of the running service.
+
+Two subsequent, separately bounded direct-provider invocations each made exactly
+one request to `claude-haiku-4-5-20251001`, using the existing container's selected
+OAuth credential privately. The first was the planned three-phase probe, stopped
+at seed failure; the second was explicitly diagnostic-only with a one-call cap.
+There were **two real provider calls total**, no fallback/hidden retry, and no
+LiteLLM or actual Codex session in either invocation.
+
+Both returned upstream and downstream HTTP 200 but failed stream qualification.
+The diagnostic invocation identifies the actual boundary:
+
+- Native `message_start` produced `response.failed` /
+  `unsupported_upstream_event`; the history row records failure/incomplete usage.
+- The message model matches the requested Haiku model. There are zero extra
+  event-level keys, but **three extra message-level keys** outside the adapter's
+  allowlist. `container` and `stop_details` are present; the third key and all
+  values were deliberately not captured. Do not infer their values or a refusal
+  from presence alone.
+- `ResponsesStream.handle()` rejects these extra keys before reasoning creation,
+  tool output, or developer-position replay. A synthetic reproduction now shows
+  that either named field alone (even null) causes this current failure.
+- The relay sets HTTP 200 before translating SSE; HTTP status alone is not a
+  success oracle. The probe correctly rejects the failed terminal.
+
+The current [official Messages schema](https://platform.claude.com/docs/en/api/messages/create)
+documents `container` and `stop_details`. This is evidence of an adapter/schema
+compatibility gap, not proof of an OAuth quota failure. A future correction must
+explicitly handle supported metadata and stop semantics, not ignore all unknown
+fields or drop signed reasoning. No runtime parser relaxation was made in this
+test-only change; the full third-field/value shape remains unobserved.
+
+**Not reached:** real signed-state replay, identical replay/cache measurements,
+changed-system negative control, actual client compaction, `.7` routing or gateway
+authorization/accounting. False cache-read flags in these failed reports mean
+unobserved, **not zero cache hits**, and do not establish any cost or quality claim.
+
+Both fresh candidate containers use an in-memory DB, no mounts/host ports,
+UID/GID 1000, read-only rootfs, dropped capabilities, bounded resources and bridge
+networking for the explicit provider call. Test-only instrumentation reports
+fixed error enums, booleans/counts and usage numbers, not content or signatures.
+No prompt/response/preview is stored. Existing `test-claudemock` ID, image, start
+time and mounts remain unchanged; owned temporary containers were removed.
+The injected token exists in Docker container metadata until that removal; this
+is not a claim of diskless credential handling or OS-level egress isolation.
+
+Sanitized local evidence under
+`C:/Users/binary/AppData/Local/Temp/claude-hoist-next-20261006/`:
+
+- `hoist-live-result.json`, SHA-256
+  `22143a201e99225a2cdd19da5652b79ee33d89ecd9c69a2326e7cf8c7debe2ba`;
+  helper SHA-256 `3d84d0d00ab929e2cbae6d3c59b47e2d5282f68ab8d95940f91f7ab1fe01abb9`.
+- `hoist-diagnostic-result.json`, SHA-256
+  `d6fbd3bfd3ca5f7316c68a2a18fdf4d5eee2c0f1aeae1f9336a5728636ccf09f`;
+  helper SHA-256 `72bc82563cb559851ccd62b983b57b453734b8853bd726d3ac3b99cf8d5164b4`.
+
+The retained [manual live runner](../integration/deployment/README-lifecycle.md#separate-manual-live-hoist-probe)
+has 11 pure Python safety tests and seven pure helper tests. After adding the
+metadata failure reproduction, all 124 backend tests pass locally, and all 17
+stream tests (including that reproduction) pass in the exact candidate image.
+These passing negative tests reproduce the live defect; they do not fix it.
+Limits are per
+invocation, not a durable cross-run allowance; failed/uncertain runs must not be
+automatically repeated. The gateway owner independently rechecked `.7`: no custom
+route is applied; original Stack configuration access in authenticated Portainer
+is still needed. No gateway reload, credential change or deployment occurred.
+
 ### Remaining end-to-end constraints
 
 - General-purpose subscription-token relay eligibility and premium-model raw

@@ -40,3 +40,45 @@ python3 -m unittest discover -s integration/deployment -p 'test_*.py'
 Limits: this is direct synthetic HTTP qualification, not an actual client/LiteLLM or paid-provider session, deployment approval, production backup restore, crash recovery, in-flight drain, graceful termination, rate-limit continuity, or high availability. Rate-limiter windows and task tracking are in memory and reset on re-creation. Migrations in the two images are currently identical, so repeated startup/rollback checks do not prove future schema reversibility. Capsule TTL is one hour for this fixture; expiry, foreign principals/models/upstreams, corrupt volumes and live key rotation are outside its bounded lifecycle cases. The same upstream credential/origin is intentional for state binding. Real signing/entitlement/provider acceptance is not established by synthetic signatures.
 
 The 2026-10-05 `.64` host execution passed all eight phases and cleanup; seven guard tests passed locally and on the host. See [the exact images](../../docs/VERIFICATION.md#isolated-docker-lifecycle-qualification) and [restoration evidence/result hash](../../docs/VERIFICATION.md#fresh-volume-backup-restoration-extension). The earlier seven-phase capture is retained separately. These rehearsals do not authorize a service cutover or make future image pairs compatible.
+
+## Separate manual live hoist probe
+
+`run_hoist_live_probe.py` and `hoist_live_probe.mjs` are **not** the synthetic
+lifecycle fixture above. They are a host-specific manual qualification of the
+exact `f75d75c` image recorded in [verification](../../docs/VERIFICATION.md#hoist-docker-build-and-real-provider-gate-2026-10-06).
+They deliberately contact the real Anthropic endpoint with the existing test
+container's selected OAuth credential. Review the code and obtain bounded live
+call authorization before use; these are not CI commands or auto-retry helpers.
+
+The runner refuses changed source/container/image identities, pins the local
+Docker socket, reads the selected credential through a read-only DB query with
+the existing environment fallback, and never falls back to an API key. Credential
+stdout is captured privately inside the host process. A fresh candidate has no
+mounts or exposed ports, an in-memory DB and ephemeral synthetic relay/state keys;
+its network is bridge, not none. Secrets are passed through child environment,
+not argv or a custom secret file, but Docker stores them in container metadata
+until exact owner/image-checked cleanup. Reports omit bodies, signatures and
+arbitrary error/log strings. Existing service state must remain unchanged.
+
+`--allow-live-haiku-oauth` is required. The normal sequence permits at most three
+Haiku calls: seed reasoning/tool output, late-developer hoisted replay, and an
+identical replay. Only if these pass does a local changed-instruction test require
+409 and zero further upstream calls. No actual tool is executed. Add
+`--diagnose-once` for one seed request only; it cannot qualify replay or report an
+overall pass. The 175-second helper/190-second host deadlines do not authorize
+retry. Count calls across separate invocations manually against the approved
+budget, and inspect an uncertain outcome before doing anything else.
+
+The diagnostic observer leaves original converter events unchanged and reports
+only fixed error enums, known-field presence and numeric counts. `outcome: pass`
+would certify this bounded direct sequence only, not actual Codex compaction,
+gateway policy/accounting, semantic equivalence, cache savings or entitlement.
+Cache evidence requires real numeric usage. Currently the live gate **fails at
+message_start metadata validation**, before any replay; see the retained evidence.
+
+Offline checks (no provider calls):
+
+```sh
+node --test integration/deployment/test_hoist_live_probe.mjs
+python3 -m unittest discover -s integration/deployment -p test_hoist_live_runner.py
+```

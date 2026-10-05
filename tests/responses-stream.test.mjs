@@ -35,6 +35,19 @@ function assertFailure(events, code) {
   if (code) assert.equal(failure.response.error.code, code);
 }
 
+test('live metadata compatibility gap: container or stop_details currently rejects before reasoning', () => {
+  // Failure reproduction, not the desired future API contract. The live probe
+  // observed presence only; null here is synthetic, not a captured provider value.
+  for (const extra of [{ container: null }, { stop_details: null }, { container: null, stop_details: null }]) {
+    const { stream, sealed } = fixture();
+    const events = stream.push(start(fullUsage, extra));
+    assertFailure(events, 'unsupported_upstream_event');
+    assert.equal(events.length, 1);
+    assert.deepEqual(events[0].response.output, []);
+    assert.deepEqual(sealed, []);
+  }
+});
+
 test('signed-empty, split signature, redacted: exact sealed blocks/order and done/completed identity', () => {
   const { stream, sealed } = fixture();
   const original = { type: 'thinking', thinking: '', cache_control: { type: 'ephemeral', ttl: '1h' },
