@@ -58,6 +58,16 @@ using an isolated client and a narrowly scoped gateway credential.
 
 ## Access and decision dependencies
 
+- Operator direction, 2026-10-05: gateway configuration access/preparation is
+  delegated to the existing `LiteLLM 관리` task. That handoff is not evidence of
+  an applied route or successful end-to-end acceptance; verify its result before
+  coordinating any reload with the prepared relay.
+- Do not modify Codex itself to make this gateway path work. The operator rejected
+  relocating mid-conversation developer instructions. Keep the existing explicit
+  rejection; the observed post-compaction continuation remains unsupported, not
+  silently excluded from the mandatory-client acceptance gate. Proxy-only
+  validated apply-patch activation is a separate choice, not implied by the
+  instruction to leave Codex unchanged.
 - The shared gateway UI does not preserve `forward_headers` through the audited
   typed admin schema. Dynamic header forwarding needs the gateway owner's YAML
   and reload access; UI admin access alone is not equivalent.

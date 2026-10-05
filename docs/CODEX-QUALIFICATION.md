@@ -106,6 +106,15 @@ be fixed by simply renaming `developer` to `system`. Moving the instruction,
 merging it into ordinary user text, or rewriting the initial prefix changes the
 contract; no such fallback is implemented. Model support alone is insufficient.
 
+Operator decision, 2026-10-05: **do not modify Codex itself and do not relocate
+developer instructions**. Relocation is therefore not a pending implementation
+option. Preserve the current fail-closed behavior for the observed
+`user → developer → user` sequence. A future alternative must preserve order and
+instruction meaning without changing Codex; no such qualified mapping is
+currently implemented. This leaves the demonstrated post-compaction continuation
+gap open rather than reducing the whole-outcome acceptance scope. The separate
+proxy-only apply-patch option is not enabled by this decision.
+
 ## Model metadata is necessary but insufficient
 
 A matching `model_catalog_json` can remove the generic metadata fallback. The
