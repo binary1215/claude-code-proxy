@@ -15,7 +15,7 @@ or modify LiteLLM source/license flags.
 | Gate | Required evidence | Current boundary |
 | --- | --- | --- |
 | Reproducible implementation | Exact Git/image revision, native and Responses regression tests | Build and 102 tests pass locally and in the Linux/Node 22 candidate image at `591e44d`; not deployed over the existing service |
-| Actual clients | Claude Code and Codex on each selected gateway route, streaming, tool execution/result, further user turns | Codex synthetic stock-pass-through chain passes; Claude Code real native baseline is not the deployed gateway chain |
+| Actual clients | Claude Code and Codex on each selected gateway route, streaming, tool execution/result, further user turns | Codex synthetic chain passes; Claude Code single-signature-event state subset passes, but split-event client loss and gateway metadata removal remain; no deployed `.7` client acceptance |
 | Reasoning continuity | Ordered thinking/signatures, signed-empty/redacted blocks and tool IDs survive replay; corruption fails explicitly | Proxy and Codex fake-provider evidence exists; real provider acceptance remains a separate gate |
 | Cache accounting | Repeated eligible native prefix, provider cache read/write/fresh/output counts and matching relay history | Prior native/temporary-gateway Haiku cache hits exist; new Responses/deployed gateway measurements do not |
 | Gateway authorization | Missing/expired/revoked keys, allowed/denied routes, relay model ACL, caller/provider secret separation | Stock source/helper audit exists; actual gateway DB-backed virtual-key acceptance remains |

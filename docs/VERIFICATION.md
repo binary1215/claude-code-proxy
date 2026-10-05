@@ -292,6 +292,39 @@ additional OpenCode chain verification remain. Remote Responses compaction,
 saved conversations and server tools are intentionally unsupported. See
 [configuration and full supported subset](RESPONSES-ADAPTER.md).
 
+## Actual Claude Code through the synthetic stock gateway
+
+Unmodified official Claude Code **2.1.289** ran with an isolated home/config and
+only the read-only `Read` tool against stock LiteLLM **1.103.1** pass-through,
+the built native relay, and a loopback fake provider. No existing login, real
+provider credential or production configuration was used.
+
+Two signature modes used identical seven-byte transport fragmentation, each
+with signed-nonempty and full-opaque scenarios:
+
+| Mode | Ordered native history replay | Other result |
+| --- | --- | --- |
+| One `signature_delta` per thinking block | Exact thinking/signature, signed-empty, redacted and tool content | Actual fixture Read and exact final marker, two requests per hop |
+| Two `signature_delta` events per thinking block | Signature contains only the final fragment in the actual client's next request | Read/final answer still succeed; redacted/tool/text order retained |
+
+For both modes, response/SSE payload bytes, beta headers, authentication
+separation and 13 guarded stock source identities pass. In the split-event
+stress case, the signature loss is already visible before the request reaches
+LiteLLM; it is not native relay corruption. This does not establish that the
+same pattern occurs in real provider traffic or that all official-client
+versions behave identically.
+
+Separately, complete request JSON objects are **not identical** on either mode:
+the stock generic pass-through removes top-level `metadata`. This reproduces
+the earlier stock audit, beyond ordinary JSON serialization differences.
+Consequently the passing single-event state subset is not whole-body fidelity
+or whole-goal completion. The strict full-fidelity result remains negative.
+
+The [reproducible Claude Code harness](../integration/clients/README-claude-code.md)
+records these separate claims; no source workaround, signature reconstruction,
+provider call or hidden retry was added. Isolation is application-level, not
+an OS-enforced sandbox. Actual `.7` and real client/model qualification remain.
+
 ## Remaining boundaries
 
 ### Goal-entry Docker candidate qualification

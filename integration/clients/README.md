@@ -10,12 +10,15 @@ spoofing, paid-key fallback, or production replacement is implied by these tests
 | Client / route | Evidence | Remaining gap |
 | --- | --- | --- |
 | Claude Code 2.1.289 → native test relay → real Claude | Earlier isolated Opus control succeeded with a real cache hit | Actual `.7` route, tool-rich multi-turn acceptance, gateway policy/accounting |
+| Claude Code 2.1.289 → stock pass-through → native relay → fake Anthropic | Single-signature-event control preserves signed/empty/redacted/tool history; real Read and final answer succeed | Split-signature-event stress loses a fragment in the client; stock route removes top-level metadata; not whole-body fidelity |
 | Codex 0.160.0 → stock LiteLLM 1.103.1 Responses → fake Anthropic | Actual CLI completes a tool round trip, but signed reasoning is lost | **Not fidelity-compatible on this tested route**; real authorization also unresolved |
 | Codex 0.160.0 → stock LiteLLM pass-through → new proxy Responses adapter → fake Anthropic | Both tool round trips preserve exact ordered thinking/signature/signed-empty/redacted/tool history | Real authorization, actual `.7` rollout, long coding sessions/compaction, gateway accounting |
 | OpenCode 1.18.34 → fake Anthropic directly | Actual CLI preserves tested signed/redacted history and tool replay | Signed-empty blocks, stock gateway chain, real upstream, cache/accounting |
 
 See [project verification](../../docs/VERIFICATION.md) for live-test boundaries,
 and [OpenCode instructions](README-opencode.md) for its separate smoke test.
+The [Claude Code harness](README-claude-code.md) distinguishes its passing
+single-event state subset from split-event and whole-body preservation losses.
 None of these rows establishes universal client compatibility or a measured
 quality/cost improvement.
 
