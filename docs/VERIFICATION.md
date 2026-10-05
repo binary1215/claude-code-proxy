@@ -294,6 +294,31 @@ saved conversations and server tools are intentionally unsupported. See
 
 ## Remaining boundaries
 
+### Goal-entry Docker candidate qualification
+
+After the user registered the whole objective for continued execution, commit
+`591e44d8648b727216d50a10a0ca4c4b6a77e42f` was archived from Git and copied to a
+new task-specific directory on the existing test host. Local and remote archive
+SHA-256 matched. No working-tree files or secrets were included in that archive.
+
+- Candidate image `local/test-claudemock:591e44d` built successfully, with ID
+  `sha256:5da3739096525b811104ef73a2091f48c8e0d508435196fce4cbd9be103686fe`.
+- Actual runtime is **Node v22.23.3**, image user `node`. All **102/102** Node
+  tests passed inside that image with external networking disabled, read-only
+  root, dropped capabilities and read-only test/diagnostic mounts.
+- Separate no-network startup checks verified default Responses returns 404
+  and enabling it without a state key fails startup. No provider credentials
+  were supplied to these fixture containers.
+- Temporary fixture containers were removed on exit. The existing
+  `test-claudemock` ID, image (`0ca7575`) and start time stayed unchanged.
+  The candidate image/source/log remain available for later qualification.
+
+This establishes Docker build/runtime compatibility, **not deployment**, a
+production security audit, a fresh dependency-vulnerability assessment, or live
+provider/gateway acceptance. The [whole-outcome gates](ACCEPTANCE.md) remain open.
+
+### Outstanding end-to-end constraints
+
 - General-purpose subscription-token relay eligibility and premium-model raw
   acceptance remain unresolved. No spoofing, SDK fallback or paid-key failover.
 - [Official gateway documentation](https://code.claude.com/docs/en/llm-gateway#subscriptions-and-gateways)

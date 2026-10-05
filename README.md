@@ -127,6 +127,9 @@ Read [the migration notes](docs/ADAPTER-PATCH.md) before replacing an existing s
 
 ## Development and evidence
 
+The [whole-outcome acceptance gates](docs/ACCEPTANCE.md) distinguish implemented
+protocol support from actual gateway/client qualification and production readiness.
+
 ```sh
 npm ci
 npm test
