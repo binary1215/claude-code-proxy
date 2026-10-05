@@ -3,11 +3,11 @@
 import http from 'node:http';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { randomBytes } from 'node:crypto';
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { randomBytes, createHash } from 'node:crypto';
+import { readFileSync, writeFileSync, existsSync, copyFileSync, constants } from 'node:fs';
 
 const phases = ['baseline_seed','baseline_restart','candidate_mint','candidate_restart_replay',
-  'candidate_wrong_key','baseline_rollback','candidate_reupgrade_replay'];
+  'candidate_wrong_key','baseline_rollback','candidate_reupgrade_replay','backup_restore_replay'];
 const phase = process.argv[2];
 const file = '/app/data/lifecycle-fixture.json';
 const model = 'fixture-lifecycle-model';
@@ -21,6 +21,8 @@ const usage = {input_tokens:3,output_tokens:9,cache_read_input_tokens:7,cache_cr
   cache_creation:{ephemeral_5m_input_tokens:1,ephemeral_1h_input_tokens:1}};
 let appServer, upstream, db, stage = 'startup', fixtureFailure = false;
 let state, providerCalls = 0, providerMode = 'native', lastBody;
+let sourceBackupDigest, sourceFixtureDigest, sourceLiveDigest, postBackupRowsAbsent = 0;
+const digest = path => createHash('sha256').update(readFileSync(path)).digest('hex');
 const log = console.log.bind(console);
 // Imported app logging is not diagnostic evidence and might contain arbitrary text.
 console.log = console.info = console.warn = console.error = () => {};
@@ -123,6 +125,21 @@ try {
     assert.equal(existsSync(file),false);
     state={admin:randomBytes(24).toString('hex'),upstream:'sk-ant-api-synthetic-'+randomBytes(16).toString('hex'),
       stateKey:randomBytes(32).toString('base64'),historyCount:0,completed:[]};save();
+  } else if(phase==='backup_restore_replay') {
+    assert.equal(existsSync(file),false);assert.equal(existsSync('/app/data/proxy.db'),false);
+    sourceBackupDigest=digest('/fixture-source/seed-backup.db');
+    sourceFixtureDigest=digest('/fixture-source/lifecycle-fixture.json');
+    sourceLiveDigest=digest('/fixture-source/proxy.db');
+    state=JSON.parse(readFileSync('/fixture-source/lifecycle-fixture.json','utf8'));
+    assert.deepEqual(state.completed,phases.slice(0,-1));
+    assert.equal(sourceBackupDigest,state.backupDigest);
+    assert.equal(state.historyCount,6);
+    postBackupRowsAbsent=state.historyCount-1;
+    // Copy only the completed SQLite backup, never the current live database.
+    copyFileSync('/fixture-source/seed-backup.db','/app/data/proxy.db',constants.COPYFILE_EXCL);
+    assert.equal(digest('/app/data/proxy.db'),sourceBackupDigest);
+    // Config secrets and client-held history are external to the DB backup.
+    state.historyCount=1;
   } else {
     state=JSON.parse(readFileSync(file,'utf8'));
     assert.deepEqual(state.completed,phases.slice(0,phases.indexOf(phase)));
@@ -165,7 +182,14 @@ try {
     const Database=(await import('better-sqlite3')).default;
     const backup=new Database('/app/data/seed-backup.db',{readonly:true,fileMustExist:true});
     try {assert.equal(backup.pragma('integrity_check',{simple:true}),'ok');assert.equal(backup.prepare('SELECT COUNT(*) AS n FROM request_log').get().n,1);} finally {backup.close();}
+    state.backupDigest=digest('/app/data/seed-backup.db');
   } else {
+    if(phase==='backup_restore_replay') {
+      assert.equal(db.pragma('integrity_check',{simple:true}),'ok');
+      assert.deepEqual(db.pragma('foreign_key_check'),[]);
+      assert.equal(db.prepare('SELECT COUNT(*) AS n FROM request_log').get().n,1);
+      assert.equal(db.prepare('SELECT COUNT(*) AS n FROM api_keys').get().n,2);
+    }
     await history();
     if(phase==='baseline_restart'||phase==='baseline_rollback') {
       await nativeSuccess();
@@ -187,11 +211,18 @@ try {
   }
   await policyChecks();assert.equal(fixtureFailure,false);
   assert.equal(providerCalls,phase==='candidate_wrong_key'?0:1);
+  if(phase==='backup_restore_replay') {
+    assert.equal(digest('/fixture-source/seed-backup.db'),sourceBackupDigest);
+    assert.equal(digest('/fixture-source/lifecycle-fixture.json'),sourceFixtureDigest);
+    assert.equal(digest('/fixture-source/proxy.db'),sourceLiveDigest);
+  }
   state.completed.push(phase);save();
   log(JSON.stringify({phase,pass:true,provider_calls:providerCalls,history_rows:state.historyCount,
     old_history_exact:true,active_key_acl:true,revoked_key_rejected:true,no_stored_content:true,
     backup_integrity_checked:phase==='baseline_seed',state_replay_exact:phase.endsWith('_replay'),
-    changed_key_rejected_before_provider:phase==='candidate_wrong_key',rollback_native_only:phase==='baseline_rollback'}));
+    changed_key_rejected_before_provider:phase==='candidate_wrong_key',rollback_native_only:phase==='baseline_rollback',
+    backup_restored:phase==='backup_restore_replay',restored_rows_before_request:phase==='backup_restore_replay'?1:0,
+    post_backup_rows_absent:postBackupRowsAbsent,source_snapshot_unchanged:phase==='backup_restore_replay'}));
 } catch {
   log(JSON.stringify({phase:phases.includes(phase)?phase:'invalid',pass:false,failure:stage}));process.exitCode=1;
 } finally {

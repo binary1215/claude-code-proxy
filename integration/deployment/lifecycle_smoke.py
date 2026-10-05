@@ -13,9 +13,9 @@ BASELINE = 'sha256:12d35112176de03ab3d1e2ae46a91a8ca6a98168478c98fd6aaf37fcb9b85
 CANDIDATE = 'sha256:8e7e8f474262dde1ed995ddb99c7b4086c26e15ad2c41b1ea3f8bb8eaed989aa'
 OWNER_LABEL = 'io.claude-relay.lifecycle-owner'
 KIND_LABEL = 'io.claude-relay.fixture-kind'
-KIND = 'synthetic-lifecycle-v1'
+KIND = 'synthetic-lifecycle-v2'
 PHASES = ('baseline_seed','baseline_restart','candidate_mint','candidate_restart_replay',
-          'candidate_wrong_key','baseline_rollback','candidate_reupgrade_replay')
+          'candidate_wrong_key','baseline_rollback','candidate_reupgrade_replay','backup_restore_replay')
 OUTPUT_LIMIT = 65536
 
 
@@ -43,9 +43,15 @@ def owned_container(info, name, owner, image):
             and labels.get(OWNER_LABEL) == owner and labels.get(KIND_LABEL) == KIND)
 
 
-def isolated_container(info, volume):
+def isolated_container(info, volume, restore_source=None):
     host = info.get('HostConfig') or {}
     mounts = info.get('Mounts') or []
+    expected = {(volume, '/app/data', True)}
+    if restore_source:
+        if restore_source == volume:
+            return False
+        expected.add((restore_source, '/fixture-source', False))
+    actual = {(mount.get('Name'), mount.get('Destination'), mount.get('RW')) for mount in mounts}
     return (info.get('Config', {}).get('User') == '1000:1000'
             and host.get('NetworkMode') == 'none' and host.get('ReadonlyRootfs') is True
             and host.get('CapDrop') == ['ALL']
@@ -53,9 +59,8 @@ def isolated_container(info, volume):
             and host.get('PidsLimit') == 64 and host.get('Memory') == 512 * 1024 * 1024
             and not host.get('Privileged') and not host.get('PortBindings')
             and not host.get('Binds') and host.get('Tmpfs', {}).get('/tmp') == 'rw,noexec,nosuid,nodev,size=16m'
-            and len(mounts) == 1 and mounts[0].get('Type') == 'volume'
-            and mounts[0].get('Name') == volume and mounts[0].get('Destination') == '/app/data'
-            and mounts[0].get('RW') is True)
+            and len(mounts) == len(expected) and actual == expected
+            and all(mount.get('Type') == 'volume' for mount in mounts))
 
 
 def run(args, source=None, timeout=15):
@@ -131,15 +136,19 @@ def inspect(kind, name, optional=False):
         raise HarnessError('resource_inspection_invalid') from None
 
 
-def container_args(name, owner, volume, image, phase):
+def container_args(name, owner, volume, image, phase, restore_source=None):
     require_image_id(image)
+    if (phase == 'backup_restore_replay') != bool(restore_source) or restore_source == volume:
+        raise HarnessError('restore_mount_contract')
+    source_mount = (['--mount', 'type=volume,source=' + restore_source + ',target=/fixture-source,readonly']
+                    if restore_source else [])
     return ['run', '--pull=never', '--name', name,
             '--label', OWNER_LABEL + '=' + owner, '--label', KIND_LABEL + '=' + KIND,
             '--network=none', '--read-only', '--user=1000:1000', '--cap-drop=ALL',
             '--security-opt=no-new-privileges', '--pids-limit=64', '--memory=512m', '--cpus=1',
             '--tmpfs', '/tmp:rw,noexec,nosuid,nodev,size=16m',
             '--mount', 'type=volume,source=' + volume + ',target=/app/data',
-            '--workdir=/app', '--entrypoint=node', '-i', image, '--input-type=module', '-', phase]
+            *source_mount, '--workdir=/app', '--entrypoint=node', '-i', image, '--input-type=module', '-', phase]
 
 
 def main(argv=None):
@@ -152,8 +161,19 @@ def main(argv=None):
               'backup_restore_qualified': False}
     owner = uuid.uuid4().hex
     volume = 'claude-lifecycle-' + owner
+    restored_volume = volume + '-restored'
     containers = []
-    volume_attempted = False
+    attempted_volumes = []
+
+    def create_fresh_volume(name):
+        if inspect('volume', name, optional=True) is not None:
+            raise HarnessError('fresh_volume_collision')
+        attempted_volumes.append(name)
+        code, _, _ = run(['volume', 'create', '--driver=local', '--label', OWNER_LABEL + '=' + owner,
+                          '--label', KIND_LABEL + '=' + KIND, name])
+        if code or not owned_volume(inspect('volume', name), name, owner):
+            raise HarnessError('volume_creation_failed')
+
     try:
         baseline, candidate = map(require_image_id, (options.baseline_id, options.candidate_id))
         if baseline != BASELINE or candidate != CANDIDATE:
@@ -166,29 +186,32 @@ def main(argv=None):
         source = Path(__file__).with_name('lifecycle_phase.mjs').read_bytes()
         if len(source) > 60000:
             raise HarnessError('helper_size_limit')
-        if inspect('volume', volume, optional=True) is not None:
-            raise HarnessError('fresh_volume_collision')
-        volume_attempted = True
-        code, _, _ = run(['volume', 'create', '--driver=local', '--label', OWNER_LABEL + '=' + owner,
-                          '--label', KIND_LABEL + '=' + KIND, volume])
-        if code or not owned_volume(inspect('volume', volume), volume, owner):
-            raise HarnessError('volume_creation_failed')
+        create_fresh_volume(volume)
         for index, phase in enumerate(PHASES):
             image = baseline if phase.startswith('baseline_') else candidate
             name = volume + '-' + str(index)
+            restore_source = volume if phase == 'backup_restore_replay' else None
+            target_volume = restored_volume if restore_source else volume
+            if restore_source:
+                create_fresh_volume(target_volume)
+            # Revalidate both exact mounts before each process can access them.
+            for mounted in (target_volume, restore_source):
+                if mounted and not owned_volume(inspect('volume', mounted), mounted, owner):
+                    raise HarnessError('mount_ownership_mismatch')
             containers.append((name, image))
-            code, output, _ = run(container_args(name, owner, volume, image, phase), source, timeout=35)
+            code, output, _ = run(container_args(name, owner, target_volume, image, phase, restore_source), source, timeout=35)
             info = inspect('container', name)
             if not owned_container(info, name, owner, image):
                 raise HarnessError('container_ownership_mismatch')
-            if not isolated_container(info, volume):
+            if not isolated_container(info, target_volume, restore_source):
                 raise HarnessError('container_isolation_mismatch')
             try:
                 result = json.loads(output)
                 # Output is one closed-schema summary; arbitrary runtime text is not retained.
                 allowed = {'phase','pass','provider_calls','history_rows','old_history_exact','active_key_acl',
                            'revoked_key_rejected','no_stored_content','backup_integrity_checked','state_replay_exact',
-                           'changed_key_rejected_before_provider','rollback_native_only','failure'}
+                           'changed_key_rejected_before_provider','rollback_native_only','failure',
+                           'backup_restored','restored_rows_before_request','post_backup_rows_absent','source_snapshot_unchanged'}
                 if not isinstance(result, dict) or set(result) - allowed or result.get('phase') != phase:
                     raise ValueError()
                 for key, value in result.items():
@@ -201,6 +224,12 @@ def main(argv=None):
             report['phases'].append(result)
             if code or info.get('State', {}).get('ExitCode') != 0 or result.get('pass') is not True:
                 raise HarnessError('phase_failed')
+            if restore_source:
+                if (result.get('backup_restored') is not True or result.get('state_replay_exact') is not True
+                        or result.get('source_snapshot_unchanged') is not True
+                        or result.get('restored_rows_before_request') != 1 or result.get('post_backup_rows_absent') != 5):
+                    raise HarnessError('restore_result_invalid')
+                report['backup_restore_qualified'] = True
         report['pass'] = True
     except (HarnessError, OSError) as error:
         report['failure'] = str(error) if isinstance(error, HarnessError) else 'local_runtime_unavailable'
@@ -218,17 +247,17 @@ def main(argv=None):
                     raise HarnessError('cleanup_failed')
             except (HarnessError, OSError):
                 report['remaining_resources'].append({'kind':'container','name':name})
-        if volume_attempted:
+        for cleanup_volume in reversed(attempted_volumes):
             try:
-                info = inspect('volume', volume, optional=True)
+                info = inspect('volume', cleanup_volume, optional=True)
                 if info is not None:
-                    if report['remaining_resources'] or not owned_volume(info, volume, owner):
+                    if report['remaining_resources'] or not owned_volume(info, cleanup_volume, owner):
                         raise HarnessError('cleanup_ownership_mismatch')
-                    code, _, _ = run(['volume', 'rm', volume])
-                    if code or inspect('volume', volume, optional=True) is not None:
+                    code, _, _ = run(['volume', 'rm', cleanup_volume])
+                    if code or inspect('volume', cleanup_volume, optional=True) is not None:
                         raise HarnessError('cleanup_failed')
             except (HarnessError, OSError):
-                report['remaining_resources'].append({'kind':'volume','name':volume})
+                report['remaining_resources'].append({'kind':'volume','name':cleanup_volume})
         report['cleanup_complete'] = not report['remaining_resources']
         report['pass'] = report['pass'] and report['cleanup_complete']
     print(json.dumps(report, separators=(',', ':')))

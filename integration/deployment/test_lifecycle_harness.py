@@ -1,6 +1,7 @@
 import importlib.util
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('lifecycle_smoke', Path(__file__).with_name('lifecycle_smoke.py'))
 module = importlib.util.module_from_spec(spec)
@@ -56,6 +57,40 @@ class Guards(unittest.TestCase):
             changed={**info,'HostConfig':{**info['HostConfig'],field:value}}
             self.assertFalse(module.isolated_container(changed,'fresh'))
         self.assertFalse(module.isolated_container(info,'other'))
+
+    def test_restore_mount_is_separate_and_read_only(self):
+        args=module.container_args('fresh','owner','restored',module.CANDIDATE,
+                                   'backup_restore_replay','original')
+        self.assertIn('type=volume,source=restored,target=/app/data',args)
+        self.assertIn('type=volume,source=original,target=/fixture-source,readonly',args)
+        for phase, source in (('backup_restore_replay',None),('candidate_mint','original'),
+                              ('backup_restore_replay','restored')):
+            with self.assertRaises(module.HarnessError):
+                module.container_args('fresh','owner','restored',module.CANDIDATE,phase,source)
+        info={'Config':{'User':'1000:1000'},'HostConfig':{
+            'NetworkMode':'none','ReadonlyRootfs':True,'CapDrop':['ALL'],
+            'SecurityOpt':['no-new-privileges'],'PidsLimit':64,'Memory':512*1024*1024,
+            'Privileged':False,'PortBindings':{},'Binds':None,
+            'Tmpfs':{'/tmp':'rw,noexec,nosuid,nodev,size=16m'}},'Mounts':[
+            {'Type':'volume','Name':'original','Destination':'/fixture-source','RW':False},
+            {'Type':'volume','Name':'restored','Destination':'/app/data','RW':True}]}
+        self.assertTrue(module.isolated_container(info,'restored','original'))
+        self.assertFalse(module.isolated_container(info,'restored'))
+        self.assertFalse(module.isolated_container(info,'restored','restored'))
+        for field, value in (('RW',True),('Type','bind'),('Destination','/elsewhere'),('Name','foreign')):
+            changed={**info,'Mounts':[{**info['Mounts'][0],field:value},info['Mounts'][1]]}
+            self.assertFalse(module.isolated_container(changed,'restored','original'))
+
+    def test_only_matching_missing_resource_is_absent(self):
+        for kind in ('volume','container'):
+            for text in ('no such '+kind, 'No such '+kind):
+                with patch.object(module,'run',return_value=(1,b'[]',text.encode())):
+                    self.assertIsNone(module.inspect(kind,'synthetic',optional=True))
+            for error in (b'permission denied',b'Cannot connect to the Docker daemon',
+                          b'no such image',b'no such '+(b'container' if kind=='volume' else b'volume')):
+                with patch.object(module,'run',return_value=(1,b'[]',error)):
+                    with self.assertRaises(module.HarnessError):
+                        module.inspect(kind,'synthetic',optional=True)
 
 
 if __name__ == '__main__':

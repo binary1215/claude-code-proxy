@@ -540,6 +540,45 @@ recovery, in-flight draining or a service cutover. No `.7` gateway configuration
 real client/provider session, authentication eligibility or whole-goal acceptance
 is established by it. See the [operating checklist](ADAPTER-PATCH.md#native-only-update-and-rollback-checklist).
 
+### Fresh-volume backup restoration extension
+
+The original seven-phase result above remains unchanged. A subsequent run adds
+an eighth `backup_restore_replay` phase with the same exact image pair and an
+additional fresh, owner-labelled volume. **8/8 phases and cleanup pass**, exit 0.
+
+The original synthetic volume is mounted read-only at `/fixture-source`; only
+the completed `seed-backup.db` is copied into the fresh target, with overwrite
+prohibited. Its digest matches before SQLite opens it. The restored database
+passes integrity and foreign-key checks, contains the two original key rows and
+one original history row, and supports authenticated replay through the actual
+candidate app. Exact model restrictions, the pre-backup revoked-key rejection,
+provider credential selection and the full old history row are checked.
+
+The configuration state key and opaque client history are supplied **separately**
+from the private synthetic fixture file, not recovered from SQLite. Original
+thinking/signed-empty/redacted/text blocks replay exactly. The new fake-provider
+request produces one new correct usage record, making two restored-volume rows.
+Five rows created after the seed backup are absent from the restored database,
+as expected. This deliberately exposes snapshot age; it does not reconcile later
+key revocations/settings or reconstruct lost client history.
+
+Original source backup, live DB and fixture file digests are unchanged. The full
+run has seven fake-provider calls; the wrong-state-key phase still has zero.
+Eight fixture containers and both fresh volumes are removed after owner checks;
+the subsequent labelled-resource query returns none. Existing `test-claudemock`
+ID/image/start time remain the same as recorded above; no gateway or production
+data is used or changed.
+
+Evidence: `/opt/test-claudemock/restore-0zWdIQ/result.json`, copied to
+`C:/Users/binary/AppData/Local/Temp/claude-restore-0zWdIQ/result.json`, both SHA-256
+`051d37d77c269d7a9fd093a3102376a81676834aeabe30720f3c5c3f11d7ec30`.
+All three source-file hashes matched on the host before execution. Seven Python
+guard tests pass locally/on the host, including distinct read-only restore
+mounts and missing-resource error discrimination; Node syntax passes. An
+independent read-only review found no execution-blocking issue. This closes
+only the synthetic restoration gap, not a real-deployment restore, provider
+acceptance or full end-to-end gate.
+
 ### Outstanding end-to-end constraints
 
 - General-purpose subscription-token relay eligibility and premium-model raw

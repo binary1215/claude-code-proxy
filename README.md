@@ -121,8 +121,8 @@ Endpoints here:
 Read [the migration notes](docs/ADAPTER-PATCH.md) before replacing an existing service. Back up the database/volume and keep the previous image/configuration. Do not use `down -v` on an upgrade.
 
 The [isolated Docker lifecycle check](integration/deployment/README-lifecycle.md) exercises
-native image upgrades, container re-creation, signed-state key continuity and
-rollback using a fresh synthetic volume with networking disabled. It does not
+native image upgrades, container re-creation, signed-state key continuity,
+rollback and backup restoration using fresh synthetic volumes with networking disabled. It does not
 replace or back up a running deployment. The [operating checklist](docs/ADAPTER-PATCH.md#native-only-update-and-rollback-checklist)
 separates that rehearsal from an authorized service cutover.
 
