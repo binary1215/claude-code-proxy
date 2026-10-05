@@ -391,6 +391,45 @@ the isolated reproduction, negative results and distinct transport/execution
 gates. Real provider quality/cost/grammar acceptance, a write-capable client and
 the deployed `.7` gateway remain unverified.
 
+### Historical tools and local compaction candidate
+
+Commit `98d26fe` separates history-only transport identity from currently callable
+tools. Local build and **115/115 Node tests** pass, including removed/omitted or
+replaced current tools, deliberate namespace/kind collisions, exact signed-state
+replay and rejection of new calls to removed tools in stream/nonstream HTTP.
+An independent code review found no must-fix issue; its suggested grammar-
+provenance boundary test was added. Missing old custom grammars are not inferred
+from names, and no historical schema or new tool permission is fabricated.
+
+- Committed-only archive SHA-256 matched between local and test hosts:
+  `b392c7a58063fbc6b6e5a1a263defd145d74a821a422a2b4abe7dd55c3af0b2f`.
+- Candidate `local/test-claudemock:98d26fe` image ID is
+  `sha256:8e7e8f474262dde1ed995ddb99c7b4086c26e15ad2c41b1ea3f8bb8eaed989aa`.
+  Its revision label is `98d26fef65ab8bc946c95e012d0c106fd7f02d39`.
+- Linux **Node v22.23.3**, user `node`, passed **115/115** tests in the isolated
+  no-network/read-only/capabilities-dropped fixture container. Test exit was zero;
+  source/build/test logs remain in `/opt/test-claudemock/verify-98d26fe-SIDeZp`.
+- Existing `test-claudemock` ID, image `0ca7575` and start time remained unchanged.
+  No gateway config, provider credential, sandbox setup or existing service was
+  changed. The retained image is a candidate, not a deployed replacement.
+
+The actual Codex 0.160.0 app-server additionally completes manual local compaction
+through the stock gateway and relay against a fake provider. The independently
+rerun final harness preserves reasoning IDs/capsules and native blocks through
+the initial real `get_goal` result and the empty-tools compaction request. It
+observes both context-compaction lifecycle events and successful compaction.
+Its next ordinary user turn **fails**: Codex reinserts a developer message after
+retained user messages; the adapter returns 400 `unsupported_parameter` without
+provider contact or relocation. Exactly four client requests and three provider
+requests occur; strict test exit is 1. Final evidence is
+`C:/Users/binary/AppData/Local/Temp/codex-compaction-main-20261005/codex-compaction-smoke.json`.
+See the [reproducible harness](../integration/clients/README-codex-compaction.md).
+
+These checks establish adapter behavior, not real-provider acceptance of history
+without current definitions, cache savings, summarization quality or full-session
+compatibility. Remote `/responses/compact` and late developer-role mapping remain
+unsupported. See [Codex qualification](CODEX-QUALIFICATION.md).
+
 ### Outstanding end-to-end constraints
 
 - General-purpose subscription-token relay eligibility and premium-model raw

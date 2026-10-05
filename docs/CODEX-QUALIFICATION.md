@@ -69,6 +69,14 @@ that empty current definitions plus historical client tool calls are accepted.
 No successful real-provider compaction is claimed. Remote Responses compaction
 remains unsupported.
 
+The [actual app-server fixture](../integration/clients/README-codex-compaction.md)
+now reproduces manual local compaction through unmodified LiteLLM: the CLI sends
+`tools: []` with the same three reasoning capsules and prior function call/result;
+the relay restores exact native blocks without `tools`, and compaction completes.
+An independent final-source rerun confirms this bounded synthetic subset. The
+next ordinary user turn fails at the late-developer boundary below, so the test's
+strict exit remains 1 and no full-session success is claimed.
+
 ## 3. Mid-conversation developer instructions
 
 Mode changes and managed developer-policy changes can append developer messages
@@ -77,11 +85,26 @@ after conversation history. The pinned client explicitly assigns the
 The adapter currently accepts system/developer messages only in the initial
 prefix; later ones fail instead of being moved earlier or demoted to user text.
 
+This is now also an **executed finding**, not only a possible mode-change issue.
+After the manual compaction above, the actual client sends retained user text,
+the user-role summary, a developer skills/permissions message, a user environment
+message and the new user prompt. The adapter returns HTTP 400
+`unsupported_parameter` before upstream contact. Exactly four client requests
+and three fake-provider requests occur, without retry or instruction relocation.
+
 Anthropic now documents [mid-conversation system messages](https://platform.claude.com/docs/en/build-with-claude/mid-conversation-system-messages)
 for selected models, including Opus 5.5. This is a potential native mapping,
 not a universal feature or an implemented proxy capability. A model-specific
 contract must validate placement, role semantics and cache behavior. Do not
 assume support for Haiku or other models, or rewrite the original system prefix.
+
+The documented native placement is narrower than an arbitrary Responses
+developer message: a mid-conversation system message must follow a user turn
+(or an assistant server-tool-result turn), then either end the message list or
+precede an assistant turn. A `user → developer → user` sequence therefore cannot
+be fixed by simply renaming `developer` to `system`. Moving the instruction,
+merging it into ordinary user text, or rewriting the initial prefix changes the
+contract; no such fallback is implemented. Model support alone is insufficient.
 
 ## Model metadata is necessary but insufficient
 

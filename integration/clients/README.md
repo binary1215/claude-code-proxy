@@ -14,6 +14,7 @@ spoofing, paid-key fallback, or production replacement is implied by these tests
 | Codex 0.160.0 → stock LiteLLM 1.103.1 Responses → fake Anthropic | Actual CLI completes a tool round trip, but signed reasoning is lost | **Not fidelity-compatible on this tested route**; real authorization also unresolved |
 | Codex 0.160.0 → stock LiteLLM pass-through → new proxy Responses adapter → fake Anthropic | Both tool round trips preserve exact ordered thinking/signature/signed-empty/redacted/tool history | Real authorization, actual `.7` rollout, long coding sessions/compaction, gateway accounting |
 | Codex 0.160.0 apply_patch → stock pass-through → validated adapter → fake Anthropic | Real freeform grammar and signed-state replay preserved; malformed patch blocked before delivery | File editing denied by actual Windows read-only policy; not coding-tool success, real provider or rollout proof |
+| Codex 0.160.0 manual local compaction → stock pass-through → adapter → fake Anthropic | Exact opaque/tool history with current tools empty; compaction lifecycle completes | The next ordinary user turn fails on a late developer message; real-provider acceptance, automatic compaction and long sessions unverified |
 | OpenCode 1.18.34 → fake Anthropic directly | Actual CLI preserves tested signed/redacted history and tool replay | Signed-empty blocks, stock gateway chain, real upstream, cache/accounting |
 
 See [project verification](../../docs/VERIFICATION.md) for live-test boundaries,
@@ -22,6 +23,9 @@ The [Claude Code harness](README-claude-code.md) distinguishes its passing
 single-event state subset from split-event and whole-body preservation losses.
 The [Codex coding-tool harness](README-codex-patch.md) separately gates transport
 replay, actual file editing, and invalid-patch rejection.
+The [manual compaction harness](README-codex-compaction.md) separately gates
+history preservation during compaction and the next ordinary user turn; only
+the former currently passes.
 None of these rows establishes universal client compatibility or a measured
 quality/cost improvement.
 
