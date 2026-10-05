@@ -1,13 +1,13 @@
 # Native relay migration (breaking change)
 
-This supersedes the historical SDK adapter implementation. The SDK execution path, SDK-dependent tool bridge, host-tool execution, Chat-to-prompt translator and SDK error-text classifier have been deleted. There is one HTTP generation path, not a compatibility mode.
+This supersedes the historical SDK adapter implementation. The SDK execution path, SDK-dependent tool bridge, host-tool execution, Chat-to-prompt translator and SDK error-text classifier have been deleted. All generation uses the configured native HTTP upstream, not a legacy compatibility mode. A separately enabled [new Responses adapter](RESPONSES-ADAPTER.md) translates stateless client requests without restoring any SDK/CLI backend.
 
 ## Before deploying
 
 1. Back up the existing SQLite database consistently (stop the service or use SQLite's backup API), including the active data volume. Keep the previous image and private configuration for rollback. Do not delete the volume.
 2. Verify your upstream's permitted authentication independently. Setup-token environment input is retained, but native acceptance of subscription credentials is **not established** by offline tests. Do not assume removal of the SDK preserves subscription behavior.
 3. Configure `ANTHROPIC_BASE_URL` and one upstream credential. DB credential overrides still win. Native HTTP upstream failures are returned unchanged, without SDK fallback or paid-key failover.
-4. Move OpenAI Chat/Responses clients to the separate LiteLLM gateway. The proxy now exposes only native generation/count/models, plus the unrelated existing Ollama embeddings endpoint.
+4. Keep clients behind the separate LiteLLM gateway. Native generation/count/models and existing Ollama embeddings remain available. For Codex, explicitly enable the new Responses adapter and a separate stock pass-through route. Normal LiteLLM Chat/Responses conversion is not full-fidelity certified; there is no proxy Chat endpoint.
 5. Move budgets to LiteLLM; place system prompts and cache controls in client/gateway requests. Clear old non-null key fields with the admin API:
 
 ```json

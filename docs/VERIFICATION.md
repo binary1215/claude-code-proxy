@@ -236,8 +236,61 @@ No `.7` settings, production service, upstream credentials, or LiteLLM source
 were changed during this client/policy verification. Completing dynamic-header
 configuration needs the gateway owner's file/reload access. Codex live Claude
 authorization and any separately billed API-key budget need an explicit choice.
-A proxy-owned Responses adapter is a proposed new scope, not implemented by
-these tests and not a reintroduction of the withdrawn SDK backend.
+A proxy-owned Responses adapter was proposed after these negative tests. The
+subsequent explicitly authorized implementation is recorded below; it does not
+reintroduce the withdrawn SDK backend or change this stock negative result.
+
+## Proxy-owned Responses adapter (2026-10-05)
+
+User direction: improve and implement **without modifying LiteLLM**. The new
+optional `/v1/responses` lives entirely in this repository. It is disabled by
+default, requires a separate 32-byte state key, and uses stock authenticated
+pass-through with its own non-colliding gateway namespace. Native Messages
+transport remains unchanged apart from sharing its existing header helper.
+
+Implemented: strict stateless request/tool translation, incremental Responses
+events, exact original signed/empty/redacted thinking in versioned AEAD
+capsules, complete capsules on both item completion and full completion, and
+replay scoped to relay-key fingerprint/model/upstream credential/item ID.
+Unknown semantics and bad/expired state fail explicitly. Client-requested
+native cache TTL/adaptive thinking can use a bounded header; it is never
+forwarded to the upstream as a header. There is no new proxy-enforced caching
+policy, SDK, CLI execution, impersonation, retry or account/model fallback.
+
+Local TypeScript build and **102/102 Node tests** pass. Coverage includes the
+existing native regressions plus request/stream/state/HTTP adapter tests, safe
+history, credential/model separation, deadlines/disconnect/admin cancellation, malformed UTF-8, HTTP errors and
+invalid terminal framing. Independent review found inconsistent tool-ID bounds;
+output and replay now share a 256-character bound, with 64/65/256/257 boundary
+regressions for both function and custom tools.
+
+Actual **Codex 0.160.0 → stock LiteLLM 1.103.1 pass-through → new built relay →
+loopback fake provider** passes both signed-nonempty and full-opaque tool turns:
+
+- Exactly two requests per hop, one matching read-only `get_goal` result and
+  the exact final marker; no repeated provider request.
+- Exact ordered native assistant history on the second call, including split
+  signature assembly, signed-empty and redacted blocks.
+- Identical nonempty capsules on incremental completion, full completion and
+  actual Codex replay; fresh synthetic gateway/relay credentials never leaked
+  upstream. All 13 guarded stock LiteLLM sources remain unchanged.
+- Model metadata fallback warning remains; unknown reasoning token splits are
+  omitted, not fabricated as zero. Fixture processes are stopped afterward.
+
+An initial fixture exposed Codex rejecting an empty `output_tokens_details`
+object. Omitting that optional object when its required split is unknown fixed
+the client test. Only corrected successful runs establish the positive result.
+Evidence stays in private temporary directories; [reproducible harness and
+scope](../integration/clients/README.md) are committed without credentials.
+
+This completes the bounded adapter implementation, **not the whole production
+goal**. No new image was deployed, no `.7` config changed, and no real provider
+was called for this adapter. Actual Claude Code/Codex through that deployed
+gateway, permitted real Codex authentication, DB-backed gateway route policy
+and spend/budget accounting, cache-hit measurements, long coding sessions and
+additional OpenCode chain verification remain. Remote Responses compaction,
+saved conversations and server tools are intentionally unsupported. See
+[configuration and full supported subset](RESPONSES-ADAPTER.md).
 
 ## Remaining boundaries
 

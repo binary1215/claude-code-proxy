@@ -1,17 +1,16 @@
-# Claude Code Proxy — native Messages relay
+# Claude Code Proxy — native relay and opt-in Responses adapter
 
 A native Anthropic HTTP relay, forked from [MehdiMohseni82/claude-code-proxy](https://github.com/MehdiMohseni82/claude-code-proxy). **This branch removes the Claude Agent SDK/CLI execution backend.** It is a breaking transport change, not an SDK upgrade.
 
 ```text
-Coding client (Messages / Chat Completions / Responses)
-    -> LiteLLM gateway (separate container: aliases, conversions, budgets)
-    -> this relay (native Messages only)
-    -> configured Anthropic-compatible HTTP upstream
+Claude Code / Messages -> stock LiteLLM pass-through -> native /v1/messages
+Codex / Responses     -> stock LiteLLM pass-through -> opt-in /v1/responses
+                                                        -> Anthropic HTTP upstream
 ```
 
-No automatic SDK fallback, tool execution, thinking reconstruction, conversation storage, or provider/account failover is included. The caller owns conversation history and executes its client tools. Upstream-native server-tool definitions are forwarded; they are not executed on the proxy host.
+No automatic SDK fallback, tool execution, invented thinking, conversation storage, or provider/account failover is included. The caller owns conversation history and executes its client tools. Upstream-native server-tool definitions are forwarded on the native route; they are not executed on the proxy host. The new [Responses adapter](docs/RESPONSES-ADAPTER.md) is disabled by default and supports a deliberately bounded client-tool subset.
 
-## Preservation contract
+## Native Messages preservation contract
 
 - JSON request bytes and upstream response/SSE bytes are forwarded unchanged, including unknown fields, thinking/signatures, redacted thinking, tool results, `is_error`, cache markers and TTLs. The proxy does not rename models or inject a system prompt.
 - `anthropic-*`, content type, accept, caller user-agent, request IDs and idempotency headers are forwarded, except hop-by-hop headers. Proxy caller credentials are **replaced**, not passed upstream. The default Anthropic API version is added if absent. OAuth mode adds the OAuth beta flag, but no Claude Code identity or system-prompt emulation.
@@ -22,6 +21,8 @@ No automatic SDK fallback, tool execution, thinking reconstruction, conversation
 - The relay cannot force an upstream prompt-cache hit or a coding client to replay opaque reasoning blocks. Native preservation removes relay-side loss; it does not prove billing savings or answer-quality improvements.
 
 JSON requests are limited to 10 MiB. Compressed request bodies are rejected, not silently decoded/re-encoded. Headers/framing are not promised byte-identical: hop-by-hop headers and content length are managed by HTTP transport; response payload bytes are preserved.
+
+The optional Responses endpoint translates protocols; it does **not** claim byte preservation. It preserves the exact original thinking/signature/redacted blocks inside authenticated encrypted reasoning items, restores them on replay, and preserves tool/text order. Capsules are supplied both when each item completes and in the full completed response. Changed, expired or foreign capsules fail explicitly rather than losing thinking silently. See the [supported subset, security model and configuration](docs/RESPONSES-ADAPTER.md).
 
 ## Authentication and subscription limitation
 
@@ -64,6 +65,8 @@ docker compose --env-file .env -f compose.adapter.yml up -d --build
 | `ANTHROPIC_API_KEY` | Optional upstream API key |
 | `CLAUDE_CODE_OAUTH_TOKEN` | Optional setup-token input; acceptance depends on upstream/model/request |
 | `UPSTREAM_TIMEOUT_MS` | Total deadline, including streaming; default `300000` |
+| `RESPONSES_ENABLED` | Optional Responses adapter; default `false` |
+| `RESPONSES_STATE_KEY` | Separate base64 32-byte secret, required when Responses is enabled |
 | `OLLAMA_URL` | Optional existing embeddings backend |
 
 Only use a trusted upstream URL: the configured credential is sent there. Plain LAN HTTP is unencrypted; use firewall restrictions and TLS where appropriate. `AUTH_DISABLED` remains a local-development option; the adapter Compose file fixes it to `false`.
@@ -90,11 +93,13 @@ Put the **proxy key** in the LiteLLM container, not the Anthropic credential. Us
 
 **Do not patch LiteLLM for this project.** The earlier patch installer and patch-dependent suites have been withdrawn; their passing results were not evidence for stock LiteLLM. The configuration above uses LiteLLM's normal provider transformation and is not a lossless contract. For a fidelity-first Messages client, evaluate the stock [pass-through path and HTTP verification](integration/litellm/README.md). Pass-through is a different gateway route with different routing/accounting behavior, not a transparent fix for Chat/Responses conversions. Production gateway settings are not changed by this repository.
 
+For Codex, use a separate stock pass-through route to the **new proxy-owned Responses adapter**, bypassing LiteLLM's lossy Responses transformation. [Configuration and rollout limits](docs/RESPONSES-ADAPTER.md) include explicit route authentication, relay model restrictions, state-key persistence and caller-requested native cache/thinking options. This path uses exact native model IDs, not managed-model aliases. Gateway spend/budget behavior still needs separate acceptance.
+
 Client requirements:
 
 - Messages clients must replay original assistant content blocks and tool results, including signatures, in order.
 - Chat clients must retain and replay LiteLLM's `thinking_blocks`; `reasoning_content` alone is not signed thinking state.
-- Responses clients must retain and replay reasoning items including `encrypted_content`, not just visible output text. `previous_response_id` persistence is a separate gateway concern, not implemented by this relay.
+- Responses clients must retain and replay reasoning items including `encrypted_content`, not just visible output text. The new adapter is stateless and rejects `previous_response_id` persistence.
 - Do not silently switch the backend/account/model for a signed-history conversation. The relay has one configured upstream credential, but it cannot enforce the gateway's routing choices.
 - Disable gateway/client retries or lossy fallbacks if testing exact-once upstream behavior. A relay's no-retry guarantee does not control a caller's retries.
 
@@ -108,7 +113,8 @@ Endpoints here:
 | `POST /v1/embeddings` | Optional existing Ollama embeddings adapter |
 | `GET /health` | Local DB/config/task/Ollama diagnostic, **not** a provider-auth probe |
 | `/api/admin/*` | Separate admin-authenticated management |
-| `/v1/chat/completions`, `/v1/responses` | Removed/unsupported here; use LiteLLM |
+| `POST /v1/responses` | New opt-in stateless adapter with authenticated signed-state replay |
+| `/v1/chat/completions` | Removed/unsupported here; normal LiteLLM conversion is not fidelity-certified |
 
 ## Migration from the SDK branch
 
@@ -129,17 +135,19 @@ npm ci
 npm run build
 ```
 
-Backend tests use real loopback HTTP, in-memory SQLite and synthetic credentials. They cover raw request/response and SSE fidelity, replay, beta/auth separation, no retry/redirect, cancellation, usage/cache counters, safe diagnostics, legacy configuration guards and migration. No real provider or subscription calls are needed. The separate LiteLLM checks exercise the unmodified FastAPI HTTP gateway against a fake upstream; see their own instructions and scope.
+Backend tests use real loopback HTTP, in-memory SQLite and synthetic credentials. They cover native raw fidelity, Responses translation, authenticated opaque replay, tool/text order, beta/auth separation, no retry/redirect, cancellation, usage/cache counters, safe diagnostics, legacy configuration guards and migration. No real provider or subscription calls are needed. The separate LiteLLM checks exercise the unmodified FastAPI HTTP gateway against a fake upstream; see their own instructions and scope.
 
 Passing offline tests demonstrates transport mechanics, not provider eligibility, billing savings or universal coding-client compatibility. Separate live evidence was obtained on an isolated `test-claudemock` Docker deployment; existing production services were not replaced. See [recorded verification results](docs/VERIFICATION.md) for the distinction between offline, live relay and gateway checks.
 
-The required acceptance clients are **Claude Code and Codex**, with OpenCode as an additional comparison. [Actual client tests](integration/clients/README.md) now show that Codex 0.160.0 can complete a tool turn through stock LiteLLM 1.103.1 while losing signed reasoning history. This route is **not** full-fidelity compatible; a successful final answer is not sufficient acceptance. The native relay cannot repair state lost in the gateway/client Responses conversion. Free pass-through authentication is supported by the pinned backend despite the UI's Premium label, but complete header forwarding requires owner-applied configuration; [policy constraints](integration/litellm/README.md#free-authentication-and-configuration-constraints) remain rollout blockers.
+The required acceptance clients are **Claude Code and Codex**, with OpenCode as an additional comparison. [Actual client tests](integration/clients/README.md) show that Codex 0.160.0 loses signed reasoning through stock LiteLLM 1.103.1's normal Responses conversion. The new pass-through → proxy Responses route passes both synthetic actual-Codex tool round trips, including split signatures, signed-empty and redacted blocks. This is protocol evidence, not real upstream authorization, production rollout or full coding-workflow certification. Free pass-through authentication is supported by the pinned backend despite the UI's Premium label, but complete header forwarding requires owner-applied configuration; [policy constraints](integration/litellm/README.md#free-authentication-and-configuration-constraints) remain rollout requirements.
 
 ## Source map
 
 ```text
 src/routes/anthropic.ts       native endpoint validation
 src/services/nativeRelay.ts  HTTP bytes, credentials, cancellation and lifecycle
+src/routes/responses.ts      gated optional Responses endpoint
+src/services/responses*.ts   strict translation, stream lifecycle and AEAD state
 src/services/usageObserver.ts bounded side-channel usage observation
 src/services/upstreamDiagnostics.ts allowlisted, bounded error/header observation
 src/services/historyService.ts / src/db/  metadata and migrations

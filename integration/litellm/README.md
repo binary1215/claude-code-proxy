@@ -20,7 +20,13 @@ of the deployed gateway.
 
 **Pass-through is not whole-request byte preservation.** LiteLLM re-encodes
 JSON and removes top-level `metadata`. The relay cannot recover fields lost
-before it. Chat/Responses conversion remains outside this pass-through contract.
+before it. Chat/Responses conversion remains outside this native pass-through contract.
+
+Codex now has a separate [proxy-owned Responses adapter](../../docs/RESPONSES-ADAPTER.md),
+behind another stock authenticated pass-through route. It bypasses the normal
+LiteLLM Responses conversion without modifying LiteLLM. Actual Codex synthetic
+signed-state/tool replay passes on that path; the policy/accounting constraints
+below still apply. It is not installed on the shared gateway automatically.
 
 Custom-host SSE can take a generic logging path instead of Anthropic's usage
 parser. Wire usage preservation does **not** prove spend logs, budgets or prices.

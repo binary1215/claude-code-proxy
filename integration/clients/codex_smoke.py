@@ -1,10 +1,11 @@
-"""Actual isolated Codex -> stock LiteLLM Responses -> loopback fake Anthropic.
+"""Actual isolated Codex -> stock LiteLLM -> optional proxy Responses adapter -> fake Anthropic.
 
 No real credentials or provider calls. This is a protocol observation, not live
 Claude authorization, real-signature validation, or billing verification.
 """
 from __future__ import annotations
 import argparse
+import atexit
 import ast
 import copy
 import hashlib
@@ -17,6 +18,7 @@ import os
 from pathlib import Path
 import queue
 import secrets
+import shutil
 import subprocess
 import sys
 import threading
@@ -27,6 +29,8 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--codex', type=Path, required=True, help='Existing official Codex executable')
 parser.add_argument('--output', type=Path, required=True, help='New evidence directory outside the repository')
 parser.add_argument('--observe-only', action='store_true', help='Exit zero for completed observations even when fidelity fails')
+parser.add_argument('--route', choices=['stock', 'adapter'], default='stock', help='Stock Responses conversion or untouched stock custom-route passthrough to the built proxy adapter')
+parser.add_argument('--node', type=Path, help='Existing Node executable for --route adapter (otherwise PATH node)')
 args = parser.parse_args()
 root = Path(__file__).resolve().parents[2]
 output = args.output.resolve()
@@ -35,7 +39,19 @@ if output.exists() or output == root or root in output.parents:
 output.mkdir(parents=True)
 codex = args.codex.resolve(strict=True)
 key = 'sk-local-fixture-' + secrets.token_hex(24)
+relay_key = None
 model = 'claude-sonnet-4-20250514'
+
+def redact(value):
+    for credential in [key, relay_key]:
+        if credential: value = value.replace(credential, '[LOCAL_FIXTURE_KEY]')
+    return value
+
+def stop_process(child):
+    if child is None: return
+    if child.poll() is None: child.terminate()
+    try: child.wait(timeout=5)
+    except subprocess.TimeoutExpired: child.kill(); child.wait(timeout=5)
 
 def identities():
     tree = ast.parse((root / 'integration/litellm/test_stock_gateway.py').read_text(encoding='utf-8'))
@@ -62,7 +78,9 @@ class Fake(BaseHTTPRequestHandler):
         try: body = json.loads(raw)
         except ValueError: self.send_error(400); return
         self.server.requests.append({'path': self.path, 'body': body,
-                                     'gateway_key_leaked': key in self.path or key.encode() in raw or any(key in v for v in self.headers.values())})
+                                     'synthetic_upstream_auth': self.headers.get('x-api-key') == 'sk-ant-local-fake-only' and not self.headers.get('authorization'),
+                                     'gateway_key_leaked': key in self.path or key.encode() in raw or any(key in v for v in self.headers.values()),
+                                     'relay_key_leaked': bool(relay_key) and (relay_key in self.path or relay_key.encode() in raw or any(relay_key in v for v in self.headers.values()))})
         if self.path.split('?')[0] != '/v1/messages' or len(self.server.requests) > 4:
             self.send_error(400); return
         results = [b for m in body.get('messages', []) for b in m.get('content', []) if isinstance(b, dict) and b.get('type') == 'tool_result']
@@ -114,7 +132,7 @@ class WireObserver(BaseHTTPRequestHandler):
     def log_message(self, *_): pass
     def do_POST(self):
         size = int(self.headers.get('content-length', '0'))
-        if self.path != '/v1/responses' or size < 1 or size > 1024 * 1024 or len(self.server.records) >= 4:
+        if self.path != self.server.response_path or size < 1 or size > 1024 * 1024 or len(self.server.records) >= 4:
             self.send_error(400); return
         raw = self.rfile.read(size)
         record = {'request': json.loads(raw), 'response_sse': ''}
@@ -148,7 +166,8 @@ def env_for(folder):
     env['PYTHONDONTWRITEBYTECODE'] = '1'
     return env
 
-report = {'scope': 'actual Codex CLI / stock LiteLLM / fake Anthropic; no live provider',
+report = {'scope': 'actual Codex CLI / stock LiteLLM / ' + ('proxy Responses adapter / ' if args.route == 'adapter' else '') + 'fake Anthropic; no live provider',
+          'route': args.route,
           'litellm_version': importlib.metadata.version('litellm'), 'before': identities(), 'scenarios': [],
           'not_tested': ['real Claude acceptance', 'subscription authorization', 'real cache hits', 'billing', '.7 deployed gateway', 'Claude Code client', 'OS-enforced network isolation']}
 if report['litellm_version'] != '1.103.1': raise SystemExit('Expected stock LiteLLM 1.103.1')
@@ -159,18 +178,61 @@ fake = ThreadingHTTPServer(('127.0.0.1', 0), Fake)
 fake.requests = []; fake.issued = []; fake.replayed = None; fake.failure = None
 thread = threading.Thread(target=fake.serve_forever, daemon=True); thread.start()
 fake_url = 'http://127.0.0.1:' + str(fake.server_port)
+relay_process = None; relay_reader = None; relay_logs = []; process = None; reader = None
+try:
+    if args.route == 'adapter':
+        node = args.node.resolve(strict=True) if args.node else shutil.which('node')
+        if not node: raise RuntimeError('Pass an existing --node executable for adapter mode')
+        relay_env = env_for(output)
+        relay_process = subprocess.Popen([str(node), str(root / 'integration/clients/boot_responses_relay.mjs'), fake_url],
+                                         cwd=output, env=relay_env, stdin=subprocess.DEVNULL,
+                                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace',
+                                         creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+        atexit.register(stop_process, relay_process)
+        relay_lines = queue.Queue()
+        def read_relay_logs():
+            for line in relay_process.stdout: relay_logs.append(line); relay_lines.put(line)
+        relay_reader = threading.Thread(target=read_relay_logs, daemon=True); relay_reader.start()
+        deadline = time.monotonic() + 20; relay_url = None
+        while time.monotonic() < deadline:
+            try: line = relay_lines.get(timeout=.2)
+            except queue.Empty:
+                if relay_process.poll() is not None: break
+                continue
+            try: ready = json.loads(line)
+            except ValueError: continue
+            port = ready.get('local_relay_port')
+            credential = ready.get('local_relay_key')
+            if isinstance(port, int) and 0 < port <= 65535 and isinstance(credential, str) and credential.startswith('sk-'):
+                relay_key = credential; relay_url = 'http://127.0.0.1:' + str(port); break
+        if not relay_url: raise RuntimeError('Local Responses relay startup failed')
+except BaseException:
+    stop_process(relay_process)
+    if relay_reader: relay_reader.join(3)
+    if relay_process: relay_process.stdout.close()
+    fake.shutdown(); fake.server_close(); thread.join(3)
+    raise
 config = {'model_list': [{'model_name': 'claude-fixture', 'litellm_params': {'model': 'anthropic/' + model, 'api_key': 'sk-ant-local-fake-only', 'api_base': fake_url}}],
           'litellm_settings': {'telemetry': False, 'num_retries': 0, 'callbacks': []}, 'router_settings': {'num_retries': 0},
           'general_settings': {'master_key': 'os.environ/LOCAL_GATEWAY_KEY'}}
+response_path = '/v1/responses'
+if args.route == 'adapter':
+    response_path = '/claude-responses/v1/responses'
+    config['general_settings']['pass_through_endpoints'] = [{
+        'path': response_path, 'target': relay_url + '/v1/responses', 'auth': True,
+        'methods': ['POST'], 'forward_headers': True,
+        'headers': {'Authorization': 'os.environ/LOCAL_RELAY_AUTHORIZATION', 'x-api-key': ''},
+    }]
 config_path = output / 'gateway.yaml'; config_path.write_text(yaml.safe_dump(config), encoding='utf-8')
 env = env_for(output); env.update({'CONFIG_FILE_PATH': str(config_path), 'LOCAL_GATEWAY_KEY': key, 'ANTHROPIC_API_KEY': 'sk-ant-local-fake-only', 'ANTHROPIC_BASE_URL': fake_url, 'LITELLM_LOCAL_MODEL_COST_MAP': 'True'})
-process = subprocess.Popen([sys.executable, str(root / 'integration/litellm/boot_gateway.py')], cwd=output, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace', creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+if relay_key: env['LOCAL_RELAY_AUTHORIZATION'] = 'Bearer ' + relay_key
 lines = queue.Queue(); logs = []
 def read_logs():
     for line in process.stdout: logs.append(line); lines.put(line)
-reader = threading.Thread(target=read_logs, daemon=True); reader.start()
 observer = None; observer_thread = None
 try:
+    process = subprocess.Popen([sys.executable, str(root / 'integration/litellm/boot_gateway.py')], cwd=output, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace', creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+    reader = threading.Thread(target=read_logs, daemon=True); reader.start()
     deadline = time.monotonic() + 45; gateway = None
     while time.monotonic() < deadline:
         try: line = lines.get(timeout=.2)
@@ -186,7 +248,7 @@ try:
             except Exception: pass
     if not gateway: raise RuntimeError('Gateway startup failed')
     observer = ThreadingHTTPServer(('127.0.0.1', 0), WireObserver)
-    observer.target_port = int(gateway.rsplit(':', 1)[1]); observer.records = []
+    observer.target_port = int(gateway.rsplit(':', 1)[1]); observer.records = []; observer.response_path = response_path
     observer_thread = threading.Thread(target=observer.serve_forever, daemon=True); observer_thread.start()
     for mode in ['signed_nonempty', 'full_opaque']:
         fake.mode = mode; fake.requests = []; fake.issued = []; fake.replayed = None; fake.failure = None
@@ -194,9 +256,9 @@ try:
         folder = output / mode; folder.mkdir(); workspace = folder / 'workspace'; workspace.mkdir()
         (folder / 'codex-state').mkdir()
         client_env = env_for(folder); client_env.update({'CODEX_HOME': str(folder / 'codex-state'), 'CODEX_FIXTURE_KEY': key, 'RUST_LOG': 'error'})
-        overrides = {'model_provider': 'fixture', 'model': 'claude-fixture',
+        overrides = {'model_provider': 'fixture', 'model': model if args.route == 'adapter' else 'claude-fixture',
                      'web_search': 'disabled', 'model_providers.fixture.name': 'Local synthetic fixture',
-                     'model_providers.fixture.base_url': 'http://127.0.0.1:' + str(observer.server_port) + '/v1', 'model_providers.fixture.wire_api': 'responses',
+                     'model_providers.fixture.base_url': 'http://127.0.0.1:' + str(observer.server_port) + response_path.removesuffix('/responses'), 'model_providers.fixture.wire_api': 'responses',
                      'model_providers.fixture.env_key': 'CODEX_FIXTURE_KEY', 'model_providers.fixture.requires_openai_auth': False,
                      'model_providers.fixture.supports_websockets': False, 'model_providers.fixture.request_max_retries': 0,
                      'model_providers.fixture.stream_max_retries': 0, 'model_providers.fixture.stream_idle_timeout_ms': 15000}
@@ -210,8 +272,8 @@ try:
             item = {'mode': mode, 'exit_code': completed.returncode, 'terminal_marker_seen': finals == ['CODEX_FIXTURE_OK'],
                     'turn_completed': any(e.get('type') == 'turn.completed' for e in events),
                     'model_metadata_fallback_warning': 'Model metadata for' in completed.stdout}
-            (folder / 'client-events.jsonl').write_text(completed.stdout.replace(key, '[LOCAL_FIXTURE_KEY]'), encoding='utf-8')
-            (folder / 'client-stderr.log').write_text(completed.stderr.replace(key, '[LOCAL_FIXTURE_KEY]'), encoding='utf-8')
+            (folder / 'client-events.jsonl').write_text(redact(completed.stdout), encoding='utf-8')
+            (folder / 'client-stderr.log').write_text(redact(completed.stderr), encoding='utf-8')
         except subprocess.TimeoutExpired:
             item = {'mode': mode, 'timed_out': True}
         assistant = [b for m in (fake.replayed or {}).get('messages', []) if m.get('role') == 'assistant' for b in m.get('content', []) if isinstance(b, dict)]
@@ -223,42 +285,53 @@ try:
         delivered_reasoning = [i for r in complete_responses for i in r.get('output', []) if i.get('type') == 'reasoning']
         done_reasoning = [e['item'] for e in response_events if e.get('type') == 'response.output_item.done' and e.get('item', {}).get('type') == 'reasoning']
         opaque = []
-        for reasoning in delivered_reasoning:
+        for reasoning in delivered_reasoning if args.route == 'stock' else []:
             try:
                 decoded = json.loads(reasoning.get('encrypted_content') or 'null')
             except ValueError:
                 decoded = None
             if isinstance(decoded, list): opaque.extend(decoded)
         client_reasoning = [i for r in observer.records[1:2] for i in r['request'].get('input', []) if isinstance(i, dict) and i.get('type') == 'reasoning']
+        completed_capsules = [i.get('encrypted_content') for i in delivered_reasoning if i.get('encrypted_content')]
+        done_capsules = [i.get('encrypted_content') for i in done_reasoning if i.get('encrypted_content')]
+        replayed_capsules = [i.get('encrypted_content') for i in client_reasoning if i.get('encrypted_content')]
         item.update({'upstream_requests': len(fake.requests), 'fixture_failure': fake.failure,
                      'tool_result_replayed': correct_result,
+                     'synthetic_upstream_auth': bool(fake.requests) and all(r['synthetic_upstream_auth'] for r in fake.requests),
+                     'responses_http_success': bool(observer.records) and all(r.get('status') == 200 for r in observer.records),
                      'ordered_assistant_exact': bool(fake.issued) and assistant == fake.issued,
                      'responses_requests': len(observer.records),
                      'delivered_reasoning_items': len(delivered_reasoning),
                      'delivered_encrypted_content': sum(bool(i.get('encrypted_content')) for i in delivered_reasoning),
                      'done_event_encrypted_content': sum(bool(i.get('encrypted_content')) for i in done_reasoning),
-                     'completed_opaque_exact': bool(fake.issued) and opaque == [b for b in fake.issued if b['type'] in {'thinking', 'redacted_thinking'}],
+                     'completed_opaque_exact': None if args.route == 'adapter' else bool(fake.issued) and opaque == [b for b in fake.issued if b['type'] in {'thinking', 'redacted_thinking'}],
+                     'capsules_done_completed_replayed_exact': bool(completed_capsules) and completed_capsules == done_capsules == replayed_capsules,
                      'client_replayed_reasoning_items': len(client_reasoning),
                      'client_replayed_encrypted_content': sum(bool(i.get('encrypted_content')) for i in client_reasoning),
                      'signed_nonempty_preserved': bool(signed) and signed[0] in assistant,
                      'signed_empty_preserved': None if mode != 'full_opaque' else len(signed) > 1 and signed[1] in assistant,
                      'redacted_preserved': None if mode != 'full_opaque' else len(fake.issued) > 2 and fake.issued[2] in assistant,
-                     'gateway_key_leaked': any(r['gateway_key_leaked'] for r in fake.requests)})
+                     'gateway_key_leaked': any(r['gateway_key_leaked'] for r in fake.requests),
+                     'relay_key_leaked': any(r['relay_key_leaked'] for r in fake.requests)})
         report['scenarios'].append(item)
-        (folder / 'fake-requests.json').write_text(json.dumps(fake.requests, indent=2).replace(key, '[LOCAL_FIXTURE_KEY]'), encoding='utf-8')
-        (folder / 'responses-wire.json').write_text(json.dumps(observer.records, indent=2).replace(key, '[LOCAL_FIXTURE_KEY]'), encoding='utf-8')
+        (folder / 'fake-requests.json').write_text(redact(json.dumps(fake.requests, indent=2)), encoding='utf-8')
+        (folder / 'responses-wire.json').write_text(redact(json.dumps(observer.records, indent=2)), encoding='utf-8')
         print(json.dumps(item), flush=True)
 finally:
     if observer:
         observer.shutdown(); observer.server_close(); observer_thread.join(3)
-    if process.poll() is None: process.terminate()
-    try: process.wait(timeout=5)
-    except subprocess.TimeoutExpired: process.kill(); process.wait(timeout=5)
-    reader.join(3); process.stdout.close(); fake.shutdown(); fake.server_close(); thread.join(3)
-    (output / 'gateway.log').write_text(''.join(logs).replace(key, '[LOCAL_FIXTURE_KEY]'), encoding='utf-8')
+    stop_process(process)
+    if reader: reader.join(3)
+    if process: process.stdout.close()
+    stop_process(relay_process)
+    if relay_reader: relay_reader.join(3)
+    if relay_process: relay_process.stdout.close()
+    fake.shutdown(); fake.server_close(); thread.join(3)
+    (output / 'gateway.log').write_text(redact(''.join(logs)), encoding='utf-8')
+    if relay_logs: (output / 'relay.log').write_text(redact(''.join(relay_logs)), encoding='utf-8')
     report['after'] = identities(); report['source_unchanged'] = report['before'] == report['after']
-    report['observation_completed'] = report['source_unchanged'] and len(report['scenarios']) == 2 and all(s.get('exit_code') == 0 and s.get('terminal_marker_seen') and s.get('turn_completed') and s.get('fixture_failure') is None and s.get('upstream_requests') == 2 and s.get('responses_requests') == 2 and s.get('tool_result_replayed') and not s.get('gateway_key_leaked') for s in report['scenarios'])
-    report['full_fidelity'] = report['observation_completed'] and all(s.get('ordered_assistant_exact') for s in report['scenarios'])
+    report['observation_completed'] = report['source_unchanged'] and len(report['scenarios']) == 2 and all(s.get('exit_code') == 0 and s.get('terminal_marker_seen') and s.get('turn_completed') and s.get('fixture_failure') is None and s.get('upstream_requests') == 2 and s.get('responses_requests') == 2 and s.get('responses_http_success') and s.get('synthetic_upstream_auth') and s.get('tool_result_replayed') and not s.get('gateway_key_leaked') and not s.get('relay_key_leaked') for s in report['scenarios'])
+    report['full_fidelity'] = report['observation_completed'] and all(s.get('ordered_assistant_exact') and (args.route != 'adapter' or s.get('capsules_done_completed_replayed_exact')) for s in report['scenarios'])
     (output / 'codex-smoke.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
 print('Report:', output / 'codex-smoke.json')
 print('Full tested fidelity:', report['full_fidelity'])

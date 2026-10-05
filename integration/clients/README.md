@@ -11,6 +11,7 @@ spoofing, paid-key fallback, or production replacement is implied by these tests
 | --- | --- | --- |
 | Claude Code 2.1.289 → native test relay → real Claude | Earlier isolated Opus control succeeded with a real cache hit | Actual `.7` route, tool-rich multi-turn acceptance, gateway policy/accounting |
 | Codex 0.160.0 → stock LiteLLM 1.103.1 Responses → fake Anthropic | Actual CLI completes a tool round trip, but signed reasoning is lost | **Not fidelity-compatible on this tested route**; real authorization also unresolved |
+| Codex 0.160.0 → stock LiteLLM pass-through → new proxy Responses adapter → fake Anthropic | Both tool round trips preserve exact ordered thinking/signature/signed-empty/redacted/tool history | Real authorization, actual `.7` rollout, long coding sessions/compaction, gateway accounting |
 | OpenCode 1.18.34 → fake Anthropic directly | Actual CLI preserves tested signed/redacted history and tool replay | Signed-empty blocks, stock gateway chain, real upstream, cache/accounting |
 
 See [project verification](../../docs/VERIFICATION.md) for live-test boundaries,
@@ -27,6 +28,19 @@ Use an existing official Codex executable and the pristine stock
 ```sh
 python integration/clients/codex_smoke.py --codex /path/to/codex --output /new/temp/evidence
 ```
+
+The default `--route stock` retains the negative baseline. Build the proxy first
+(`npm run build`) and select the implemented adapter path with:
+
+```sh
+python integration/clients/codex_smoke.py --route adapter --codex /path/to/codex --output /new/temp/adapter-evidence
+```
+
+The adapter fixture starts an isolated built Node relay with fresh synthetic
+relay/admin/provider keys and a random state key. A separate authenticated stock
+pass-through route replaces the gateway key with the relay key. The real native
+model ID is explicit; no model alias/fallback is used. All fixture processes are
+stopped on completion. No `.7` settings or real provider credentials are used.
 
 The default exit status is **nonzero when fidelity fails**, even if the CLI
 finishes normally. `--observe-only` permits exit zero for a completed diagnostic
@@ -83,7 +97,28 @@ Read-only inspection of the same relevant source in LiteLLM
 found both defects still present. That version was not installed or runtime-tested.
 
 An Anthropic-only relay cannot repair opaque state discarded between LiteLLM
-and the client. A new proxy-owned Responses adapter behind a separate stock
-pass-through route is a possible architecture change, **not implemented or
-approved by this test**. Do not resurrect the withdrawn legacy translator or
-claim that a successful final text response resolves reasoning continuity.
+and the client. The user subsequently authorized the new proxy-owned adapter
+below. The negative baseline remains useful and is not overwritten by that work.
+
+### Implemented adapter result on 2026-10-05
+
+Actual Codex 0.160.0 → unmodified LiteLLM 1.103.1 pass-through → built new adapter
+→ fake Anthropic passes both `signed_nonempty` and `full_opaque` cases. Each has
+exactly two requests per hop, the requested read-only tool result and final
+marker, and exact ordered native assistant replay. Complete authenticated
+reasoning capsules are identical in `output_item.done`, `response.completed`
+and the next actual client request. Split signatures concatenate once;
+signed-empty and redacted blocks are retained. No gateway/relay key reaches
+the fake provider; 13 guarded stock files remain unchanged.
+
+The adapter's encrypted capsules cannot be decoded by the stock plaintext
+opaque-state check, so `completed_opaque_exact` is `null` for this route, not
+false or an omitted acceptance requirement. Ciphertext identity and the exact
+decoded **next native request** establish its round-trip test instead.
+The custom-model metadata fallback warning remains disclosed. An initial run
+failed because an empty `output_tokens_details` object lacked the Codex-required
+`reasoning_tokens`; omitting the unknown split fixed it without fabricating zero.
+
+This is a short synthetic protocol smoke, not a full coding session or provider
+signature validation. Long-session remote compaction is explicitly unsupported.
+See [adapter design, configuration and limitations](../../docs/RESPONSES-ADAPTER.md).
