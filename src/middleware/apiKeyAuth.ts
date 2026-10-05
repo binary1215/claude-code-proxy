@@ -7,6 +7,7 @@ declare global {
   namespace Express {
     interface Request {
       apiKeyId?: number;
+      apiKeyFingerprint?: string;
       apiKeyName?: string;
       rawBody?: Buffer;
       rateLimitRpm?: number | null;
@@ -89,6 +90,7 @@ export function apiKeyAuth(req: Request, res: Response, next: NextFunction): voi
   }
 
   req.apiKeyId = apiKey.id;
+  req.apiKeyFingerprint = apiKey.key_hash;
   req.apiKeyName = apiKey.name;
   req.rateLimitRpm = apiKey.rate_limit_rpm;
   req.rateLimitTpm = apiKey.rate_limit_tpm;

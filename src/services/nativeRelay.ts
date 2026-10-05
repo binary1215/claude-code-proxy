@@ -28,18 +28,7 @@ export function upstreamUrl(base: string, path: string, query = ""): URL {
   return url;
 }
 
-export function relayNative(req: Request, res: Response, endpoint: string): void {
-  const credential = getUpstreamCredential();
-  if (!credential || /[^\x21-\x7e]/.test(credential.token)) {
-    res.status(503).json({ type: "error", error: { type: "api_error", message: "Upstream credential is not configured." } });
-    return;
-  }
-  let url: URL;
-  try { url = upstreamUrl(ANTHROPIC_BASE_URL, endpoint, req.originalUrl.split("?").slice(1).join("?")); }
-  catch {
-    res.status(503).json({ type: "error", error: { type: "api_error", message: "Invalid upstream base URL configuration." } });
-    return;
-  }
+export function upstreamHeaders(req: Request, credential: { token: string; kind: "oauth" | "api_key" }): http.OutgoingHttpHeaders {
   const excluded = excludedHeaders(req.headers);
   const headers: http.OutgoingHttpHeaders = {};
   for (const [name, value] of Object.entries(req.headers)) {
@@ -56,6 +45,22 @@ export function relayNative(req: Request, res: Response, endpoint: string): void
     if (!betas.includes("oauth-2025-04-20")) betas.push("oauth-2025-04-20");
     headers["anthropic-beta"] = betas.join(",");
   } else headers["x-api-key"] = credential.token;
+  return headers;
+}
+
+export function relayNative(req: Request, res: Response, endpoint: string): void {
+  const credential = getUpstreamCredential();
+  if (!credential || /[^\x21-\x7e]/.test(credential.token)) {
+    res.status(503).json({ type: "error", error: { type: "api_error", message: "Upstream credential is not configured." } });
+    return;
+  }
+  let url: URL;
+  try { url = upstreamUrl(ANTHROPIC_BASE_URL, endpoint, req.originalUrl.split("?").slice(1).join("?")); }
+  catch {
+    res.status(503).json({ type: "error", error: { type: "api_error", message: "Invalid upstream base URL configuration." } });
+    return;
+  }
+  const headers = upstreamHeaders(req, credential);
   const body = req.method === "POST" ? req.rawBody : undefined;
   if (body) headers["content-length"] = body.length;
 
