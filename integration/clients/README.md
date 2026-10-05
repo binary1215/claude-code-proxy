@@ -13,12 +13,15 @@ spoofing, paid-key fallback, or production replacement is implied by these tests
 | Claude Code 2.1.289 → stock pass-through → native relay → fake Anthropic | Single-signature-event control preserves signed/empty/redacted/tool history; real Read and final answer succeed | Split-signature-event stress loses a fragment in the client; stock route removes top-level metadata; not whole-body fidelity |
 | Codex 0.160.0 → stock LiteLLM 1.103.1 Responses → fake Anthropic | Actual CLI completes a tool round trip, but signed reasoning is lost | **Not fidelity-compatible on this tested route**; real authorization also unresolved |
 | Codex 0.160.0 → stock LiteLLM pass-through → new proxy Responses adapter → fake Anthropic | Both tool round trips preserve exact ordered thinking/signature/signed-empty/redacted/tool history | Real authorization, actual `.7` rollout, long coding sessions/compaction, gateway accounting |
+| Codex 0.160.0 apply_patch → stock pass-through → validated adapter → fake Anthropic | Real freeform grammar and signed-state replay preserved; malformed patch blocked before delivery | File editing denied by actual Windows read-only policy; not coding-tool success, real provider or rollout proof |
 | OpenCode 1.18.34 → fake Anthropic directly | Actual CLI preserves tested signed/redacted history and tool replay | Signed-empty blocks, stock gateway chain, real upstream, cache/accounting |
 
 See [project verification](../../docs/VERIFICATION.md) for live-test boundaries,
 and [OpenCode instructions](README-opencode.md) for its separate smoke test.
 The [Claude Code harness](README-claude-code.md) distinguishes its passing
 single-event state subset from split-event and whole-body preservation losses.
+The [Codex coding-tool harness](README-codex-patch.md) separately gates transport
+replay, actual file editing, and invalid-patch rejection.
 None of these rows establishes universal client compatibility or a measured
 quality/cost improvement.
 
@@ -125,6 +128,7 @@ failed because an empty `output_tokens_details` object lacked the Codex-required
 This is a short synthetic protocol smoke, not a full coding session or provider
 signature validation. Remote compaction is unsupported; the default custom
 provider's **local** compaction also has an unresolved historical-tool contract,
-alongside apply-patch grammar and later developer instructions. See the
+alongside later developer instructions. Apply-patch now has a separately opt-in
+validated adapter and coding-tool fixture, not a completed live qualification. See the
 [source-qualified gaps](../../docs/CODEX-QUALIFICATION.md).
 See [adapter design, configuration and limitations](../../docs/RESPONSES-ADAPTER.md).

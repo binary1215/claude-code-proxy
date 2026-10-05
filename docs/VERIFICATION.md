@@ -350,6 +350,47 @@ This establishes Docker build/runtime compatibility, **not deployment**, a
 production security audit, a fresh dependency-vulnerability assessment, or live
 provider/gateway acceptance. The [whole-outcome gates](ACCEPTANCE.md) remain open.
 
+### Validated apply_patch candidate qualification
+
+Commit `acd9379` adds an explicit `RESPONSES_APPLY_PATCH_MODE=validated` option,
+defaulting to `reject`. Local build and **111/111 Node tests** passed, including
+stream/nonstream/replay grammar checks, invalid-output blocking, EOF/cancellation,
+configuration validation and existing native/state/authorization regressions.
+An independent code review's missing EOF/cancellation test was added. The LF
+base grammar matched the pinned official source byte-for-byte; the actual Windows
+CLI additionally exposed the exact CRLF asset spelling, now explicitly accepted.
+Neither spelling authorizes normalization of patch input.
+
+- The committed-only archive SHA-256 matched on local/test hosts:
+  `4af1343beea80bebe8174fa5d794fba9bf578545354ea5f07ede7488d3d4d261`.
+- Candidate `local/test-claudemock:acd9379` built with image ID
+  `sha256:dfcb61738f25052f4dc3b2ec970af5dbc8b28061a4a6a59893504f9a104b27d5`.
+- Linux **Node v22.23.3**, user `node`, also passed **111/111** tests in a
+  no-network/read-only/capabilities-dropped fixture container. The final command
+  returned zero; logs remain in the bounded candidate directory as
+  `node-tests-confirmed.log`. An earlier shell exit-status wrapper was corrected;
+  both test outputs reported all 111 tests passing.
+- A separate no-network check confirmed default mode `reject`, and the grammar
+  license and attribution are both present in the runtime image.
+- Existing `test-claudemock` container ID, image `0ca7575`, and start timestamp
+  were unchanged. No existing test/production container or gateway was replaced,
+  no real provider was called, and no user authentication was loaded.
+
+The actual Codex 0.160.0 synthetic coding-tool check offers the real freeform
+`apply_patch` tool using a test-only catalog, with shell tools disabled. Through
+stock LiteLLM 1.103.1 and the adapter, ordered signed/empty/redacted reasoning and
+the patch/tool-result history replay exactly. A malformed patch fails before any
+custom tool-call completion reaches the client. However, the valid patch is
+**not applied**: this Windows CLI downgraded its requested workspace-write policy
+to read-only because no Windows sandbox mode was configured. The tool error is
+replayed unchanged; an eventual final marker is not editing success. No sandbox
+bypass, global profile change, ACL/user/firewall setup or reroute was performed.
+
+See the [coding-tool harness](../integration/clients/README-codex-patch.md) for
+the isolated reproduction, negative results and distinct transport/execution
+gates. Real provider quality/cost/grammar acceptance, a write-capable client and
+the deployed `.7` gateway remain unverified.
+
 ### Outstanding end-to-end constraints
 
 - General-purpose subscription-token relay eligibility and premium-model raw

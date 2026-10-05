@@ -35,6 +35,12 @@ No reduced editing profile has been installed. Server-side execution of tools
 remains out of scope, and grammar validity is not filesystem or patch-execution
 validity.
 
+The [actual coding-tool fixture](../integration/clients/README-codex-patch.md)
+now confirms signed-state and patch/result transport through stock LiteLLM.
+Its malformed-patch negative passes, but the valid file edit was denied by the
+effective Windows read-only sandbox. This is not successful editing or provider
+qualification; no permission bypass or OS setup was used to make the test pass.
+
 ## 2. Local compaction after tool turns
 
 The configured custom provider is neither OpenAI nor Azure. In this client,
