@@ -145,12 +145,59 @@ test('tool history rejects orphan/duplicate/mismatched/incomplete/out-of-turn re
     [call(), output('unknown')], [call(), message('user', 'Interrupted')],
     [call('call_a'), call('call_b'), output('call_a'), message('assistant', 'Incomplete parallel batch'), output('call_b')],
     [call('call_a'), call('call_b'), output('call_a'), call('call_c'), output('call_b'), output('call_c')],
-    [call('call_a', 'missing'), output('call_a')],
     [call('call_a', 'lookup', { arguments: '[]' }), output('call_a')],
     [call('call_a', 'lookup', { arguments: 'not-json PRIVATE_ARGUMENTS' }), output('call_a')],
     [call('call_a'), output('call_a', { is_error: 'true' })],
   ];
   for (const history of invalid) bad(request({ tools: [fn()], input: [message('user', 'Go'), ...history] }));
+});
+
+test('historical tools with no current definitions preserve identities without enabling calls or inventing schemas', () => {
+  const blocks = [
+    { type: 'thinking', thinking: 'signed history', signature: 'sig-compaction' },
+    { type: 'thinking', thinking: '', signature: 'sig-empty-compaction' },
+    { type: 'redacted_thinking', data: 'redacted-compaction' },
+  ];
+  const history = [message('user', 'Go'), ...blocks.map((b, i) => reasoning(`rs_compact_${i}`, b)),
+    call(), output(), { type: 'custom_tool_call', call_id: 'call_custom', name: 'run_text', namespace: 'functions', input: 'opaque\n🙂' },
+    { type: 'custom_tool_call_output', call_id: 'call_custom', output: 'Done' }, message('user', 'Summarize')];
+  const definitions = [fn(), { type: 'namespace', name: 'functions', tools: [{ type: 'custom', name: 'run_text' }] }];
+  const normal = prepare(request({ tools: definitions, input: history }));
+  for (const extra of [{}, { tools: [] }, { tools: [], tool_choice: 'none' }, { tools: [], parallel_tool_calls: false }]) {
+    const compact = prepare(request({ ...extra, input: history }));
+    assert.deepEqual(compact.nativeBody.messages, normal.nativeBody.messages);
+    assert.equal(Object.hasOwn(compact.nativeBody, 'tools'), false);
+    assert.equal(Object.hasOwn(compact.nativeBody, 'tool_choice'), false);
+    assert.equal(compact.tools.size, 0);
+    const native = { id: 'msg_not_enabled', type: 'message', role: 'assistant', model,
+      content: [normal.nativeBody.messages[1].content.at(-1)], stop_reason: 'tool_use', stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1 } };
+    assert.throws(() => convertNativeMessage(native, { model, tools: compact.tools, seal: codec.seal }), e => e.code === 'unknown_upstream_tool');
+  }
+  const other = prepare(request({ tools: [fn('new_tool')], input: history }));
+  assert.deepEqual(other.nativeBody.messages, normal.nativeBody.messages);
+  assert.deepEqual([...other.tools.keys()], ['new_tool']);
+  assert.deepEqual(other.nativeBody.tools.map(t => t.name), ['new_tool']);
+  bad(request({ tools: [], input: history, tool_choice: { type: 'function', name: 'lookup' } }), 'invalid_tool_history');
+});
+
+test('historical identities reject kind and namespace collisions across current and removed tools', () => {
+  const custom = { type: 'custom_tool_call', call_id: 'call_custom', name: 'lookup', input: 'text' };
+  const customResult = { type: 'custom_tool_call_output', call_id: 'call_custom', output: 'Done' };
+  bad(request({ tools: [fn()], input: [message('user', 'Go'), custom, customResult] }), 'invalid_tool_history');
+  bad(request({ tools: [{ type: 'custom', name: 'lookup' }], input: [message('user', 'Go'), call(), output()] }), 'invalid_tool_history');
+  bad(request({ tools: [], input: [message('user', 'Go'), call(), output(), custom, customResult] }), 'invalid_tool_history');
+  const nsTool = { type: 'namespace', name: 'functions', tools: [fn()] };
+  const flattened = prepare(request({ tools: [nsTool] })).nativeBody.tools[0].name;
+  const nsCall = call('call_ns', 'lookup', { namespace: 'functions' });
+  for (const [tools, history] of [
+    [[fn(flattened)], [nsCall, output('call_ns')]],
+    [[nsTool], [call('call_one', flattened), output()]],
+    [[], [nsCall, output('call_ns'), call('call_one', flattened), output()]],
+  ]) bad(request({ tools, input: [message('user', 'Go'), ...history] }), 'invalid_tool_history');
+  for (const history of [[call()], [output()], [call(), output(), output()],
+    [call(), customResult], [call(), message('user', 'Interrupted')], [call('call_one', 'lookup', { arguments: '[]' }), output()]]) {
+    bad(request({ tools: [], input: [message('user', 'Go'), ...history] }), 'invalid_tool_history');
+  }
 });
 
 test('native tool choice and parallel semantics explicitly map with thinking disabled', () => {

@@ -51,16 +51,23 @@ request uses the existing history, but
 whose [tool list is empty](https://github.com/openai/codex/blob/a956835d020762cb2b570053af06f643a11c0ecc/codex-rs/core/src/client_common.rs#L45).
 The history can still contain reasoning capsules, calls and results.
 
-The current request adapter requires matching current tool definitions for
-historical calls. Thus source-level request construction conflicts with proxy
-validation after tool use. Merely documenting remote compaction as unsupported
-does not describe the default custom-provider limitation accurately.
+The original request adapter required matching current tool definitions for
+historical calls, conflicting with this construction after tool use.
+Implementation update: a separate history-only identity registry now restores
+function/custom/namespace call transport without populating currently callable
+tools or inventing missing schemas. Native-name collisions and malformed history
+still fail; forced choices and new provider calls require current definitions.
+Signed state is restored using the same authenticated codec. Unit/HTTP fixtures
+cover empty/omitted/replaced tool lists, exact signed-state replay and rejection
+of a new call to a removed tool, in both streaming and nonstream modes.
 
-Before changing this contract, distinguish historical tool identity/schema from
-currently callable tools, preserve opaque state, and test the actual provider's
-acceptance of the resulting native history. The Messages API's optional `tools`
-field alone does not prove that empty current definitions plus historical client
-tool calls will be accepted. No successful real compaction is claimed.
+An absent old schema/grammar remains unknown; history is client-authored, not
+attested execution provenance. A matching current grammar still validates
+historical input. Actual provider acceptance of the resulting native history is
+a separate gate: the Messages API's optional `tools` field alone does not prove
+that empty current definitions plus historical client tool calls are accepted.
+No successful real-provider compaction is claimed. Remote Responses compaction
+remains unsupported.
 
 ## 3. Mid-conversation developer instructions
 

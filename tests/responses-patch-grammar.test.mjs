@@ -108,6 +108,20 @@ test('nonstream and historical grammar input round-trip unchanged, invalid histo
   }
 });
 
+test('removed custom-tool definitions do not imply historical grammar or permission for a new patch', () => {
+  const raw = 'opaque historical text, not a valid patch';
+  const input = [{ role: 'user', content: 'fixture' },
+    { type: 'custom_tool_call', call_id: 'call_patch', name: 'apply_patch', input: raw },
+    { type: 'custom_tool_call_output', call_id: 'call_patch', output: 'historical result' }];
+  const compact = prepare({ tools: [], input }, { ...options, applyPatchMode: 'reject' });
+  assert.deepEqual(compact.nativeBody.messages[1].content, native(raw).content);
+  assert.equal(compact.tools.size, 0);
+  assert.equal(Object.hasOwn(compact.nativeBody, 'tools'), false);
+  assert.throws(() => prepare({ input }), e => e.code === 'invalid_tool_history');
+  assert.throws(() => convertNativeMessage(native(patch), { model, tools: compact.tools, seal: options.codec.seal }),
+    e => e.code === 'unknown_upstream_tool');
+});
+
 test('stream buffers all grammar input until validated; invalid input never emits executable done', () => {
   for (const input of [patch, ...invalid]) {
     const stream = new ResponsesStream(streamOptions());

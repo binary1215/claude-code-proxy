@@ -144,8 +144,8 @@ function thinkingPolicy(request: JsonObject, extension: JsonObject, options: Req
 
 /** Strict stateless translation. Signed state is opened only through the bound codec.
  * Images: inline PNG/JPEG/GIF/WebP <=5 MiB decoded, or HTTPS URL <=8192 chars;
- * detail auto only, no local files/file IDs/fetches. Historical calls require current
- * tool definitions. Client IDs/cache keys/summary hints are never prompt text.
+ * detail auto only, no local files/file IDs/fetches. Historical identities do not
+ * authorize new tool calls. Client IDs/cache keys/summary hints are never prompt text.
  */
 export function prepareResponsesRequest(input: unknown, options: RequestTranslationOptions): PreparedResponsesRequest {
   const request = object(input);
@@ -248,6 +248,26 @@ export function prepareResponsesRequest(input: unknown, options: RequestTranslat
     if (!result) fail("invalid_tool_history", "A tool reference has no matching current definition.");
     return result;
   };
+  // A local compaction request can retain past calls while offering no tools.
+  // Reconstruct only their transport identity, never schemas or callable tools.
+  // Keep this registry separate from `tools`, which authorizes provider output.
+  const historyBindings = new Map(tools);
+  const resolveHistoryTool = (kind: "function" | "custom", toolName: unknown, namespace: unknown): ToolBinding => {
+    const sourceName = name(toolName, namespace === undefined ? 64 : 128);
+    const sourceNamespace = namespace === undefined ? undefined : name(namespace, 128);
+    const flattened = nativeName(sourceName, sourceNamespace);
+    const existing = historyBindings.get(flattened);
+    if (existing) {
+      if (identity(existing.kind, existing.name, existing.namespace) !== identity(kind, sourceName, sourceNamespace)) {
+        fail("invalid_tool_history", "Historical and current tool identities collide after namespace translation.");
+      }
+      return existing;
+    }
+    const binding: ToolBinding = { nativeName: flattened, name: sourceName, kind,
+      ...(sourceNamespace === undefined ? {} : { namespace: sourceNamespace }) };
+    historyBindings.set(flattened, binding);
+    return binding;
+  };
   if (own(request, "tool_choice") || own(request, "parallel_tool_calls")) {
     if (own(request, "parallel_tool_calls") && typeof request.parallel_tool_calls !== "boolean") fail();
     const choice = request.tool_choice ?? "auto";
@@ -327,7 +347,7 @@ export function prepareResponsesRequest(input: unknown, options: RequestTranslat
       if (own(item, "id")) string(item.id, true);
       if (own(item, "status") && item.status !== "completed") fail("invalid_tool_history");
       const kind = type === "function_call" ? "function" : "custom";
-      const binding = resolveTool(kind, item.name, item.namespace);
+      const binding = resolveHistoryTool(kind, item.name, item.namespace);
       const callId = string(item.call_id, true, MAX_TOOL_CALL_ID_LENGTH);
       if (calls.has(callId) || (pending.size && nativeBody.messages.at(-1)?.role !== "assistant")) fail("invalid_tool_history", "Tool call identifiers or ordering are invalid.");
       let args: JsonObject;

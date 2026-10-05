@@ -217,15 +217,32 @@ the relay; local files, file IDs, and non-auto detail conversion are rejected.
 Function arguments are syntax-checked JSON objects, not locally schema-executed.
 Tools always run in the client, never in this container.
 
+Historical calls do not need to remain in the current `tools` list. The adapter
+reconstructs their existing deterministic function/custom/namespace transport
+identity, preserves call/result order and signed reasoning, and does not invent
+schemas or re-enable those tools. Only current definitions authorize new provider
+tool calls and explicit `tool_choice`. Ambiguous native-name collisions across
+history and current definitions fail. `tools: []` (or no tools field) therefore
+leaves native `tools` and `tool_choice` absent even when tool history is present.
+
+This is not tool-history attestation: calls/results are client-authored, and an
+absent old schema or grammar cannot be recovered. Custom history retains the
+raw string in the existing `{input: string}` transport wrapper; a name such as
+`apply_patch` alone never implies a grammar. If a matching current definition
+declares a recognized grammar, its historical inputs are still validated.
+Changing current tool definitions may also change the provider's cache prefix.
+Do not infer real provider acceptance or cache savings from this translation.
+
 Unsupported: Chat Completions, saved/previous responses, background jobs,
 Responses compaction, WebSockets, built-in server tools/search, arbitrary grammar tools,
 strict tool-schema guarantees, structured output, automatic truncation, arbitrary
-future block types and late system-message relocation. Historical tool calls
-currently require their definitions in the current request. These return explicit
+future block types and late system-message relocation. These return explicit
 errors instead of silently changing semantics. Long-running Codex sessions are
 **not certified** by a short tool smoke. The pinned custom-provider client uses
-local compaction with empty current tools; historical tool validation currently
-conflicts with that path. Apply-patch mode requires an explicit operator choice
+local compaction with empty current tools; the history-only translation above
+removes the former current-definition validation conflict. It does not implement
+the remote `/responses/compact` endpoint or prove upstream acceptance of local
+summarization. Apply-patch mode requires an explicit operator choice
 and further real-provider qualification; later developer instructions also need
 further work. See [coding-session qualification gaps](CODEX-QUALIFICATION.md).
 Initial system/developer messages necessarily share Anthropic's system channel;

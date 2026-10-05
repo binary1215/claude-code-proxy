@@ -62,6 +62,7 @@ const upstream=http.createServer(async(req,res)=>{
   if(scenario==='redirect') {res.writeHead(307,{location:'http://127.0.0.1:1/never-follow'});res.end('redirect-not-followed');return;}
   const hasResult=body.messages.some(m=>m.content.some(b=>b.type==='tool_result'));
   let message=hasResult?issued([{type:'text',text:'COMPLETE'}],'end_turn'):issued();
+  if(scenario==='history-only-illegal-tool') message=issued();
   if(scenario.startsWith('patch-')&&!hasResult) message=issued([...content.slice(0,3),
     {type:'tool_use',id:'toolu_patch',name:'apply_patch',input:{input:scenario==='patch-valid'?patchText:'PRIVATE_INVALID_PATCH'}}]);
   if(scenario==='model-change') message={...message,model:'unexpected-model'};
@@ -146,6 +147,32 @@ test('returned history replays exact ordered native blocks and repeated continua
   assert.deepEqual(sent.messages.find(m=>m.role==='assistant').content,content);
   assert.equal(sent.messages.at(-1).content[0].tool_use_id,content[3].id);
   const second=await request(continuation());assert(completed(second));assert.deepEqual(calls.at(-1).body,sent);
+});
+
+test('history-only compaction replays sealed state without adding callable tools; stale upstream calls fail',async()=>{
+  for(const stream of [false,true]) {
+    const payload=continuation();payload.tools=[];payload.stream=stream;
+    payload.input.push({role:'user',content:'Summarize the existing tool round trip.'});
+    const before=calls.length;const response=await request(payload);
+    assert.equal(response.status,200);assert.equal(calls.length,before+1);
+    const result=stream?completed(response):JSON.parse(response.body);assert.equal(result.status,'completed');
+    assert.deepEqual(calls.at(-1).body.messages.find(m=>m.role==='assistant').content,content);
+    assert.equal(Object.hasOwn(calls.at(-1).body,'tools'),false);
+    assert.equal(Object.hasOwn(calls.at(-1).body,'tool_choice'),false);
+    const invalid=structuredClone(payload);invalid.input[0].content='history-only-illegal-tool';
+    const failed=await request(invalid);assert.equal(calls.length,before+2);
+    if(stream) {
+      const parsed=events(failed);
+      assert.equal(failed.status,200);assert.equal(completed(failed),undefined);
+      assert.equal(parsed.at(-1).type,'response.failed');
+      assert.equal(parsed.at(-1).response.error.code,'unknown_upstream_tool');
+      assert.equal(parsed.some(e=>e.type==='response.output_item.done'&&e.item.type==='function_call'),false);
+    } else {
+      // Nonstream relay failures deliberately use the sanitized public envelope.
+      assert.equal(failed.status,502);assert.equal(JSON.parse(failed.body).error.code,'upstream_error');
+    }
+    await settled();assert.equal(lastLog().status,'error');assertOneFinalization(lastLog());
+  }
 });
 test('nonstream output uses the same sealed-state replay contract and never claims fabricated prices',async()=>{
   const response=await request(body('seed',{stream:false}));assert.equal(response.status,200);
