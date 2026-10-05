@@ -74,16 +74,18 @@ now reproduces manual local compaction through unmodified LiteLLM: the CLI sends
 `tools: []` with the same three reasoning capsules and prior function call/result;
 the relay restores exact native blocks without `tools`, and compaction completes.
 An independent final-source rerun confirms this bounded synthetic subset. The
-next ordinary user turn fails at the late-developer boundary below, so the test's
-strict exit remains 1 and no full-session success is claimed.
+next ordinary user turn fails at the late-developer boundary below in default
+`reject` mode, so that baseline's strict exit remains 1. The later opt-in hoist
+comparison passes the bounded continuation sequence, not whole-session acceptance.
 
 ## 3. Mid-conversation developer instructions
 
 Mode changes and managed developer-policy changes can append developer messages
 after conversation history. The pinned client explicitly assigns the
 [developer role to mode instructions](https://github.com/openai/codex/blob/a956835d020762cb2b570053af06f643a11c0ecc/codex-rs/core/src/context/world_state/collaboration_mode.rs#L158).
-The adapter currently accepts system/developer messages only in the initial
+By default the adapter accepts system/developer messages only in the initial
 prefix; later ones fail instead of being moved earlier or demoted to user text.
+An explicit experimental developer-only hoist mode is described below.
 
 This is now also an **executed finding**, not only a possible mode-change issue.
 After the manual compaction above, the actual client sends retained user text,
@@ -104,16 +106,31 @@ developer message: a mid-conversation system message must follow a user turn
 precede an assistant turn. A `user → developer → user` sequence therefore cannot
 be fixed by simply renaming `developer` to `system`. Moving the instruction,
 merging it into ordinary user text, or rewriting the initial prefix changes the
-contract; no such fallback is implemented. Model support alone is insufficient.
+contract; no such automatic fallback is used. Model support alone is insufficient.
 
-Operator decision, 2026-10-05: **do not modify Codex itself and do not relocate
-developer instructions**. Relocation is therefore not a pending implementation
-option. Preserve the current fail-closed behavior for the observed
-`user → developer → user` sequence. A future alternative must preserve order and
-instruction meaning without changing Codex; no such qualified mapping is
-currently implemented. This leaves the demonstrated post-compaction continuation
-gap open rather than reducing the whole-outcome acceptance scope. The separate
-proxy-only apply-patch option is not enabled by this decision.
+Earlier operator direction on 2026-10-05 prohibited Codex modification and
+developer relocation. The later request explicitly authorizes **testing proxy-only
+developer-to-top-level-system relocation**. Codex remains unchanged; this does not
+authorize deployment, real-provider charges, or the separate apply-patch mode.
+
+Implementation: `RESPONSES_DEVELOPER_MESSAGE_MODE=hoist` collects developer text
+without deduplication or rewriting, preserving instruction encounter order and
+remaining message/tool order. Default `reject` and native Messages stay unchanged.
+All hoist-mode capsules additionally bind the effective system digest. A changed
+prefix with existing capsules fails 409 before provider contact; switching modes
+also invalidates capsules. See the [exact contract](RESPONSES-ADAPTER.md#optional-developer-instruction-hoisting).
+This is a semantic compatibility tradeoff, not lossless instruction placement,
+guaranteed provider acceptance, cache savings, or whole-session qualification.
+
+Executed hoist comparison at `1d9bbf7`: actual Codex through stock LiteLLM completes
+manual compaction and **two** ordinary follow-up turns (five requests at each hop).
+The late developer role remains in the actual client request; proxy translation
+alone resolves the adapter rejection. System blocks are exact and equal before
+compaction and both following turns in this fixture. Newly issued nonempty,
+signed-empty and redacted reasoning replays exactly on the second follow-up.
+The first follow-up has no old capsules. Default reject still reproduces 400
+(four client, three fake-provider requests). See the
+[complete comparison and evidence](../integration/clients/README-codex-compaction.md#opt-in-hoist-comparison-2026-10-05).
 
 ## Model metadata is necessary but insufficient
 

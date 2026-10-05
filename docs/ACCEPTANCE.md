@@ -14,13 +14,13 @@ or modify LiteLLM source/license flags.
 
 | Gate | Required evidence | Current boundary |
 | --- | --- | --- |
-| Reproducible implementation | Exact Git/image revision, native and Responses regression tests | Build and 115 tests pass locally and in the Linux/Node 22 candidate image at `98d26fe`; not deployed over the existing service |
+| Reproducible implementation | Exact Git/image revision, native and Responses regression tests | Build and 123 tests pass locally at `1d9bbf7`; earlier 115-test Linux/Node 22 image at `98d26fe` passed. New hoist code is not Docker-qualified or deployed over the existing service |
 | Actual clients | Claude Code and Codex on each selected gateway route, streaming, tool execution/result, further user turns | Codex synthetic chain passes; Claude Code single-signature-event state subset passes, but split-event client loss and gateway metadata removal remain; no deployed `.7` client acceptance |
 | Reasoning continuity | Ordered thinking/signatures, signed-empty/redacted blocks and tool IDs survive replay; corruption fails explicitly | Proxy and Codex fake-provider evidence exists; real provider acceptance remains a separate gate |
 | Cache accounting | Repeated eligible native prefix, provider cache read/write/fresh/output counts and matching relay history | Prior native/temporary-gateway Haiku cache hits exist; new Responses/deployed gateway measurements do not |
 | Gateway authorization | Missing/expired/revoked keys, allowed/denied routes, relay model ACL, caller/provider secret separation | Stock source/helper audit exists; actual gateway DB-backed virtual-key acceptance remains |
 | Gateway accounting | Stream completion/failure/cancellation usage and persisted spend compared with known source counters | Generic pass-through accounting is not verified; unknown cost must not be presented as zero or a saving |
-| Coding-session envelope | Actual tool schema, model metadata, context limit, follow-up behavior and compaction choice | Optional validated apply-patch transport passes synthetic replay; actual Windows CLI denied the file edit. Actual Codex manual local compaction passes the synthetic history-only subset, but its next ordinary user turn fails on a late developer message. Real-provider qualification and operator mode choice remain; remote compaction unsupported |
+| Coding-session envelope | Actual tool schema, model metadata, context limit, follow-up behavior and compaction choice | Optional validated apply-patch transport passes synthetic replay; actual Windows CLI denied the file edit. Codex compaction + two follow-ups pass with opt-in hoist through stock LiteLLM/fake provider at `1d9bbf7`; default reject still fails on the late developer. Changed system with retained capsules fails 409. Real provider/long-session qualification and deployment mode choice remain; remote compaction unsupported |
 | Deployment and rollback | Backed-up config/database, preserved state key, exact target, no unrelated service change, healthy rollback target | Isolated Docker 8/8 lifecycle phases pass for exact native `0ca7575`/candidate `98d26fe` images, including fresh-volume synthetic DB restoration and original-state replay with separately retained key/client history. Real deployment backup/cutover not qualified; existing test container remains `0ca7575` |
 | Additional client | OpenCode with the same explicitly selected native model through gateway/relay | Pinned actual-client stock-gateway/native-relay fake-provider chain passes single-signature nonempty/empty/redacted/tool controls; multiple-signature-event stress loses fragments in the client. Real `.7`/provider/cache acceptance remains; not a replacement for mandatory clients |
 
@@ -62,12 +62,13 @@ using an isolated client and a narrowly scoped gateway credential.
   delegated to the existing `LiteLLM 관리` task. That handoff is not evidence of
   an applied route or successful end-to-end acceptance; verify its result before
   coordinating any reload with the prepared relay.
-- Do not modify Codex itself to make this gateway path work. The operator rejected
-  relocating mid-conversation developer instructions. Keep the existing explicit
-  rejection; the observed post-compaction continuation remains unsupported, not
-  silently excluded from the mandatory-client acceptance gate. Proxy-only
-  validated apply-patch activation is a separate choice, not implied by the
-  instruction to leave Codex unchanged.
+- Do not modify Codex itself to make this gateway path work. After initially
+  rejecting developer relocation, the operator authorized a bounded proxy-only
+  top-level-system hoisting experiment on 2026-10-05. Default rejection and the
+  running deployment stay unchanged. This does not reduce mandatory acceptance:
+  actual provider signatures, cache behavior and instruction-change semantics
+  remain separate gates. Proxy-only validated apply-patch activation is a separate
+  choice, not implied by this experiment or by leaving Codex unchanged.
 - The shared gateway UI does not preserve `forward_headers` through the audited
   typed admin schema. Dynamic header forwarding needs the gateway owner's YAML
   and reload access; UI admin access alone is not equivalent.

@@ -14,7 +14,7 @@ spoofing, paid-key fallback, or production replacement is implied by these tests
 | Codex 0.160.0 → stock LiteLLM 1.103.1 Responses → fake Anthropic | Actual CLI completes a tool round trip, but signed reasoning is lost | **Not fidelity-compatible on this tested route**; real authorization also unresolved |
 | Codex 0.160.0 → stock LiteLLM pass-through → new proxy Responses adapter → fake Anthropic | Both tool round trips preserve exact ordered thinking/signature/signed-empty/redacted/tool history | Real authorization, actual `.7` rollout, long coding sessions/compaction, gateway accounting |
 | Codex 0.160.0 apply_patch → stock pass-through → validated adapter → fake Anthropic | Real freeform grammar and signed-state replay preserved; malformed patch blocked before delivery | File editing denied by actual Windows read-only policy; not coding-tool success, real provider or rollout proof |
-| Codex 0.160.0 manual local compaction → stock pass-through → adapter → fake Anthropic | Exact opaque/tool history with current tools empty; compaction lifecycle completes | The next ordinary user turn fails on a late developer message; real-provider acceptance, automatic compaction and long sessions unverified |
+| Codex 0.160.0 manual local compaction → stock pass-through → adapter → fake Anthropic | Default reject reproduces late-developer 400. Explicit hoist passes compaction + two follow-ups with exact system and opaque replay | Real-provider acceptance, automatic compaction, dynamic instruction changes with old capsules and long sessions unqualified; hoist is a semantic opt-in |
 | OpenCode 1.18.34 → fake Anthropic directly | Actual CLI preserves tested signed/redacted history and tool replay | Signed-empty blocks, stock gateway chain, real upstream, cache/accounting |
 | OpenCode 1.18.34 → stock pass-through → native relay → fake Anthropic | Single-signature-event controls preserve signed-nonempty/empty/redacted/tool state; real Read succeeds; tested request bodies and SSE remain exact across the chain | Multiple-signature-event stress loses earlier fragments in the client. Metadata absent in these requests, so known stock metadata removal is not exercised; real `.7`/provider/cache acceptance remains |
 
@@ -135,8 +135,9 @@ failed because an empty `output_tokens_details` object lacked the Codex-required
 
 This is a short synthetic protocol smoke, not a full coding session or provider
 signature validation. Remote compaction is unsupported; the default custom
-provider's **local** compaction also has an unresolved historical-tool contract,
-alongside later developer instructions. Apply-patch now has a separately opt-in
+provider's **local** compaction now has a history-only tool translation and an
+[executed optional hoist continuation fixture](README-codex-compaction.md#opt-in-hoist-comparison-2026-10-05).
+These do not establish real-provider acceptance. Apply-patch has a separately opt-in
 validated adapter and coding-tool fixture, not a completed live qualification. See the
 [source-qualified gaps](../../docs/CODEX-QUALIFICATION.md).
 See [adapter design, configuration and limitations](../../docs/RESPONSES-ADAPTER.md).

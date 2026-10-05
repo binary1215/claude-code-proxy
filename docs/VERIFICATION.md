@@ -579,7 +579,28 @@ independent read-only review found no execution-blocking issue. This closes
 only the synthetic restoration gap, not a real-deployment restore, provider
 acceptance or full end-to-end gate.
 
-### Outstanding end-to-end constraints
+### Developer hoisting comparison (2026-10-05)
+
+At code commit `1d9bbf772ca50efe73e2bf5dcf12a2e6aeccfc2f`, the explicit proxy-only
+`RESPONSES_DEVELOPER_MESSAGE_MODE=hoist` passes actual Codex 0.160.0 manual
+compaction followed by two ordinary turns through stock LiteLLM 1.103.1 and a
+loopback fake Anthropic endpoint. All five requests reach the fake once. System
+blocks match an independent projection and remain identical across compaction;
+new signed/nonempty, signed-empty and redacted reasoning replays exactly on the
+second follow-up. Default reject reproduces the prior 400 with four client and
+three fake-provider requests. Main independently reran both committed modes.
+
+All 123 Node regressions and six Python evidence-oracle tests pass. New HTTP/unit
+tests require changed system + old hoist capsules to fail 409 before upstream
+contact, and prevent capsule reuse across policy modes. No provider signatures
+are fabricated as real: all generated signatures/counters are synthetic. The
+guard authenticates the effective system, not the full conversation, and does
+not establish instruction hierarchy equivalence or cache savings. See the
+[evidence paths/digests and exact scope](../integration/clients/README-codex-compaction.md#opt-in-hoist-comparison-2026-10-05).
+No installed client, LiteLLM source or `.7`/`.64` deployment was changed. Earlier
+Docker qualification applies to `98d26fe`, not this new mode.
+
+### Remaining end-to-end constraints
 
 - General-purpose subscription-token relay eligibility and premium-model raw
   acceptance remain unresolved. No spoofing, SDK fallback or paid-key failover.

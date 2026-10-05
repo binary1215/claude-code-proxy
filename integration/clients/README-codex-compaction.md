@@ -20,12 +20,17 @@ stock Python environment, use a NEW directory under the system temp directory:
 
 Default `--expect success` is strict: a failed post-compaction user turn returns
 **1**, even when local compaction succeeds. Only explicitly selected
-`--expect capture` allows zero for a completed observation; the report still
+`--expect capture` allows zero for the precisely expected default-reject failure; the report still
 keeps `full_session_pass: false`. This diagnostic mode is not acceptance.
+
+Add `--developer-message-mode hoist` to test the explicit proxy-only relocation
+policy, leaving `--expect success`. Its success gate also requires a **second**
+ordinary post-compaction turn with exact new opaque-state replay. The default
+mode is `reject`; neither command changes an installed client or remote service.
 
 The guarded `codex_patch_smoke.py` helpers are reused for environment isolation,
 stock identity checks, process cleanup, and synthetic SSE generation. The
-existing default-reject `boot_responses_relay.mjs` starts the actual application
+default-reject (or explicitly selected hoist) `boot_responses_relay.mjs` starts the actual application
 with an in-memory DB; no grammar opt-in or source monkeypatch is used. No
 existing helper/source/config file is modified by this harness.
 
@@ -65,8 +70,9 @@ ordinary `turn/start` then tests continuation; there is no mode/model change.
 Limits: each request 1 MiB, each response capture 4 MiB, app-server stdout 5 MiB
 or 1,500 messages, bounded RPC deadlines (30/45 seconds), and at most six HTTP
 requests per observer/provider. The strict known-case gates require two initial
-requests, one compaction request, and one further user request with no hidden
-retry. Processes and local listeners are closed in `finally`. RPC notifications
+requests, one compaction request, and one further user request in reject mode,
+or two further user requests in hoist mode, with no hidden retry. Processes and
+local listeners are closed in `finally`. RPC notifications
 are buffered so completion-before-ack ordering is not silently discarded.
 
 The synthetic model catalog is explicitly labeled as a local fixture, with the
@@ -80,7 +86,7 @@ The pinned server requires `thread/start.sandbox: "read-only"`, not the
 camel-case value shown in some current examples. An initial RPC-only attempt
 captured that validation error; it made no provider/Responses HTTP requests.
 
-## Observed candidate result (2026-10-05)
+## Original default-reject candidate result (2026-10-05)
 
 Final-source independent rerun evidence:
 `C:/Users/binary/AppData/Local/Temp/codex-compaction-main-20261005/`.
@@ -145,3 +151,55 @@ Not tested: automatic threshold-triggered compaction, remote
 signature validation, authorization/entitlement, billing/cache effects or broad
 tool compatibility. Manual local compaction is established only for this
 bounded synthetic subset; whole-session continuation is not established.
+
+## Opt-in hoist comparison (2026-10-05)
+
+Implemented and independently rerun at code commit
+`1d9bbf772ca50efe73e2bf5dcf12a2e6aeccfc2f`, using the same pinned Codex and stock
+LiteLLM versions. Built request-adapter SHA-256:
+`b25422f41635613071d86e954835a63a6a8c11d8af6e062ee05a084c5e8789f8`.
+
+| Mode | Client / fake-provider requests | Result |
+| --- | --- | --- |
+| `reject` | 4 / 3 | Compaction completes; following ordinary turn returns 400 before provider contact, matching the original boundary |
+| `hoist` | 5 / 5 | Compaction and both ordinary follow-up turns complete; exact native reasoning/text/tool replay and system projection pass |
+
+The actual first follow-up still contains `user → user → developer → user → user`;
+the client request is not rewritten by the harness or gateway. The proxy gathers
+developer blocks into top-level system. Every successfully forwarded request is
+checked by an independent text/tool/system oracle, not just the final status.
+Exact duplicates and instruction order are retained; all other text/tool blocks
+retain their order. Unknown observed shapes fail the oracle.
+
+The effective system is **identical before compaction and on both following
+turns** in this fixture. Within the final hoist run its three SHA-256 values are
+`f8801d41f6e527447fa2b7784e8215bdf308b1e204011e48467d6c4a08ee0169`.
+Different isolated runs can have different environment instructions; this is
+within-run equality, not a cross-session cache claim. The first post-compaction
+input has no old reasoning capsules. Its response emits nonempty thinking,
+signed-empty thinking, redacted thinking and text. The second post-compaction
+request replays those exact native blocks in order; reasoning IDs/ciphertext
+also match output-item-done, response-completed and actual client replay.
+
+No hidden retries, unchanged 13 guarded stock-LiteLLM file identities, separated
+synthetic authentication, and empty workspace all pass. The new eight Node
+unit/HTTP tests separately verify changed effective system → 409 with no provider
+contact, policy-switch rejection in both directions, and default/late-system
+rejection. The complete Node suite has 123 passing tests; six pure Python oracle
+tests pass. Independent review found no blocking implementation issue.
+
+Final main-agent evidence:
+
+- Hoist: `C:/Users/binary/AppData/Local/Temp/codex-compaction-hoist-1d9bbf7/codex-compaction-smoke.json`,
+  SHA-256 `2acbdeba2ebacd689e4ad344ef2b5f227081ef5fc665e7fc82458cfc374e643e`.
+- Reject: `C:/Users/binary/AppData/Local/Temp/codex-compaction-reject-1d9bbf7/codex-compaction-smoke.json`,
+  SHA-256 `23528b93e0ccec9ffcb4211dd45ff361a5ad6cc37e5e0e951e8b7a5f0ed7f1a2`.
+
+Hoist exits 0 under strict success. Reject exits 0 only under explicit capture;
+its `full_session_pass` remains false. The hoist report's legacy
+`full_session_pass: true` means this **bounded synthetic sequence**, not full
+coding-session, provider, policy, deployment, quality or cost qualification.
+No real provider call, `.7`/`.64` mutation, paid-key selection or installed-client
+change is made. System changes with retained old capsules still fail explicitly;
+hoisting is not general dynamic-instruction support. See the
+[mode contract and cache caveats](../../docs/RESPONSES-ADAPTER.md#optional-developer-instruction-hoisting).
