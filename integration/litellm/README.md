@@ -98,3 +98,50 @@ The optional `--collision` probe is explicitly marked experimental/not asserted
 for the colliding route; its exit status is not compatibility acceptance.
 Credential isolation checks every upstream request, including retries and
 multi-turn seed/replay calls, for the local random gateway key.
+
+## Free authentication and configuration constraints
+
+The deployed 1.103.1 UI disables its pass-through authentication toggle with a
+Premium label. The pinned backend intentionally supports `auth: true` without
+a license: registration attaches the real `user_api_key_auth` dependency even
+with `premium_user=False`. Using this supported safe setting does not require
+a license flag change. Do not create an unauthenticated route as a workaround.
+
+The UI/admin CRUD endpoint and typed `/config/update` schema drop
+`forward_headers`. Consequently the dynamic beta-header contract above requires
+an owner-applied YAML configuration and reload. A static-header API-only route
+is a narrower contract, not an equivalent substitute. If YAML owns
+`pass_through_endpoints` (even an empty list), API writes to that field are
+rejected. Built-in `/anthropic` uses process-global upstream environment
+configuration, not a model's UI `api_base`; do not redirect it casually on a
+shared gateway.
+
+Custom routes require explicit virtual-key route permissions, including
+`metadata.allowed_passthrough_routes`. That helper grants child paths too, and
+an empty key list can inherit team grants; it is not an explicit deny. Custom
+pass-through skips the usual model allowlist because its body model is not
+resolved as a managed model. Route authentication alone is therefore not proof
+of model isolation. Require a separately verified relay/model restriction before
+relying on it for that policy.
+
+Budget checks can reject an already exhausted cached spend value, but that does
+not prove new stream usage is charged correctly. Custom-host streams use generic
+accounting, and a default flat `cost_per_request: 0` can override derived cost.
+The [official cost-header contract](https://docs.litellm.ai/docs/proxy/pass_through_cost_tracking)
+supports upstream-reported cost/tokens, but final SSE usage is not known when
+initial HTTP headers are sent. Do not fabricate a zero price or label an
+unverified spend dashboard accurate.
+
+Reproduce 25 stock policy/helper/schema observations without a database,
+provider, remote host, or license override:
+
+```sh
+python integration/litellm/test_gateway_policy.py --output /new/temp/policy-evidence
+```
+
+This checks 13 policy-related source identities before/after, not the full
+package. It is not DB-backed HTTP virtual-key authentication, persisted CRUD,
+multi-worker synchronization, budget debit/concurrency, or UI-accounting proof.
+The [actual Codex audit](../clients/README.md) separately detects reasoning loss
+in the stock Responses conversion; pass-through Messages results cannot be used
+as acceptance for that route.

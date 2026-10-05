@@ -1,0 +1,89 @@
+# Actual coding-client compatibility checks
+
+Required clients: **Claude Code and Codex**. OpenCode is an additional comparison,
+not a substitute for either required client. Only free, supported stock LiteLLM
+features are in scope. No LiteLLM source patch, SDK/CLI proxy backend, identity
+spoofing, paid-key fallback, or production replacement is implied by these tests.
+
+## Current evidence
+
+| Client / route | Evidence | Remaining gap |
+| --- | --- | --- |
+| Claude Code 2.1.289 → native test relay → real Claude | Earlier isolated Opus control succeeded with a real cache hit | Actual `.7` route, tool-rich multi-turn acceptance, gateway policy/accounting |
+| Codex 0.160.0 → stock LiteLLM 1.103.1 Responses → fake Anthropic | Actual CLI completes a tool round trip, but signed reasoning is lost | **Not fidelity-compatible on this tested route**; real authorization also unresolved |
+| OpenCode 1.18.34 → fake Anthropic directly | Actual CLI preserves tested signed/redacted history and tool replay | Signed-empty blocks, stock gateway chain, real upstream, cache/accounting |
+
+See [project verification](../../docs/VERIFICATION.md) for live-test boundaries,
+and [OpenCode instructions](README-opencode.md) for its separate smoke test.
+None of these rows establishes universal client compatibility or a measured
+quality/cost improvement.
+
+## Codex + stock Responses reproduction
+
+Use an existing official Codex executable and the pristine stock
+`litellm[proxy]==1.103.1` environment described in the
+[gateway audit](../litellm/README.md). Do not point the fixture at a live gateway.
+
+```sh
+python integration/clients/codex_smoke.py --codex /path/to/codex --output /new/temp/evidence
+```
+
+The default exit status is **nonzero when fidelity fails**, even if the CLI
+finishes normally. `--observe-only` permits exit zero for a completed diagnostic
+run with a negative fidelity result. Always inspect `observation_completed` and
+`full_fidelity` separately in `codex-smoke.json`.
+
+The harness creates a private home/config/workspace, ignores user configuration
+and project rules, runs an ephemeral read-only Codex session, and removes
+inherited provider credentials. Its fake model requests only the read-only
+`get_goal` tool, never shell/file/network tools. The selected client must expose
+that tool; otherwise the fixture fails rather than substituting an unsafe tool.
+The client and gateway use loopback URLs and synthetic credentials. This is
+configuration isolation, **not an OS-enforced egress sandbox**. The observer
+forwards response bytes while changing HTTP transport framing; it is not a
+production component or a wire-framing fidelity test.
+
+Two cases emit fragmented signature deltas: nonempty thinking; and nonempty,
+signed-empty, redacted thinking plus a tool call. The local fake returns a final
+marker after a tool result so execution completion can be distinguished from
+history preservation. It is not a real signature validator. Acceptance also
+requires the exact ordered issued assistant content, one matching successful
+tool result, exactly two requests at each hop, a completed turn and exact final
+agent message, no fixture failure/key leak, and unchanged selected gateway
+source files. The source guard covers 13 files, not the entire installed package.
+
+Raw synthetic requests/SSE and client events stay in the selected new directory
+outside the repository. They contain generated client instructions and dummy
+thinking/signatures, not a user's actual project or provider conversation.
+
+### Observed failure on 2026-10-05
+
+Both scenarios completed exactly two requests and returned the expected marker.
+Nevertheless `full_fidelity=false`:
+
+1. LiteLLM's reasoning `response.output_item.done` has summary text but no
+   `encrypted_content`. `response.completed.output` has opaque content later.
+2. Actual Codex's next Responses request replays that reasoning ID and summary
+   with `encrypted_content:null`. The subsequent Anthropic request contains the
+   tool call but no thinking or redacted blocks.
+3. Independently, the completed response's opaque content is already incorrect:
+   two signature fragments become separate thinking blocks, with duplicated
+   thinking text. Signed-empty thinking is lost in aggregation as well.
+
+The stock source explains both gateway-side defects:
+[incremental reasoning completion](https://github.com/BerriAI/litellm/blob/580bde9a2d148714889ec1c04a9872819e78a778/litellm/responses/litellm_completion_transformation/streaming_iterator.py),
+[Anthropic signature handling](https://github.com/BerriAI/litellm/blob/580bde9a2d148714889ec1c04a9872819e78a778/litellm/llms/anthropic/chat/handler.py),
+and [thinking aggregation](https://github.com/BerriAI/litellm/blob/580bde9a2d148714889ec1c04a9872819e78a778/litellm/litellm_core_utils/streaming_chunk_builder_utils.py).
+The Codex run also warns that the synthetic alias lacks custom model metadata;
+this is a disclosed fixture limitation, not evidence that adding metadata would
+repair these observed malformed gateway events.
+
+Read-only inspection of the same relevant source in LiteLLM
+[`v1.103.3`, `ecae261b100cdf6bcb1d024ae69e4efa4a891be0`](https://github.com/BerriAI/litellm/tree/ecae261b100cdf6bcb1d024ae69e4efa4a891be0)
+found both defects still present. That version was not installed or runtime-tested.
+
+An Anthropic-only relay cannot repair opaque state discarded between LiteLLM
+and the client. A new proxy-owned Responses adapter behind a separate stock
+pass-through route is a possible architecture change, **not implemented or
+approved by this test**. Do not resurrect the withdrawn legacy translator or
+claim that a successful final text response resolves reasoning continuity.

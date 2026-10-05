@@ -196,6 +196,49 @@ did not load; it returned 404 before reaching the relay. Using the supported
 `.yaml` extension corrected the fixture. Only the corrected run establishes
 the live result. Actual `.7` route/key changes await a separate user decision.
 
+## Actual clients and free-gateway policy
+
+The user selected **Claude Code + Codex as mandatory**, OpenCode as additional,
+and free supported LiteLLM paths only. That whole objective is **not achieved**.
+
+Actual isolated Codex 0.160.0 ran against stock LiteLLM 1.103.1 and a loopback
+fake Anthropic provider. Both signed-nonempty and full-opaque fixtures completed
+exactly one tool round trip and an exact final marker, but both failed ordered
+assistant fidelity. A loopback wire observer localized the loss:
+
+- Incremental reasoning `output_item.done` lacks opaque content; only the final
+  `response.completed` includes it. Codex replays the reasoning with null opaque
+  content, leaving only `tool_use` in the subsequent Anthropic assistant turn.
+- Completed opaque state is independently malformed: split signature deltas
+  produce separate blocks and duplicated thinking text; signed-empty is lost.
+- The fake alias causes a model-metadata fallback warning. No real provider,
+  cache hit, subscription permission, `.7` deployment, or quality claim follows.
+
+The source guard passed before/after. Default fidelity mode correctly exits
+nonzero; explicit observation-only mode completes successfully while retaining
+`full_fidelity:false`. A read-only inspection found the same relevant defects in
+LiteLLM v1.103.3 source; no newer gateway was deployed or runtime-certified.
+
+Separately, actual OpenCode 1.18.34 directly against a fake Anthropic provider
+preserved tested nonempty thinking/signature, redacted state and tool replay.
+This is not gateway-chain or signed-empty coverage. Detailed scope and runnable
+fixtures are in [actual-client verification](../integration/clients/README.md).
+
+The deployed UI's disabled Premium authentication control does not match the
+pinned backend's intentional free `auth:true` support. An independent offline
+audit verified 25 policy/schema/helper observations, with 13 selected source
+identities unchanged. It also verified constraints: typed admin config drops
+`forward_headers`; YAML ownership blocks field API writes; custom routes skip
+managed-model ACLs; default generic/flat-zero accounting is not financial
+acceptance. No DB-backed virtual-key HTTP or persisted spend test was performed.
+
+No `.7` settings, production service, upstream credentials, or LiteLLM source
+were changed during this client/policy verification. Completing dynamic-header
+configuration needs the gateway owner's file/reload access. Codex live Claude
+authorization and any separately billed API-key budget need an explicit choice.
+A proxy-owned Responses adapter is a proposed new scope, not implemented by
+these tests and not a reintroduction of the withdrawn SDK backend.
+
 ## Remaining boundaries
 
 - General-purpose subscription-token relay eligibility and premium-model raw

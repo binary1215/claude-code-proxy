@@ -133,6 +133,8 @@ Backend tests use real loopback HTTP, in-memory SQLite and synthetic credentials
 
 Passing offline tests demonstrates transport mechanics, not provider eligibility, billing savings or universal coding-client compatibility. Separate live evidence was obtained on an isolated `test-claudemock` Docker deployment; existing production services were not replaced. See [recorded verification results](docs/VERIFICATION.md) for the distinction between offline, live relay and gateway checks.
 
+The required acceptance clients are **Claude Code and Codex**, with OpenCode as an additional comparison. [Actual client tests](integration/clients/README.md) now show that Codex 0.160.0 can complete a tool turn through stock LiteLLM 1.103.1 while losing signed reasoning history. This route is **not** full-fidelity compatible; a successful final answer is not sufficient acceptance. The native relay cannot repair state lost in the gateway/client Responses conversion. Free pass-through authentication is supported by the pinned backend despite the UI's Premium label, but complete header forwarding requires owner-applied configuration; [policy constraints](integration/litellm/README.md#free-authentication-and-configuration-constraints) remain rollout blockers.
+
 ## Source map
 
 ```text
@@ -144,6 +146,7 @@ src/services/historyService.ts / src/db/  metadata and migrations
 admin/                       optional administration UI
 tests/                       loopback native relay regression tests
 integration/litellm/          stock gateway verification and configuration notes
+integration/clients/          actual CLI synthetic compatibility checks
 ```
 
 MIT for this repository; dependencies retain their own licenses and terms.
