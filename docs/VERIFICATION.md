@@ -223,6 +223,8 @@ Separately, actual OpenCode 1.18.34 directly against a fake Anthropic provider
 preserved tested nonempty thinking/signature, redacted state and tool replay.
 This is not gateway-chain or signed-empty coverage. Detailed scope and runnable
 fixtures are in [actual-client verification](../integration/clients/README.md).
+The later [OpenCode chain qualification](#opencode-native-gateway-chain-qualification)
+adds those synthetic checks without changing this original baseline's scope.
 
 The deployed UI's disabled Premium authentication control does not match the
 pinned backend's intentional free `auth:true` support. An independent offline
@@ -429,6 +431,57 @@ These checks establish adapter behavior, not real-provider acceptance of history
 without current definitions, cache savings, summarization quality or full-session
 compatibility. Remote `/responses/compact` and late developer-role mapping remain
 unsupported. See [Codex qualification](CODEX-QUALIFICATION.md).
+
+### OpenCode native gateway-chain qualification
+
+Actual pinned OpenCode **1.18.34** was subsequently run through stock LiteLLM
+**1.103.1** authenticated custom pass-through and the built native relay, against
+a loopback fake Anthropic provider. No new backend change was required. Four
+isolated cases separate nonempty versus full opaque (signed-empty plus redacted)
+history, and one versus two signature SSE events. All responses are written in
+seven-byte chunks. The empty-thinking control explicitly includes an empty
+`thinking_delta` before its signature, matching the documented event shape.
+
+Both **single-signature controls pass**: the actual client executes only Read
+on the exact synthetic fixture, completes the expected final answer, and replays
+ordered thinking/signatures/empty/redacted/tool content. OpenCode adds an
+ephemeral cache marker to tool_use; the test reports this mutation separately
+and asserts the exact expected marked content, not equality with unmodified
+issued content.
+
+Both **two-signature-event stress cases lose the first fragment in the client**,
+already visible before LiteLLM. The next native request contains that same
+last-fragment signature. This is not observed gateway/relay stripping, nor proof
+that real Anthropic normally emits multiple signature events. The pinned client
+and SDK source metadata-replacement path agrees with the captured behavior.
+
+- Exactly two client and two provider requests occur per case, eight per hop
+  overall; all actual Read/final/step-finish checks pass and no retry is hidden.
+- Each tested client request body, including serialized bytes, matches the
+  provider-bound body. Both response SSE byte arrays and beta headers match.
+  These requests have **no top-level metadata**, so the known stock metadata
+  removal was not exercised. This is not universal byte-transparent gateway
+  behavior or a contradiction of the Claude Code metadata finding.
+- Generated credential separation, unchanged fixture/workspace and all 13
+  stock source guards pass. Each case's incidental registry/release attempts
+  are rejected by a local proxy, without forwarding; no OS-level egress claim.
+- Final report: `observation_completed:true`, `state_control_pass:true`,
+  `state_stress_pass:false`, `whole_body_semantic_exact:true`,
+  `strict_qualification_pass:false`. Default strict exit is **1**, preserving
+  the negative stress finding.
+- Evidence resides in
+  `C:/Users/binary/AppData/Local/Temp/opencode-gateway-qualified-2e4d8a321feb44c99a829b52fc3f0c3a/`.
+  HEAD independently recomputed hop body comparisons, response SSE hashes and
+  full-versus-last-fragment signatures from those captures; this was evidence
+  inspection, not a second CLI run. An earlier fixture-only Windows CRLF/LF
+  assertion mismatch was fixed before the final four-case execution, without
+  changing old evidence or client/relay/gateway behavior.
+
+See the [reproducible harness](../integration/clients/README-opencode-gateway.md)
+and [pinned source cross-check](../integration/clients/README-opencode.md#pinned-source-cross-check).
+No actual provider credential, `.7` deployment, entitlement, cache hit, price,
+long-session, model-switch or arbitrary-tool compatibility is established.
+The existing test/production containers were not changed by this qualification.
 
 ### Outstanding end-to-end constraints
 

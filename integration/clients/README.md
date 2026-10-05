@@ -16,9 +16,13 @@ spoofing, paid-key fallback, or production replacement is implied by these tests
 | Codex 0.160.0 apply_patch → stock pass-through → validated adapter → fake Anthropic | Real freeform grammar and signed-state replay preserved; malformed patch blocked before delivery | File editing denied by actual Windows read-only policy; not coding-tool success, real provider or rollout proof |
 | Codex 0.160.0 manual local compaction → stock pass-through → adapter → fake Anthropic | Exact opaque/tool history with current tools empty; compaction lifecycle completes | The next ordinary user turn fails on a late developer message; real-provider acceptance, automatic compaction and long sessions unverified |
 | OpenCode 1.18.34 → fake Anthropic directly | Actual CLI preserves tested signed/redacted history and tool replay | Signed-empty blocks, stock gateway chain, real upstream, cache/accounting |
+| OpenCode 1.18.34 → stock pass-through → native relay → fake Anthropic | Single-signature-event controls preserve signed-nonempty/empty/redacted/tool state; real Read succeeds; tested request bodies and SSE remain exact across the chain | Multiple-signature-event stress loses earlier fragments in the client. Metadata absent in these requests, so known stock metadata removal is not exercised; real `.7`/provider/cache acceptance remains |
 
 See [project verification](../../docs/VERIFICATION.md) for live-test boundaries,
 and [OpenCode instructions](README-opencode.md) for its separate smoke test.
+The [OpenCode gateway-chain harness](README-opencode-gateway.md) adds four actual
+client cases, separating documented single-signature controls from multiple-
+signature-event stress and client-added cache controls from gateway preservation.
 The [Claude Code harness](README-claude-code.md) distinguishes its passing
 single-event state subset from split-event and whole-body preservation losses.
 The [Codex coding-tool harness](README-codex-patch.md) separately gates transport

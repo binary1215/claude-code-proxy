@@ -22,7 +22,7 @@ or modify LiteLLM source/license flags.
 | Gateway accounting | Stream completion/failure/cancellation usage and persisted spend compared with known source counters | Generic pass-through accounting is not verified; unknown cost must not be presented as zero or a saving |
 | Coding-session envelope | Actual tool schema, model metadata, context limit, follow-up behavior and compaction choice | Optional validated apply-patch transport passes synthetic replay; actual Windows CLI denied the file edit. Actual Codex manual local compaction passes the synthetic history-only subset, but its next ordinary user turn fails on a late developer message. Real-provider qualification and operator mode choice remain; remote compaction unsupported |
 | Deployment and rollback | Backed-up config/database, preserved state key, exact target, no unrelated service change, healthy rollback target | Existing test container still uses native revision `0ca7575`; no production cutover has been authorized by a test result |
-| Additional client | OpenCode with the same explicitly selected native model through gateway/relay | Direct fake-provider comparison only; not a replacement for mandatory clients |
+| Additional client | OpenCode with the same explicitly selected native model through gateway/relay | Pinned actual-client stock-gateway/native-relay fake-provider chain passes single-signature nonempty/empty/redacted/tool controls; multiple-signature-event stress loses fragments in the client. Real `.7`/provider/cache acceptance remains; not a replacement for mandatory clients |
 
 For Codex, the [official gateway contract](https://learn.chatgpt.com/docs/enterprise/gateway-compatibility)
 requires actual streaming, continuation, tool, routing and authentication evidence.

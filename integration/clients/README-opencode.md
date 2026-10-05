@@ -2,6 +2,11 @@
 
 This test runs the **unmodified official OpenCode CLI** against an in-process loopback fake Anthropic Messages provider. It uses no real provider credential, account, project, or model call. It does not install anything globally.
 
+This document retains the original **direct** baseline. The separate
+[stock-gateway/native-relay chain harness](README-opencode-gateway.md) adds
+signed-empty controls and distinct multiple-signature-event stress cases. Its
+findings must not be retroactively attributed to this older direct test.
+
 ## Pinned client and source
 
 Verified on 2026-10-05:
@@ -47,3 +52,21 @@ Actual pinned-binary run passed in approximately nine seconds with exactly two `
 Failures exit nonzero and print bounded counts/flags; synthetic-only tool error/stderr may be retained inside the isolated temp directory for diagnosis. There is a 60-second run deadline and a 1MiB fake-provider request bound.
 
 This is **direct-client → fake Anthropic** evidence, not a stock LiteLLM, relay-chain, billing, real signature validity, arbitrary unknown-block, signed-empty-text separator, cancellation, persistence-across-processes, or real upstream entitlement test. The signature/data are synthetic; the test checks the specified round-trip subset, not cryptographic acceptance. OpenCode itself is not a byte-transparent client: it generates requests through an SDK, adds the observed cache marker, [changes empty text separators around signed reasoning](https://github.com/anomalyco/opencode/blob/aec0b9a6d8898f68f923aaf08b7306d931fd9d76/packages/opencode/src/session/message-v2.ts#L266-L287), and changes reasoning replay when switching models. Keep the same provider/model for this fidelity fixture.
+
+## Pinned source cross-check
+
+The pinned client's [reasoning filter](https://github.com/anomalyco/opencode/blob/aec0b9a6d8898f68f923aaf08b7306d931fd9d76/packages/opencode/src/provider/transform.ts#L182)
+retains empty reasoning when signature or redacted metadata exists. The
+[Anthropic prompt converter](https://github.com/vercel/ai/blob/85464f4e2026d9fc0274424c0171a25742836411/packages/anthropic/src/convert-to-anthropic-messages-prompt.ts#L601)
+then restores signed thinking even with empty text. Empty reasoning is therefore
+not categorically lost by this pinned native-client path.
+
+For multiple signature SSE events, the [SDK emits each signature in metadata](https://github.com/vercel/ai/blob/85464f4e2026d9fc0274424c0171a25742836411/packages/anthropic/src/anthropic-messages-language-model.ts#L2267),
+while [OpenCode replaces that metadata](https://github.com/anomalyco/opencode/blob/aec0b9a6d8898f68f923aaf08b7306d931fd9d76/packages/opencode/src/session/processor.ts#L294).
+This explains the chain fixture's last-fragment-only stress result. The
+[official streaming contract](https://platform.claude.com/docs/en/build-with-claude/streaming#thinking-delta)
+describes a signature event before block-stop and explicitly a single signature
+for omitted thinking. Multiple signature events are not the same test as one
+event split across network writes, and the stress result is not proof that
+production Anthropic routinely emits that shape. The native relay does not
+rewrite SSE or fabricate missing client history to conceal the result.
