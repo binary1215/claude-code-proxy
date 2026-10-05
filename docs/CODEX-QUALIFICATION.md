@@ -1,8 +1,9 @@
 # Codex coding-session qualification gaps
 
 The passing actual-Codex smoke verifies a short synthetic tool round trip. It
-does not certify a full coding session. The following findings come from
-**source review**, not a newly executed long-session/provider test.
+does not certify a full coding session. The original findings below came from
+**source review**. Implementation updates are identified separately; none is
+a newly executed long-session/provider qualification.
 
 Inspected client: Codex `0.160.0`, official `rust-v0.160.0` commit
 `a956835d020762cb2b570053af06f643a11c0ecc`. Proxy basis: `591e44d`.
@@ -10,8 +11,8 @@ Inspected client: Codex `0.160.0`, official `rust-v0.160.0` commit
 ## 1. apply_patch grammar
 
 The client has only the `Freeform` apply-patch tool variant. Its tool definition
-uses `format.type=grammar` with `syntax=lark`; the proxy currently rejects
-grammar tools explicitly. This is different from the supported free-text custom
+uses `format.type=grammar` with `syntax=lark`; the proxy rejects
+grammar tools by default. This is different from the supported free-text custom
 tool subset. See the pinned
 [enum](https://github.com/openai/codex/blob/a956835d020762cb2b570053af06f643a11c0ecc/codex-rs/protocol/src/openai_models.rs#L322)
 and [actual tool definition](https://github.com/openai/codex/blob/a956835d020762cb2b570053af06f643a11c0ecc/codex-rs/core/src/tools/handlers/apply_patch_spec.rs#L18).
@@ -22,9 +23,17 @@ editing workflow; it is not transparent apply-patch compatibility. Do not
 silently replace grammar with unconstrained text or modify the user's normal
 client profile to hide this limitation.
 
-The next implementation decision is an explicitly bounded, validated grammar
-adapter versus a user-approved reduced tool profile. Neither is implemented by
-this source review. Server-side execution of tools remains out of scope.
+Implementation update: the optional `RESPONSES_APPLY_PATCH_MODE=validated`
+recognizes the exact pinned grammar and optional Environment ID variant, wraps
+raw input in native JSON, and validates it before emitting tool input or done
+events. Unknown grammars still fail. Stream/nonstream/replay and HTTP tests cover
+positive cases and invalid-patch rejection without hidden retry or content repair.
+This is post-generation checking, **not constrained sampling**; failure rate and
+token usage need not match GPT. The default remains `reject` until an operator
+explicitly accepts that distinction. See the [full contract](RESPONSES-ADAPTER.md#optional-codex-apply_patch-grammar-adaptation).
+No reduced editing profile has been installed. Server-side execution of tools
+remains out of scope, and grammar validity is not filesystem or patch-execution
+validity.
 
 ## 2. Local compaction after tool turns
 

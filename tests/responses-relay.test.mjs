@@ -4,6 +4,7 @@ import { once } from 'node:events';
 import { randomBytes } from 'node:crypto';
 import { after, test } from 'node:test';
 import { gzipSync } from 'node:zlib';
+import { CODEX_APPLY_PATCH_GRAMMAR } from '../dist/services/responsesPatchGrammar.js';
 
 process.env.DATABASE_PATH = ':memory:';
 process.env.AUTH_DISABLED = 'false';
@@ -12,9 +13,12 @@ process.env.ANTHROPIC_API_KEY = 'sk-ant-api-responses-synthetic-only';
 delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
 process.env.RESPONSES_ENABLED = 'true';
 process.env.RESPONSES_STATE_KEY = randomBytes(32).toString('base64');
+process.env.RESPONSES_APPLY_PATCH_MODE = 'validated';
 process.env.UPSTREAM_TIMEOUT_MS = '800';
 const privateText = 'PRIVATE_RESPONSES_REASONING_TOOL_RESULT';
 const model = 'fixture-response-model';
+const patchText = '*** Begin Patch\n*** Add File: synthetic.txt\n+fixture only\n*** End Patch\n';
+const patchTool = {type:'custom',name:'apply_patch',format:{type:'grammar',syntax:'lark',definition:CODEX_APPLY_PATCH_GRAMMAR}};
 const content = [
   {type:'thinking',thinking:`한글🙂 ${privateText}`,signature:'fragmented-signature+/='},
   {type:'thinking',thinking:'',signature:'signed-empty+/='},
@@ -58,6 +62,8 @@ const upstream=http.createServer(async(req,res)=>{
   if(scenario==='redirect') {res.writeHead(307,{location:'http://127.0.0.1:1/never-follow'});res.end('redirect-not-followed');return;}
   const hasResult=body.messages.some(m=>m.content.some(b=>b.type==='tool_result'));
   let message=hasResult?issued([{type:'text',text:'COMPLETE'}],'end_turn'):issued();
+  if(scenario.startsWith('patch-')&&!hasResult) message=issued([...content.slice(0,3),
+    {type:'tool_use',id:'toolu_patch',name:'apply_patch',input:{input:scenario==='patch-valid'?patchText:'PRIVATE_INVALID_PATCH'}}]);
   if(scenario==='model-change') message={...message,model:'unexpected-model'};
   if(scenario==='max-tokens') message=issued([{type:'text',text:'partial'}],'max_tokens');
   if(scenario==='unsupported') message=issued([{type:'future_native_block',value:privateText}],'end_turn');
@@ -243,4 +249,34 @@ test('history never persists plaintext, tool arguments, signatures or encrypted 
   await settled();const rows=db.prepare('SELECT * FROM request_log').all();
   for(const row of rows){assert.equal(row.full_prompt,null);assert.equal(row.full_response,null);assert.equal(row.prompt_preview,null);assert.notEqual(row.status,'pending');}
   const serialized=JSON.stringify(rows);for(const value of [privateText,'signed-empty','ccpr1.',key.key])assert(!serialized.includes(value));
+});
+
+test('validated apply_patch HTTP stream/nonstream and signed replay succeed; invalid patch never becomes executable',async()=>{
+  for(const stream of [true,false]) {
+    const payload=body('patch-valid',{stream,tools:[patchTool]});
+    const response=await request(payload);assert.equal(response.status,200);
+    const result=stream?completed(response):JSON.parse(response.body);
+    const tool=result.output.at(-1);assert.equal(tool.type,'custom_tool_call');assert.equal(tool.input,patchText);
+    const replay=await request({...payload,input:[{role:'user',content:'patch-valid'},...result.output,
+      {type:'custom_tool_call_output',call_id:'toolu_patch',output:'synthetic tool result'}]});
+    assert.equal(replay.status,200);
+    assert.deepEqual(calls.at(-1).body.messages[1].content,[...content.slice(0,3),
+      {type:'tool_use',id:'toolu_patch',name:'apply_patch',input:{input:patchText}}]);
+    await settled();assert.equal(lastLog().status,'success');assertOneFinalization(lastLog());
+
+    const n=calls.length;const bad=await request({...payload,input:'patch-invalid'});
+    assert.equal(calls.length,n+1);assert(!bad.body.includes('PRIVATE_INVALID_PATCH'));
+    assert(!bad.body.includes('"type":"response.completed"'));
+    if(stream) {
+      const parsed=events(bad);assert.equal(parsed.at(-1).response.error.code,'invalid_tool_grammar');
+      assert(!parsed.some(e=>e.type.startsWith('response.custom_tool_call_input.')));
+      assert(!parsed.some(e=>e.type==='response.output_item.done'&&e.item.type==='custom_tool_call'));
+    } else assert.equal(bad.status,502);
+    await settled();assert.equal(lastLog().status,'error');assertOneFinalization(lastLog());
+  }
+  const n=calls.length;
+  assert.equal((await request(body('patch-valid',{tools:[{...patchTool,format:{...patchTool.format,definition:CODEX_APPLY_PATCH_GRAMMAR+' '}}]}))).status,400);
+  assert.equal(calls.length,n);
+  const rows=db.prepare('SELECT * FROM request_log').all();
+  for(const value of [patchText,'PRIVATE_INVALID_PATCH','ccpr1.']) assert(!JSON.stringify(rows).includes(value));
 });

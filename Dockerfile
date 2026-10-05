@@ -21,6 +21,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 COPY --from=build /app/dist/ ./dist/
+COPY licenses/ ./licenses/
 
 # The relay never starts a CLI or executes caller tools.
 RUN mkdir -p /app/data && chown -R node:node /app/data

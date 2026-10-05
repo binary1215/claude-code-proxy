@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { validPatchInput } from "./responsesPatchGrammar.js";
 import { JsonObject, ResponseTranslationOptions, ResponsesError, ToolBinding, MAX_TOOL_CALL_ID_LENGTH } from "./responsesTypes.js";
 
 const TOTAL_LIMIT = 8 * 1024 * 1024;
@@ -11,6 +12,7 @@ const SAFE_ERRORS: Record<string, string> = {
   unsupported_upstream_block: "The upstream content block is not supported by this adapter.",
   unsupported_upstream_delta: "The upstream delta is not supported by this adapter.",
   malformed_tool_input: "The upstream tool input was not a supported JSON object.",
+  invalid_tool_grammar: "The upstream tool input did not match its declared grammar.",
   unknown_upstream_tool: "The upstream tool was not declared in this request.",
   invalid_upstream_usage: "The upstream usage counters were invalid.",
   incomplete_upstream_stream: "The upstream stream ended before a complete message.",
@@ -377,6 +379,7 @@ export class ResponsesStream {
       }
       if (state.tool!.kind === "custom") {
         if (Object.keys(state.native.input).length !== 1 || typeof state.native.input.input !== "string") problem("malformed_tool_input");
+        if (state.tool!.grammar && !validPatchInput(state.native.input.input, state.tool!.grammar!)) problem("invalid_tool_grammar");
         state.item.input = state.native.input.input;
         if (state.item.input.length) result.push(this.emit("response.custom_tool_call_input.delta", { ...base, delta: state.item.input }));
         result.push(this.emit("response.custom_tool_call_input.done", { ...base, input: state.item.input }));

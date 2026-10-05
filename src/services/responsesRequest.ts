@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { patchInputDescription, recognizePatchGrammar, validPatchInput, type PatchGrammar } from "./responsesPatchGrammar.js";
 import { MAX_TOOL_CALL_ID_LENGTH, ResponsesError, type JsonObject, type PreparedResponsesRequest, type RequestTranslationOptions, type ToolBinding } from "./responsesTypes.js";
 
 const MAX_OUTPUT_TOKENS = 65_536;
@@ -187,20 +188,28 @@ export function prepareResponsesRequest(input: unknown, options: RequestTranslat
   const definitions: JsonObject[] = [];
   const addTool = (value: unknown, namespace?: string, namespaceDescription?: string): void => {
     const tool = object(value);
-    if (!["function", "custom"].includes(tool.type)) fail("unsupported_tool", "Only client-executed function and free-text tools are supported.");
+    if (!["function", "custom"].includes(tool.type)) fail("unsupported_tool", "Only supported client-executed function and custom tools are accepted.");
     keys(tool, ["type", "name", "description", "parameters", "strict", "format", "cache_control"]);
     const toolName = name(tool.name, namespace === undefined ? 64 : 128);
     if (own(tool, "strict") && tool.strict !== false && tool.strict !== null) fail("unsupported_tool", "Strict tool enforcement is not supported.");
     if (own(tool, "description") && tool.description !== null) string(tool.description);
     let schema: JsonObject;
+    let grammar: PatchGrammar | undefined;
     if (tool.type === "custom") {
       if (own(tool, "parameters") || own(tool, "strict")) fail("unsupported_tool");
       if (own(tool, "format")) {
         const format = object(tool.format);
-        if (format.type !== "text") fail("unsupported_tool", "Grammar tools are not supported.");
-        keys(format, ["type"]);
+        if (format.type === "grammar") {
+          keys(format, ["type", "syntax", "definition"]);
+          grammar = recognizePatchGrammar(toolName, format.syntax, format.definition);
+          if (options.applyPatchMode !== "validated" || !grammar) fail("unsupported_tool", "Grammar tools require explicit validated mode and an exact supported apply_patch grammar.");
+        } else {
+          if (format.type !== "text") fail("unsupported_tool");
+          keys(format, ["type"]);
+        }
       }
       schema = { type: "object", properties: { input: { type: "string" } }, required: ["input"], additionalProperties: false };
+      if (grammar) schema.properties.input.description = patchInputDescription(tool.format.definition);
     } else {
       if (own(tool, "format")) fail("unsupported_tool");
       schema = own(tool, "parameters") && tool.parameters !== null ? object(tool.parameters) : { type: "object", properties: {} };
@@ -209,10 +218,11 @@ export function prepareResponsesRequest(input: unknown, options: RequestTranslat
     }
     const flattened = nativeName(toolName, namespace);
     if (tools.has(flattened)) fail("unsupported_tool", "Tool names collide after namespace translation.");
-    const binding: ToolBinding = { nativeName: flattened, name: toolName, kind: tool.type, ...(namespace === undefined ? {} : { namespace }) };
+    const binding: ToolBinding = { nativeName: flattened, name: toolName, kind: tool.type, ...(namespace === undefined ? {} : { namespace }), ...(grammar ? { grammar } : {}) };
     tools.set(flattened, binding);
     identities.set(identity(binding.kind, toolName, namespace), binding);
-    const description = [namespaceDescription, tool.description].filter(part => typeof part === "string" && part.length).join("\n\n");
+    const transportDescription = grammar ? "Transport note: this native tool takes a JSON object with an input string. Only that string is the raw patch described above; do not put JSON or a code fence inside the string." : undefined;
+    const description = [namespaceDescription, tool.description, transportDescription].filter(part => typeof part === "string" && part.length).join("\n\n");
     definitions.push(withCache({ name: flattened, input_schema: schema, ...(description ? { description } : {}) }, tool));
   };
   if (own(request, "tools")) {
@@ -327,6 +337,7 @@ export function prepareResponsesRequest(input: unknown, options: RequestTranslat
       } else {
         if (own(item, "arguments")) fail("invalid_tool_history");
         args = { input: string(item.input) };
+        if (binding.grammar && !validPatchInput(args.input, binding.grammar)) fail("invalid_tool_history", "A historical patch input does not match its declared grammar.");
       }
       calls.add(callId);
       pending.set(callId, kind);

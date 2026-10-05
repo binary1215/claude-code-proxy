@@ -15,6 +15,16 @@ export const OLLAMA_URL = process.env.OLLAMA_URL || "http://ollama:11434";
 // Opt-in only: existing native deployments do not acquire a new protocol route.
 export const RESPONSES_ENABLED = process.env.RESPONSES_ENABLED === "true";
 export const RESPONSES_STATE_KEY = process.env.RESPONSES_STATE_KEY || "";
+// Post-generation validation is not equivalent to provider constrained decoding.
+// Operators must explicitly opt in to this bounded apply_patch adaptation.
+function responsesApplyPatchMode(): "reject" | "validated" {
+  const mode = process.env.RESPONSES_APPLY_PATCH_MODE ?? "reject";
+  if (mode !== "reject" && mode !== "validated") {
+    throw new Error("RESPONSES_APPLY_PATCH_MODE must be reject or validated");
+  }
+  return mode;
+}
+export const RESPONSES_APPLY_PATCH_MODE = responsesApplyPatchMode();
 function responsesInteger(name: string, fallback: number, min: number, max: number): number {
   const value = Number(process.env[name] ?? fallback);
   if (!Number.isSafeInteger(value) || value < min || value > max) {

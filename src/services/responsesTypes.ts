@@ -15,6 +15,7 @@ export interface ToolBinding {
   name: string;
   namespace?: string;
   kind: "function" | "custom";
+  grammar?: import("./responsesPatchGrammar.js").PatchGrammar;
 }
 
 export interface StateContext {
@@ -40,6 +41,7 @@ export interface RequestTranslationOptions {
   context: StateContext;
   defaultMaxTokens: number;
   defaultThinkingBudget: number;
+  applyPatchMode?: import("./responsesPatchGrammar.js").ApplyPatchMode;
 }
 
 export interface ResponseTranslationOptions {

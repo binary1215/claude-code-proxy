@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { once } from "node:events";
 import type { Request, Response } from "express";
 import { ANTHROPIC_BASE_URL, UPSTREAM_TIMEOUT_MS, RESPONSES_ENABLED, RESPONSES_STATE_KEY,
-  RESPONSES_STATE_TTL_SECONDS, RESPONSES_MAX_OUTPUT_TOKENS, RESPONSES_THINKING_BUDGET_TOKENS } from "../config.js";
+  RESPONSES_STATE_TTL_SECONDS, RESPONSES_MAX_OUTPUT_TOKENS, RESPONSES_THINKING_BUDGET_TOKENS, RESPONSES_APPLY_PATCH_MODE } from "../config.js";
 import { getUpstreamCredential } from "./settingsService.js";
 import { upstreamHeaders, upstreamUrl } from "./nativeRelay.js";
 import { ResponsesStateCodec, upstreamStateScope } from "./responsesState.js";
@@ -63,7 +63,7 @@ export function relayResponses(req: Request, res: Response): void {
       input = { ...input, anthropic: extension };
     }
     prepared = prepareResponsesRequest(input, { codec, context, defaultMaxTokens: RESPONSES_MAX_OUTPUT_TOKENS,
-      defaultThinkingBudget: RESPONSES_THINKING_BUDGET_TOKENS });
+      defaultThinkingBudget: RESPONSES_THINKING_BUDGET_TOKENS, applyPatchMode: RESPONSES_APPLY_PATCH_MODE });
     options = { model, tools: prepared.tools, seal: (block, id) => codec.seal(block, context, id) };
   } catch (error) {
     if (error instanceof ResponsesError) sendError(res, error.status, error.code, error.message);

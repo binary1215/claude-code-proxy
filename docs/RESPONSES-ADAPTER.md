@@ -60,6 +60,7 @@ RESPONSES_STATE_KEY=<canonical-base64-of-32-random-bytes>
 RESPONSES_STATE_TTL_SECONDS=604800
 RESPONSES_MAX_OUTPUT_TOKENS=8192
 RESPONSES_THINKING_BUDGET_TOKENS=1024
+RESPONSES_APPLY_PATCH_MODE=reject
 ```
 
 Generate a separate cryptographic random state key through your normal secret
@@ -86,6 +87,43 @@ The default native thinking policy is a 1024-token enabled budget with an
 be verified. An explicit request `anthropic.thinking` can select an authorized
 native policy. The adapter does not guess what a model supports or turn a
 provider rejection into a different model or thinking mode.
+
+### Optional Codex apply_patch grammar adaptation
+
+`RESPONSES_APPLY_PATCH_MODE=reject` is the default. An operator may explicitly
+select `validated` after accepting **post-generation validation**, which is not
+equivalent to provider-side constrained decoding. This setting does not enable
+Responses by itself or affect the native Messages endpoint.
+
+Validated mode recognizes only the exact `apply_patch` Lark grammar emitted by
+Codex 0.160.0 at commit `a956835d020762cb2b570053af06f643a11c0ecc`, including its
+optional Environment ID variant. Altered/unknown grammars, syntax types and tool
+names are rejected before provider contact; arbitrary grammars are never run.
+Both the LF source asset and the exact CRLF spelling observed from the pinned
+official Windows executable are recognized; mixed/arbitrary whitespace variants
+are not. The caller's exact recognized grammar definition is retained in the
+native tool description. This does not normalize CRLF in patch input itself.
+Namespaces retain their existing reversible name mapping.
+
+The native tool uses `{input: string}`. The property description includes the
+exact grammar and the tool description distinguishes the JSON transport wrapper
+from the raw patch string. All custom input is buffered until the native block
+ends, checked against the bounded grammar, then returned without normalization.
+Invalid output yields `invalid_tool_grammar` (streaming `response.failed`, or an
+HTTP 502 for nonstreaming). No patch input delta, input-done or completed tool
+item for that invalid call is emitted. There is no repair, hidden retry or
+unconstrained-text fallback. Replayed patch inputs with a current grammar
+definition are validated as well. The raw patch limit is 1 MiB; existing encoded
+JSON/event/block limits can reject a smaller raw patch with escaping overhead.
+
+This preserves the syntax of accepted calls, **not generation success rate,
+token cost, sampling distribution, filesystem safety or successful application**.
+For example, the pinned grammar allows a header-only Update hunk that the actual
+CLI executor rejects. Paths and permissions remain the client's responsibility;
+the proxy never reads files or applies patches. Checks are per tool call, not a
+transaction: an earlier completed tool in the same response might already have
+executed before a later invalid call fails. Provider acceptance and real coding
+quality remain separate gates. See the [grammar attribution](../licenses/CODEX-NOTICE.md).
 
 ## Configure the unmodified gateway
 
@@ -171,7 +209,8 @@ still apply. See [Anthropic caching](https://platform.claude.com/docs/en/build-w
 
 Supported: stateless POST Responses, streaming/nonstream text, initial
 system/developer prefixes, user/assistant text, HTTPS/inline input images,
-function tools (including namespaces), free-text custom tools, tool results,
+function tools (including namespaces), free-text custom tools, optionally the
+exact validated Codex apply_patch grammar described above, tool results,
 signed reasoning replay, caller cache controls, native thinking options, and
 key/model authorization. Images are passed to the provider, never fetched by
 the relay; local files, file IDs, and non-auto detail conversion are rejected.
@@ -179,15 +218,16 @@ Function arguments are syntax-checked JSON objects, not locally schema-executed.
 Tools always run in the client, never in this container.
 
 Unsupported: Chat Completions, saved/previous responses, background jobs,
-Responses compaction, WebSockets, built-in server tools/search, grammar tools,
+Responses compaction, WebSockets, built-in server tools/search, arbitrary grammar tools,
 strict tool-schema guarantees, structured output, automatic truncation, arbitrary
 future block types and late system-message relocation. Historical tool calls
 currently require their definitions in the current request. These return explicit
 errors instead of silently changing semantics. Long-running Codex sessions are
 **not certified** by a short tool smoke. The pinned custom-provider client uses
 local compaction with empty current tools; historical tool validation currently
-conflicts with that path. Normal apply-patch grammar and later developer
-instructions also need further work. See [coding-session qualification gaps](CODEX-QUALIFICATION.md).
+conflicts with that path. Apply-patch mode requires an explicit operator choice
+and further real-provider qualification; later developer instructions also need
+further work. See [coding-session qualification gaps](CODEX-QUALIFICATION.md).
 Initial system/developer messages necessarily share Anthropic's system channel;
 this is not a claim that the providers have identical instruction hierarchies.
 
