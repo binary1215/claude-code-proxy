@@ -483,6 +483,63 @@ No actual provider credential, `.7` deployment, entitlement, cache hit, price,
 long-session, model-switch or arbitrary-tool compatibility is established.
 The existing test/production containers were not changed by this qualification.
 
+## Isolated Docker lifecycle qualification
+
+On 2026-10-05, the [lifecycle harness](../integration/deployment/README-lifecycle.md)
+ran on the `.64` Docker host (Docker 29.4.0, Python 3.10.12), using the already
+qualified immutable images, without pulling/rebuilding or real credentials:
+
+- Baseline `0ca75751d407b0bce2f9c15675b1e0d8fd8075c4`:
+  `sha256:12d35112176de03ab3d1e2ae46a91a8ca6a98168478c98fd6aaf37fcb9b85fc3`.
+- Candidate `98d26fef65ab8bc946c95e012d0c106fd7f02d39`:
+  `sha256:8e7e8f474262dde1ed995ddb99c7b4086c26e15ad2c41b1ea3f8bb8eaed989aa`.
+
+All **7/7 phases pass**, exit 0: baseline seed/re-creation, candidate upgrade and
+streamed reasoning mint, candidate re-creation/replay, wrong state-key rejection,
+native baseline rollback, and candidate re-upgrade/original-state replay.
+
+- Seven fresh non-root/read-only containers use `network=none`, no host port or
+  bind mount, one new owner-labelled synthetic volume and bounded resources.
+  Each loads the image's actual app/database through a test bootstrap, not its
+  `dist/server.js` entrypoint or production Compose. Inspected isolation matches
+  the requested flags. A fake provider lives on container loopback only.
+- Six total fake-provider requests occur, one in each successful request phase.
+  The changed-key phase returns `409 invalid_reasoning_state`, with **zero**
+  provider calls/new history rows. No tool execution is part of this fixture.
+- Ordered nonempty thinking, signed-empty thinking, redacted thinking and text
+  match the originally issued blocks after re-creation and again after rollback
+  plus re-upgrade. Minting uses split signature events and seven-byte UTF-8/CRLF
+  chunks; output-item-done/completed capsules agree.
+- Every phase preserves the active key's exact model ACL and rejected revoked
+  key, the original history row and DB-selected synthetic provider credential.
+  All six successful rows have input 3/output 9/cache-read 7/cache-create 2,
+  5-minute/1-hour creation counts 1 each, complete usage and **null** billed USD.
+  New stored prompt/response/preview fields remain null. These are fixture
+  counters, not real cache hits or price evidence.
+- A SQLite backup of the seeded DB passes a separate read-only integrity/count
+  check. **Restoration is not tested.** Migration/key/history-service sources
+  are identical for this exact image pair; future schema rollback is not implied.
+- Rolling back restores native Messages only; Responses returns 404 without a
+  provider call. Re-upgrading with the original private state key restores replay
+  within the fixture's one-hour TTL. Lost client history is not reconstructed.
+- Cleanup passes with no remaining owned resources. A subsequent labelled-resource
+  read finds no fixture containers/volumes. Existing `test-claudemock` ID
+  `e818d18871aef221db9410031c27c9b2993f413d04b424629901109f732f1ccc`, image and
+  start time `2026-10-04T18:34:12.359589146Z` remain unchanged.
+
+Evidence: `/opt/test-claudemock/lifecycle-ckZWLW/result.json`, copied to
+`C:/Users/binary/AppData/Local/Temp/claude-lifecycle-ckZWLW/result.json`; both have
+SHA-256 `665b3ab6cbe6d1efbbc209848cd71af072702ebb723844c998fd4f443642bb03`.
+Host/local script hashes were matched before execution. Main independently
+inspected the implementation/result and verified seven phases, six provider calls
+and cleanup. Five Python guard tests pass locally and on the host; Node syntax,
+TypeScript build and existing 115 Node regressions also pass locally.
+
+This is normal process/container **re-creation**, not `docker restart`, crash
+recovery, in-flight draining or a service cutover. No `.7` gateway configuration,
+real client/provider session, authentication eligibility or whole-goal acceptance
+is established by it. See the [operating checklist](ADAPTER-PATCH.md#native-only-update-and-rollback-checklist).
+
 ### Outstanding end-to-end constraints
 
 - General-purpose subscription-token relay eligibility and premium-model raw

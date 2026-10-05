@@ -33,3 +33,65 @@ Removed key-setting columns may remain as inert/migration metadata so upgrading 
 - Docker files remain non-root and SDK-free. Local Node tests and admin builds do not prove a Docker image build, live OAuth eligibility, real cache hits or production LAN behavior.
 
 Rollback requires restoring the prior image/configuration and the consistent pre-migration database backup as a unit. Do not point older code at a migrated database and assume schema compatibility.
+
+## Native-only update and rollback checklist
+
+The rule above concerns a schema-changing migration, especially the removed SDK
+branch. An update from native `0ca7575` to candidate `98d26fe` is a narrower case:
+the migration, key-service and history-service sources are unchanged. That source
+comparison is not, on its own, a restore test or permission to replace a service.
+Use the [isolated Docker lifecycle check](../integration/deployment/README-lifecycle.md)
+before a separately authorized cutover. Never roll back into the deleted SDK/CLI
+backend to obtain subscription compatibility.
+
+1. Record the **exact target** container ID, immutable image ID, source revision,
+   Compose file/project/service, named volume, bound interface/port and private
+   configuration location. Do not dump the container environment into logs.
+   Retain the old local image; do not rely on a mutable tag or rebuild to recover
+   it. Confirm that no other service shares the target data volume.
+2. Quiesce incoming work and wait for the authenticated task list to drain before
+   stopping the selected service. This application does not implement a durable
+   in-flight task queue or a graceful rollout orchestrator. Do not treat a stopped
+   container as evidence that interrupted provider work completed or was unbilled.
+3. Back up configuration and all required secrets privately, including the
+   **unchanged Responses state key** if already enabled. The state key is not
+   stored in SQLite. A new key on every container creation invalidates prior
+   reasoning capsules. Their replay also requires the same relay key, model,
+   upstream URL, provider credential/auth kind and original reasoning item ID.
+   Preserve `RESPONSES_STATE_TTL_SECONDS` too: expiry is evaluated against the
+   current server setting, not a TTL embedded in the capsule.
+4. Make and integrity-check a consistent SQLite backup. This application enables
+   WAL: copying a live `proxy.db` alone is not a safe backup. Use SQLite's backup
+   API, or stop all writers and preserve the complete database/sidecar set as one
+   consistent snapshot. Test restoration in a **new** isolated volume rather than
+   overwriting the current one. [SQLite backup API](https://www.sqlite.org/backup.html),
+   [WAL precautions](https://www.sqlite.org/wal.html).
+5. Replace only the selected test service with the qualified immutable image and
+   deliberate configuration. Preserve the existing volume, admin secret, relay
+   keys and provider credential. Do not enable Responses or validated apply-patch
+   implicitly, change account/model, or run `down -v`, volume pruning or a stack-wide
+   update. Container/image export alone does not back up mounted volumes.
+   [Docker volume backup](https://docs.docker.com/engine/storage/volumes/).
+6. Check local health, admin authentication, existing relay-key authentication,
+   revoked-key rejection, model restrictions and old history before admitting
+   client work. `/health` is only a local diagnostic, not provider eligibility or
+   a gateway end-to-end check. Use separately approved bounded provider probes
+   for that next acceptance gate; do not repair a rejection through fallback.
+7. If rollback is needed, stop/quiesce the candidate first. For the **exact tested
+   native pair only**, an in-place rollback may retain the newer history when
+   schema and runtime compatibility were actually verified. Otherwise restore the
+   old image/configuration plus its consistent backup into a new volume. Preserve
+   the candidate volume for diagnosis; restoring an older snapshot would omit
+   later logs, key revocations and settings, which require explicit reconciliation
+   before traffic resumes. Never silently resurrect a revoked credential.
+8. Recheck the same authentication/model/history controls and the target image ID
+   after rollback. Native `0ca7575` has no Responses route: rolling back the image
+   restores native service, **not Codex availability**. Keep the original state key
+   privately for a later re-upgrade; do not discard client history or strip
+   thinking to make the older endpoint accept it.
+
+The SQLite history holds metadata, not resumable conversation bodies. Clients must
+retain their own history. Per-key RPM/TPM windows and active-task tracking are
+process-local and reset on restart; persisted key limits survive, but consumed
+window counters do not. This checklist does not establish crash recovery,
+zero-downtime replacement, free-gateway spend enforcement or provider authorization.

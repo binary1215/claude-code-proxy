@@ -120,6 +120,12 @@ Endpoints here:
 
 Read [the migration notes](docs/ADAPTER-PATCH.md) before replacing an existing service. Back up the database/volume and keep the previous image/configuration. Do not use `down -v` on an upgrade.
 
+The [isolated Docker lifecycle check](integration/deployment/README-lifecycle.md) exercises
+native image upgrades, container re-creation, signed-state key continuity and
+rollback using a fresh synthetic volume with networking disabled. It does not
+replace or back up a running deployment. The [operating checklist](docs/ADAPTER-PATCH.md#native-only-update-and-rollback-checklist)
+separates that rehearsal from an authorized service cutover.
+
 - SDK/CLI and server-side tool grants, internal Chat translation, injected system prompts and proxy-managed cache TTLs are removed, not hidden behind a mode flag.
 - API keys, configured credentials and request history are retained. Token/cost columns become nullable transactionally; new cache fields are added.
 - Keys with old non-null `monthly_budget_usd`, `system_prompt` or `cache_ttl_seconds` fail with **409**. Move budget enforcement to LiteLLM and system/cache settings to caller requests, then clear those fields through `PATCH /api/admin/keys/:id` using `null`. The dashboard offers clear-only migration actions. New non-null values are rejected.
@@ -158,6 +164,7 @@ admin/                       optional administration UI
 tests/                       loopback native relay regression tests
 integration/litellm/          stock gateway verification and configuration notes
 integration/clients/          actual CLI synthetic compatibility checks
+integration/deployment/       isolated image/state/rollback qualification
 ```
 
 MIT for this repository; dependencies retain their own licenses and terms.
