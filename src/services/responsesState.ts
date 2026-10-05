@@ -38,7 +38,14 @@ export class ResponsesStateCodec implements ReasoningCodec {
   private aad(context: StateContext, itemId: string): Buffer {
     if (typeof itemId !== "string" || !itemId || itemId.length > 256 ||
         !context.model || !context.principal || !context.upstream) invalid();
-    return Buffer.from(JSON.stringify(["claude-proxy-responses-v1", context.model, context.principal, context.upstream, itemId]));
+    const fields = ["claude-proxy-responses-v1", context.model, context.principal, context.upstream, itemId];
+    // Keep the existing reject-mode capsule contract unchanged. Hoist-mode
+    // capsules cannot cross policy modes or a changed effective system prefix.
+    if (context.instructionScope !== undefined) {
+      if (typeof context.instructionScope !== "string" || !/^[0-9a-f]{64}$/.test(context.instructionScope)) invalid();
+      fields.push("developer-hoist-v1", context.instructionScope);
+    }
+    return Buffer.from(JSON.stringify(fields));
   }
 
   seal(block: JsonObject, context: StateContext, itemId: string): string {

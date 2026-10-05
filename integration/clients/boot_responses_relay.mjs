@@ -2,6 +2,10 @@
 // The only emitted key is freshly generated for this in-memory, local relay.
 import { randomBytes } from 'node:crypto';
 
+const developerMessageMode = process.argv[3] ?? 'reject';
+if (process.argv.length > 4 || !['reject', 'hoist'].includes(developerMessageMode)) {
+  process.stderr.write('LOCAL_RELAY_INVALID_DEVELOPER_MODE\n'); process.exit(1);
+}
 let fixture;
 try { fixture = new URL(process.argv[2] ?? ''); }
 catch { process.stderr.write('LOCAL_RELAY_INVALID_FIXTURE\n'); process.exit(1); }
@@ -24,6 +28,7 @@ Object.assign(process.env, {
   RESPONSES_ENABLED: 'true', RESPONSES_STATE_KEY: randomBytes(32).toString('base64'),
   RESPONSES_MAX_OUTPUT_TOKENS: '8192', RESPONSES_THINKING_BUDGET_TOKENS: '1024',
   RESPONSES_STATE_TTL_SECONDS: '604800',
+  RESPONSES_DEVELOPER_MESSAGE_MODE: developerMessageMode,
 });
 // Do not forward application logs or exception details to the test observer.
 console.log = console.warn = console.error = () => {};

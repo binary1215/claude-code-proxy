@@ -67,6 +67,7 @@ docker compose --env-file .env -f compose.adapter.yml up -d --build
 | `UPSTREAM_TIMEOUT_MS` | Total deadline, including streaming; default `300000` |
 | `RESPONSES_ENABLED` | Optional Responses adapter; default `false` |
 | `RESPONSES_STATE_KEY` | Separate base64 32-byte secret, required when Responses is enabled |
+| `RESPONSES_DEVELOPER_MESSAGE_MODE` | `reject` (default) or experimental `hoist`; moves late developer text to top-level system, with scoped replay guards; see [contract and limits](docs/RESPONSES-ADAPTER.md#optional-developer-instruction-hoisting) |
 | `OLLAMA_URL` | Optional existing embeddings backend |
 
 Only use a trusted upstream URL: the configured credential is sent there. Plain LAN HTTP is unencrypted; use firewall restrictions and TLS where appropriate. `AUTH_DISABLED` remains a local-development option; the adapter Compose file fixes it to `false`.

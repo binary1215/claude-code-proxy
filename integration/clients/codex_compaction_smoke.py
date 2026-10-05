@@ -29,6 +29,7 @@ from codex_patch_smoke import ROOT, MODEL, SOURCE, clean_env, identities, start,
 TURN_MARKER = 'CODEX_COMPACTION_INITIAL_OK'
 SUMMARY_MARKER = 'SYNTHETIC_COMPACTED_SUMMARY_ONLY'
 FOLLOWUP_MARKER = 'CODEX_COMPACTION_FOLLOWUP_OK'
+SECOND_FOLLOWUP_MARKER = 'CODEX_COMPACTION_SECOND_FOLLOWUP_OK'
 
 class Fake(StreamFixture):
     def do_POST(self):
@@ -42,7 +43,15 @@ class Fake(StreamFixture):
         if self.server.phase=='compact':
             self.stream([{'type':'text','text':SUMMARY_MARKER}], 'end_turn'); return
         if self.server.phase=='followup':
-            self.stream([{'type':'text','text':FOLLOWUP_MARKER}], 'end_turn'); return
+            self.server.followup_issued=[
+                {'type':'thinking','thinking':'Synthetic post-compaction reasoning 🔧.','signature':'fixture-post-signed-nonempty+/='},
+                {'type':'thinking','thinking':'','signature':'fixture-post-signed-empty+/='},
+                {'type':'redacted_thinking','data':'fixture-post-redacted+/='},
+                {'type':'text','text':FOLLOWUP_MARKER}]
+            self.stream(self.server.followup_issued, 'end_turn'); return
+        if self.server.phase=='followup_second':
+            self.server.followup_replayed=copy.deepcopy(body)
+            self.stream([{'type':'text','text':SECOND_FOLLOWUP_MARKER}], 'end_turn'); return
         results=[b for m in body.get('messages',[]) for b in m.get('content',[]) if isinstance(b,dict) and b.get('type')=='tool_result']
         if results:
             self.server.replayed=copy.deepcopy(body); self.stream([{'type':'text','text':TURN_MARKER}],'end_turn'); return
@@ -132,18 +141,99 @@ class Rpc:
 def assistant(body):
     return [b for m in (body or {}).get('messages',[]) if m.get('role')=='assistant' for b in m.get('content',[]) if isinstance(b,dict)]
 
+def fixture_text_blocks(value):
+    """Independent, deliberately text-only oracle for this synthetic fixture.
+
+    Unknown content must fail the evidence check, not be silently skipped. This
+    is not a production protocol converter; only the fixture's observed shapes
+    are accepted. Preserve duplicated text and cache fields exactly.
+    """
+    if isinstance(value,str): return [{'type':'text','text':value}]
+    if not isinstance(value,list): raise ValueError('Fixture expected text content')
+    result=[]
+    for block in value:
+        if not isinstance(block,dict) or block.get('type') not in {'input_text','output_text','text'} or not isinstance(block.get('text'),str):
+            raise ValueError('Fixture encountered unsupported content')
+        result.append({'type':'text','text':block['text'],**({'cache_control':copy.deepcopy(block['cache_control'])} if 'cache_control' in block else {})})
+    return result
+
+def fixture_system(request):
+    blocks=[]
+    if request.get('instructions') is not None:
+        if not isinstance(request['instructions'],str): raise ValueError('Fixture expected text instructions')
+        blocks.append({'type':'text','text':request['instructions']})
+    for item in request.get('input',[]):
+        if item.get('type','message')=='message' and item.get('role') in {'system','developer'}:
+            blocks.extend(fixture_text_blocks(item['content']))
+    return blocks
+
+def fixture_conversation(request):
+    """Ordered plain text/tool blocks, excluding separately checked sealed state."""
+    result=[]
+    for item in request.get('input',[]):
+        kind=item.get('type','message')
+        if kind=='message':
+            if item.get('role') in {'system','developer'}: continue
+            if item.get('role') not in {'user','assistant'}: raise ValueError('Fixture encountered unsupported role')
+            result.extend({'role':item['role'],'block':block} for block in fixture_text_blocks(item['content']))
+        elif kind=='reasoning': continue
+        elif kind=='function_call':
+            if item.get('name')!='get_goal' or item.get('namespace') is not None: raise ValueError('Fixture encountered unsafe tool')
+            result.append({'role':'assistant','block':{'type':'tool_use','id':item['call_id'],'name':'get_goal','input':json.loads(item['arguments'])}})
+        elif kind=='function_call_output':
+            value=item['output']; block={'type':'tool_result','tool_use_id':item['call_id'],'content':value if isinstance(value,str) else fixture_text_blocks(value)}
+            if 'is_error' in item: block['is_error']=item['is_error']
+            result.append({'role':'user','block':block})
+        else: raise ValueError('Fixture encountered unsupported input item')
+    return result
+
+def native_conversation(body):
+    return [{'role':message['role'],'block':block} for message in body.get('messages',[]) for block in message.get('content',[])
+            if block.get('type') not in {'thinking','redacted_thinking'}]
+
+def projection_checks(records,upstream):
+    """Pair every successful request by phase and occurrence, not one sample."""
+    successful=[record for record in records if record.get('status')==200]
+    if len(successful)!=len(upstream): return []
+    checks=[]
+    for record,native in zip(successful,upstream):
+        request=record['request']; body=native['body']
+        try:
+            checks.append({'phase':record['phase'],'phase_exact':record['phase']==native['phase'],
+                'system_exact':body.get('system',[])==fixture_system(request),
+                'conversation_order_exact':native_conversation(body)==fixture_conversation(request)})
+        except (KeyError,TypeError,ValueError):
+            checks.append({'phase':record['phase'],'oracle_rejected_shape':True})
+    return checks
+
+def wire_reasoning(record):
+    events=[json.loads(line[6:]) for line in record['response_sse'].splitlines() if line.startswith('data: ') and line[6:]!='[DONE]']
+    done=[e['item'] for e in events if e.get('type')=='response.output_item.done' and e.get('item',{}).get('type')=='reasoning']
+    complete=[i for e in events if e.get('type')=='response.completed' for i in e['response'].get('output',[]) if i.get('type')=='reasoning']
+    return done,complete
+
+def capsules(items):
+    return [(i.get('id'),i.get('encrypted_content')) for i in items if i.get('type')=='reasoning']
+
+def system_digest(body):
+    return hashlib.sha256(json.dumps(body.get('system',[]),ensure_ascii=False,separators=(',',':')).encode()).hexdigest()
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--codex',type=Path,required=True); parser.add_argument('--node',type=Path)
     parser.add_argument('--output',type=Path,required=True); parser.add_argument('--expect',choices=['capture','success'],default='success',help='Explicit capture mode allows a correctly observed adapter failure, never labels it success')
+    parser.add_argument('--developer-message-mode',choices=['reject','hoist'],default='reject',help='Proxy-only test configuration; never modifies Codex or LiteLLM')
     args=parser.parse_args(); output=args.output.resolve(); temp=Path(tempfile.gettempdir()).resolve()
     if output.exists() or temp not in output.parents or ROOT in output.parents: raise SystemExit('Use a NEW system-temp child outside the repository')
     output.mkdir(parents=True); workspace=output/'workspace'; workspace.mkdir(); home=output/'codex-state'; home.mkdir()
     codex=args.codex.resolve(strict=True); node=args.node.resolve(strict=True) if args.node else shutil.which('node')
     if not node: raise SystemExit('Existing node required')
     report={'scope':'actual Codex app-server manual local compaction -> pristine stock authenticated passthrough -> actual Responses relay -> loopback fake',
+            'developer_message_mode':args.developer_message_mode,
             'source_commit':SOURCE,'litellm_version':importlib.metadata.version('litellm'),'before':identities(),'not_tested':[
-                'automatic token-threshold compaction','remote /responses/compact','long sessions','resume after process restart','real-provider signatures/authorization/cost/cache hits','OS-enforced total network isolation']}
+                'automatic token-threshold compaction','remote /responses/compact','long sessions','resume after process restart',
+                'semantic equivalence of late developer versus top-level system','real-provider signatures/authorization/cost/cache hits',
+                'actual .7 gateway or .64 deployment','OS-enforced total network isolation']}
     report['repository_head']=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
     report['built_request_adapter_sha256']=hashlib.sha256((ROOT/'dist/services/responsesRequest.js').read_bytes()).hexdigest()
     report['codex_version']=subprocess.check_output([str(codex),'--version'],env=clean_env(output),text=True).strip()
@@ -155,6 +245,7 @@ def main():
             if key: text=text.replace(key,'[LOCAL_FIXTURE_KEY]')
         return text
     fake=ThreadingHTTPServer(('127.0.0.1',0),Fake); fake.requests=[]; fake.phase='initial'; fake.failure=None; fake.issued=[]; fake.replayed=None; fake.local_keys=[gateway_key]
+    fake.followup_issued=[]; fake.followup_replayed=None
     fake_thread=threading.Thread(target=fake.serve_forever,daemon=True); fake_thread.start(); children=[]; observer=None; rpc=None
     try:
         def relay_ready(line):
@@ -162,7 +253,7 @@ def main():
                 value=json.loads(line); port=value.get('local_relay_port'); key=value.get('local_relay_key')
                 if isinstance(port,int) and not isinstance(port,bool) and 0<port<=65535 and isinstance(key,str) and key.startswith('sk-'): return value
             except ValueError: pass
-        child,thread,logs,ready=start([str(node),str(ROOT/'integration/clients/boot_responses_relay.mjs'),'http://127.0.0.1:'+str(fake.server_port)],clean_env(output),output,relay_ready,20)
+        child,thread,logs,ready=start([str(node),str(ROOT/'integration/clients/boot_responses_relay.mjs'),'http://127.0.0.1:'+str(fake.server_port),args.developer_message_mode],clean_env(output),output,relay_ready,20)
         children.append((child,thread,logs,'relay.log')); relay_key=ready['local_relay_key']; fake.local_keys.append(relay_key)
         config={'litellm_settings':{'telemetry':False,'num_retries':0,'callbacks':[]},'router_settings':{'num_retries':0},
             'general_settings':{'master_key':'os.environ/LOCAL_GATEWAY_KEY','pass_through_endpoints':[{
@@ -213,6 +304,10 @@ def main():
             fake.phase='followup'
             rpc.request(4,'turn/start',{'threadId':thread_id,'input':[{'type':'text','text':'Synthetic continuation. Do not use any tools, files, commands or network. Finish with '+FOLLOWUP_MARKER+'.'}]})
             report['followup_turn_terminal']=rpc.completed(thread_id)
+            if args.developer_message_mode=='hoist' and report['followup_turn_terminal'].get('params',{}).get('turn',{}).get('status')=='completed':
+                fake.phase='followup_second'
+                rpc.request(5,'turn/start',{'threadId':thread_id,'input':[{'type':'text','text':'Second synthetic continuation. Do not use any tools, files, commands or network. Finish with '+SECOND_FOLLOWUP_MARKER+'.'}]})
+                report['second_followup_turn_terminal']=rpc.completed(thread_id)
     except Exception as error:
         report['harness_error']=redact(str(error))[:2048]
     finally:
@@ -241,37 +336,57 @@ def main():
         report['compact_native_tools_absent']=bool(upstream_compact) and all('tools' not in r['body'] for r in upstream_compact)
         report['compact_native_assistant_prefix_exact']=bool(upstream_compact) and assistant(upstream_compact[0]['body'])[:len(fake.issued)]==fake.issued
         report['compact_native_tool_result_exact']=bool(upstream_compact) and results(upstream_compact[0]['body'])==initial_results
-        initial_wire=[json.loads(line[6:]) for r in records[:1] for line in r['response_sse'].splitlines() if line.startswith('data: ') and line[6:]!='[DONE]']
-        done=[e['item'] for e in initial_wire if e.get('type')=='response.output_item.done' and e.get('item',{}).get('type')=='reasoning']
-        complete=[i for e in initial_wire if e.get('type')=='response.completed' for i in e['response'].get('output',[]) if i.get('type')=='reasoning']
-        def capsules(items): return [(i.get('id'),i.get('encrypted_content')) for i in items if i.get('type')=='reasoning']
+        done,complete=wire_reasoning(records[0]) if records else ([],[])
         initial_replay=capsules(records[1]['request'].get('input',[])) if len(records)>1 else []
         compact_replay=capsules(compact[0]['request'].get('input',[])) if compact else []
         report['reasoning_done_completed_initial_and_compact_replay_exact']=len(done)==3 and all(i.get('encrypted_content') for i in done) and capsules(done)==capsules(complete)==initial_replay==compact_replay
         followup=[r for r in records if r['phase']=='followup']
+        second_followup=[r for r in records if r['phase']=='followup_second']
         initial_wire_requests=[r for r in records if r['phase']=='initial']; initial_upstream=[r for r in fake.requests if r['phase']=='initial']
         followup_upstream=[r for r in fake.requests if r['phase']=='followup']
-        report['no_hidden_retries']=len(initial_wire_requests)==2 and len(initial_upstream)==2 and len(compact)==1 and len(upstream_compact)==1 and len(followup)==1 and len(followup_upstream)<=1 and len(records)==4 and len(fake.requests) in {3,4}
+        second_followup_upstream=[r for r in fake.requests if r['phase']=='followup_second']
+        hoist=args.developer_message_mode=='hoist'
+        report['no_hidden_retries']=len(initial_wire_requests)==2 and len(initial_upstream)==2 and len(compact)==1 and len(upstream_compact)==1 and len(followup)==1 and (
+            len(followup_upstream)==1 and len(second_followup)==1 and len(second_followup_upstream)==1 and len(records)==5 and len(fake.requests)==5 if hoist else
+            len(followup_upstream)==0 and len(second_followup)==0 and len(second_followup_upstream)==0 and len(records)==4 and len(fake.requests)==3)
         report['further_user_turn']=bool(followup)
         report['followup_request_shapes']=[{'input_item_types':[i.get('type') for i in r['request'].get('input',[]) if isinstance(i,dict)],
             'message_roles':[i.get('role') for i in r['request'].get('input',[]) if isinstance(i,dict) and i.get('type')=='message'],
-            'status':r.get('status'),'response':r['response_sse'] if r.get('status')!=200 else None} for r in followup]
+            'phase':r['phase'],'status':r.get('status'),'response':r['response_sse'] if r.get('status')!=200 else None} for r in followup+second_followup]
+        post_roles=[shape['message_roles'] for shape in report['followup_request_shapes']]
+        report['post_compaction_late_developer_shape_exact']=post_roles==[
+            ['user','user','developer','user','user'],
+            ['user','user','developer','user','user','assistant','user']]
+        report['request_projection_checks']=projection_checks(records,fake.requests)
+        report['all_forwarded_system_blocks_exact']=len(report['request_projection_checks'])==len(fake.requests)>0 and all(c.get('phase_exact') and c.get('system_exact') for c in report['request_projection_checks'])
+        report['all_forwarded_text_and_tool_order_exact']=len(report['request_projection_checks'])==len(fake.requests)>0 and all(c.get('phase_exact') and c.get('conversation_order_exact') for c in report['request_projection_checks'])
+        report['pre_compaction_system_sha256']=system_digest(upstream_compact[0]['body']) if upstream_compact else None
+        report['post_compaction_system_sha256']=[system_digest(r['body']) for r in followup_upstream+second_followup_upstream]
+        report['pre_post_compaction_system_equal']=upstream_compact[0]['body'].get('system',[])==followup_upstream[0]['body'].get('system',[]) if upstream_compact and followup_upstream else None
+        report['post_compaction_system_stable']=len(followup_upstream)==1 and len(second_followup_upstream)==1 and followup_upstream[0]['body'].get('system',[])==second_followup_upstream[0]['body'].get('system',[])
+        followup_done,followup_complete=wire_reasoning(followup[0]) if len(followup)==1 and followup[0].get('status')==200 else ([],[])
+        second_replay=capsules(second_followup[0]['request'].get('input',[])) if len(second_followup)==1 else []
+        report['post_compaction_reasoning_done_completed_replay_exact']=len(followup_done)==3 and all(i.get('encrypted_content') for i in followup_done) and capsules(followup_done)==capsules(followup_complete)==second_replay
+        report['post_compaction_ordered_native_assistant_exact']=bool(fake.followup_issued) and assistant(fake.followup_replayed)==fake.followup_issued
+        report['post_compaction_first_input_has_no_old_reasoning']=len(followup)==1 and not capsules(followup[0]['request'].get('input',[]))
         report['upstream_auth_exact']=bool(fake.requests) and all(r['upstream_auth_exact'] for r in fake.requests); report['credential_leak']=any(r['credential_leak'] for r in fake.requests)
         notifications=rpc.events if rpc else []
         report['context_compaction_started']=any(e.get('method')=='item/started' and e.get('params',{}).get('item',{}).get('type')=='contextCompaction' for e in notifications)
         report['context_compaction_completed']=any(e.get('method')=='item/completed' and e.get('params',{}).get('item',{}).get('type')=='contextCompaction' for e in notifications)
         report['compact_status']=report.get('compact_turn_terminal',{}).get('params',{}).get('turn',{}).get('status')
         report['followup_status']=report.get('followup_turn_terminal',{}).get('params',{}).get('turn',{}).get('status')
+        report['second_followup_status']=report.get('second_followup_turn_terminal',{}).get('params',{}).get('turn',{}).get('status')
         report['followup_final_exact']=any(e.get('method')=='item/completed' and e.get('params',{}).get('item',{}).get('type')=='agentMessage' and e['params']['item'].get('text')==FOLLOWUP_MARKER for e in notifications)
+        report['second_followup_final_exact']=any(e.get('method')=='item/completed' and e.get('params',{}).get('item',{}).get('type')=='agentMessage' and e['params']['item'].get('text')==SECOND_FOLLOWUP_MARKER for e in notifications)
         report['workspace_files']=sorted(str(p.relative_to(workspace)) for p in workspace.rglob('*') if p.is_file())
         report['capture_completed']=not report.get('harness_error') and report['stock_unchanged'] and report['fixture_failure'] is None and report['ordered_initial_assistant_exact'] and report['initial_tool_result_replayed'] and len(compact)==1 and report['compact_status'] in {'completed','failed'} and report['upstream_auth_exact'] and not report['credential_leak'] and report['workspace_files']==[]
         report['local_compaction_subset_pass']=report['capture_completed'] and len(initial_wire_requests)==2 and len(initial_upstream)==2 and len(upstream_compact)==1 and report['initial_tool_success'] and report['compact_status']=='completed' and report['context_compaction_started'] and report['context_compaction_completed'] and report['compact_native_tools_absent'] and report['compact_native_assistant_prefix_exact'] and report['compact_native_tool_result_exact'] and report['reasoning_done_completed_initial_and_compact_replay_exact']
-        report['post_compaction_continuation_pass']=report['further_user_turn'] and report['followup_status']=='completed' and report['followup_final_exact']
+        report['post_compaction_continuation_pass']=hoist and report['further_user_turn'] and report['followup_status']=='completed' and report['followup_final_exact'] and report['second_followup_status']=='completed' and report['second_followup_final_exact'] and report['post_compaction_late_developer_shape_exact'] and report['post_compaction_system_stable'] and report['post_compaction_reasoning_done_completed_replay_exact'] and report['post_compaction_ordered_native_assistant_exact'] and report['post_compaction_first_input_has_no_old_reasoning'] and report['all_forwarded_system_blocks_exact'] and report['all_forwarded_text_and_tool_order_exact']
         report['full_session_pass']=report['local_compaction_subset_pass'] and report['post_compaction_continuation_pass'] and report['no_hidden_retries']
-        report['expected_late_developer_rejection']=report['local_compaction_subset_pass'] and report['no_hidden_retries'] and len(fake.requests)==3 and report['followup_status']=='failed' and len(followup)==1 and followup[0].get('status')==400 and report['followup_request_shapes'][0]['message_roles']==['user','user','developer','user','user'] and '"code":"unsupported_parameter"' in followup[0]['response_sse']
+        report['expected_late_developer_rejection']=not hoist and report['local_compaction_subset_pass'] and report['no_hidden_retries'] and len(fake.requests)==3 and report['followup_status']=='failed' and len(followup)==1 and followup[0].get('status')==400 and report['followup_request_shapes'][0]['message_roles']==['user','user','developer','user','user'] and '"code":"unsupported_parameter"' in followup[0]['response_sse']
         (output/'fake-requests.json').write_text(redact(json.dumps(fake.requests,indent=2)),encoding='utf-8'); (output/'responses-wire.json').write_text(redact(json.dumps(records,indent=2)),encoding='utf-8')
         (output/'codex-compaction-smoke.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
-    print(json.dumps({k:report[k] for k in ['capture_completed','local_compaction_subset_pass','post_compaction_continuation_pass','full_session_pass','responses_requests','upstream_requests','compact_status','compact_request_shapes','followup_request_shapes']},indent=2)); print('Report:',output/'codex-compaction-smoke.json')
-    return 0 if report['full_session_pass'] or args.expect=='capture' and report['capture_completed'] else 1
+    print(json.dumps({k:report[k] for k in ['developer_message_mode','capture_completed','local_compaction_subset_pass','post_compaction_continuation_pass','full_session_pass','expected_late_developer_rejection','responses_requests','upstream_requests','compact_status','compact_request_shapes','followup_request_shapes','all_forwarded_system_blocks_exact','all_forwarded_text_and_tool_order_exact','pre_post_compaction_system_equal','post_compaction_system_stable','post_compaction_reasoning_done_completed_replay_exact','post_compaction_ordered_native_assistant_exact']},indent=2)); print('Report:',output/'codex-compaction-smoke.json')
+    return 0 if report['full_session_pass'] or args.expect=='capture' and report['expected_late_developer_rejection'] else 1
 
 if __name__=='__main__': raise SystemExit(main())

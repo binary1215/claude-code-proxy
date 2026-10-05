@@ -61,6 +61,7 @@ RESPONSES_STATE_TTL_SECONDS=604800
 RESPONSES_MAX_OUTPUT_TOKENS=8192
 RESPONSES_THINKING_BUDGET_TOKENS=1024
 RESPONSES_APPLY_PATCH_MODE=reject
+RESPONSES_DEVELOPER_MESSAGE_MODE=reject
 ```
 
 Generate a separate cryptographic random state key through your normal secret
@@ -124,6 +125,47 @@ the proxy never reads files or applies patches. Checks are per tool call, not a
 transaction: an earlier completed tool in the same response might already have
 executed before a later invalid call fails. Provider acceptance and real coding
 quality remain separate gates. See the [grammar attribution](../licenses/CODEX-NOTICE.md).
+
+### Optional developer instruction hoisting
+
+`RESPONSES_DEVELOPER_MESSAGE_MODE=reject` retains the existing initial-prefix-only
+contract. The explicit experimental `hoist` option also accepts **developer**
+messages after user/assistant/tool history. It changes only the proxy's Responses
+adapter; native Messages, Codex and LiteLLM are not modified. Late `system`
+messages remain rejected. Unknown option values fail startup.
+
+The effective top-level native system contains request `instructions` first,
+then all accepted system/developer text blocks in their input encounter order.
+Text, duplicates and per-block cache markers are kept, with no deduplication or
+new prompt. User/tool data is never promoted; the relative order of remaining
+history is unchanged (adjacent same-role messages still merge as before).
+This deliberately changes where developer instructions apply. It is **not**
+lossless instruction-hierarchy or model-behavior equivalence.
+
+Every capsule minted in hoist mode is additionally AEAD-bound to a policy-tagged
+digest of the exact translated system blocks, including cache markers. The full
+system is collected before any capsule is opened. A changed/added/removed
+instruction, including an added duplicate, causes replay to fail with HTTP 409
+`invalid_reasoning_state` before provider contact. There is no deletion of
+thinking, re-signing, hidden retry, or automatic new session. A text-only compacted
+history without old capsules may establish a new scope, and subsequent unchanged
+system requests can replay the new capsules. This check is conservative: it is
+not provider-signature verification or a digest of all history/tools.
+
+`reject` and `hoist` capsules are intentionally incompatible in **both** directions,
+even for requests with only initial instructions or no system at all. Changing
+the mode requires a fresh conversation or client-produced compaction that no
+longer replays old capsules. Existing reject-mode capsules keep their original
+format/binding; no deployment is switched automatically.
+
+Hoisting does not guarantee cache savings. The cache hierarchy is tools, system,
+then messages; changing the effective system invalidates downstream cached
+content. Stable subsequent translated prefixes remain eligible, but actual hits
+depend on provider rules and explicit cache controls. See the
+[official invalidation rules](https://platform.claude.com/docs/en/build-with-claude/prompt-caching#what-invalidates-the-cache).
+Instruction changes with retained reasoning therefore remain an explicit failure
+boundary, not universal long-session compatibility. Synthetic tests cannot prove
+real Anthropic acceptance, costs or answer quality.
 
 ## Configure the unmodified gateway
 
@@ -208,7 +250,8 @@ still apply. See [Anthropic caching](https://platform.claude.com/docs/en/build-w
 ## Supported subset and explicit rejections
 
 Supported: stateless POST Responses, streaming/nonstream text, initial
-system/developer prefixes, user/assistant text, HTTPS/inline input images,
+system/developer prefixes, explicitly opt-in late-developer hoisting as above,
+user/assistant text, HTTPS/inline input images,
 function tools (including namespaces), free-text custom tools, optionally the
 exact validated Codex apply_patch grammar described above, tool results,
 signed reasoning replay, caller cache controls, native thinking options, and
@@ -243,8 +286,9 @@ local compaction with empty current tools; the history-only translation above
 removes the former current-definition validation conflict. It does not implement
 the remote `/responses/compact` endpoint or prove upstream acceptance of local
 summarization. Apply-patch mode requires an explicit operator choice
-and further real-provider qualification; later developer instructions also need
-further work. See [coding-session qualification gaps](CODEX-QUALIFICATION.md).
+and further real-provider qualification. Developer hoisting is a separate opt-in
+with the replay and semantic limitations above, not general instruction-change
+support. See [coding-session qualification gaps](CODEX-QUALIFICATION.md).
 Initial system/developer messages necessarily share Anthropic's system channel;
 this is not a claim that the providers have identical instruction hierarchies.
 

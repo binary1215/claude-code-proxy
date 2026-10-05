@@ -25,6 +25,15 @@ function responsesApplyPatchMode(): "reject" | "validated" {
   return mode;
 }
 export const RESPONSES_APPLY_PATCH_MODE = responsesApplyPatchMode();
+// Moving a late developer instruction changes its scope. Never enable implicitly.
+function responsesDeveloperMessageMode(): "reject" | "hoist" {
+  const mode = process.env.RESPONSES_DEVELOPER_MESSAGE_MODE ?? "reject";
+  if (mode !== "reject" && mode !== "hoist") {
+    throw new Error("RESPONSES_DEVELOPER_MESSAGE_MODE must be reject or hoist");
+  }
+  return mode;
+}
+export const RESPONSES_DEVELOPER_MESSAGE_MODE = responsesDeveloperMessageMode();
 function responsesInteger(name: string, fallback: number, min: number, max: number): number {
   const value = Number(process.env[name] ?? fallback);
   if (!Number.isSafeInteger(value) || value < min || value > max) {

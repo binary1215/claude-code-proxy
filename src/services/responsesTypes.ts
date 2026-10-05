@@ -22,6 +22,8 @@ export interface StateContext {
   model: string;
   principal: string;
   upstream: string;
+  /** Opt-in hoist policy and effective system binding, not full transcript validation. */
+  instructionScope?: string;
 }
 
 export interface ReasoningCodec {
@@ -34,6 +36,7 @@ export interface PreparedResponsesRequest {
   tools: Map<string, ToolBinding>;
   stream: boolean;
   model: string;
+  stateContext: StateContext;
 }
 
 export interface RequestTranslationOptions {
@@ -42,6 +45,7 @@ export interface RequestTranslationOptions {
   defaultMaxTokens: number;
   defaultThinkingBudget: number;
   applyPatchMode?: import("./responsesPatchGrammar.js").ApplyPatchMode;
+  developerMessageMode?: "reject" | "hoist";
 }
 
 export interface ResponseTranslationOptions {

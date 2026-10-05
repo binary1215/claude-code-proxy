@@ -148,6 +148,8 @@ function thinkingPolicy(request: JsonObject, extension: JsonObject, options: Req
  * authorize new tool calls. Client IDs/cache keys/summary hints are never prompt text.
  */
 export function prepareResponsesRequest(input: unknown, options: RequestTranslationOptions): PreparedResponsesRequest {
+  const developerMessageMode = options.developerMessageMode ?? "reject";
+  if (developerMessageMode !== "reject" && developerMessageMode !== "hoist") fail("unsupported_parameter");
   const request = object(input);
   keys(request, ["model", "input", "instructions", "tools", "tool_choice", "parallel_tool_calls", "max_output_tokens", "temperature", "top_p", "stream", "store", "previous_response_id", "background", "truncation", "reasoning", "text", "include", "client_metadata", "prompt_cache_key", "anthropic"]);
   const model = string(request.model, true, 256);
@@ -287,19 +289,38 @@ export function prepareResponsesRequest(input: unknown, options: RequestTranslat
 
   const system: JsonObject[] = [];
   if (own(request, "instructions") && request.instructions !== null) system.push({ type: "text", text: string(request.instructions) });
+  const items = typeof request.input === "string" ? [{ type: "message", role: "user", content: request.input }] : request.input;
+  if (!Array.isArray(items) || !items.length) fail();
   let begun = false;
+  // Collect the effective system before opening any opaque state. Hoisting is
+  // explicit, developer-only, order-preserving among instructions, and never
+  // deduplicates text or promotes user/tool content. Late system stays rejected.
+  for (const value of items) {
+    const item = object(value);
+    const type = item.type ?? (own(item, "role") ? "message" : undefined);
+    if (type === "message" && ["system", "developer"].includes(item.role)) {
+      keys(item, ["type", "role", "content", "id", "status"]);
+      if (own(item, "id")) string(item.id, true);
+      if (own(item, "status") && item.status !== "completed") fail();
+      if (begun && (item.role !== "developer" || developerMessageMode !== "hoist")) {
+        fail("unsupported_parameter", "System and developer messages are allowed only in the initial prefix unless developer hoisting is explicitly enabled.");
+      }
+      system.push(...content(item.content, false));
+    } else begun = true;
+  }
+  // This prevents silently replaying old signatures under a newly hoisted
+  // prefix. It does not attest provider signatures or the rest of the history.
+  const stateContext = developerMessageMode === "hoist" ? { ...options.context,
+    instructionScope: createHash("sha256").update(JSON.stringify(["developer-hoist-v1", system])).digest("hex") } : options.context;
   const pending = new Map<string, "function" | "custom">();
   const calls = new Set<string>();
   const reasoningIds = new Set<string>();
   const append = (role: "user" | "assistant", blocks: JsonObject[]): void => {
-    begun = true;
     const messages = nativeBody.messages as JsonObject[];
     const previous = messages.at(-1);
     if (previous?.role === role) previous.content.push(...blocks);
     else messages.push({ role, content: blocks });
   };
-  const items = typeof request.input === "string" ? [{ type: "message", role: "user", content: request.input }] : request.input;
-  if (!Array.isArray(items) || !items.length) fail();
   for (const value of items) {
     const item = object(value);
     const type = item.type ?? (own(item, "role") ? "message" : undefined);
@@ -308,8 +329,8 @@ export function prepareResponsesRequest(input: unknown, options: RequestTranslat
       if (own(item, "id")) string(item.id, true);
       if (own(item, "status") && item.status !== "completed") fail();
       if (["system", "developer"].includes(item.role)) {
-        if (begun) fail("unsupported_parameter", "System and developer messages are allowed only in the initial prefix.");
-        system.push(...content(item.content, false));
+        // Already validated and collected above, before any state is opened.
+        continue;
       } else if (["user", "assistant"].includes(item.role)) {
         if (pending.size && (item.role === "user" || nativeBody.messages.at(-1)?.role !== "assistant")) fail("invalid_tool_history", "Every pending tool call must be answered before another message turn.");
         append(item.role, content(item.content, item.role === "user"));
@@ -332,7 +353,7 @@ export function prepareResponsesRequest(input: unknown, options: RequestTranslat
         }
       }
       let opened: JsonObject;
-      try { opened = object(options.codec.open(sealed, options.context, id)); }
+      try { opened = object(options.codec.open(sealed, stateContext, id)); }
       catch { fail("invalid_reasoning_state", "The encrypted reasoning state is invalid or bound to another request context.", 409); }
       if (opened.type === "thinking") {
         if (typeof opened.thinking !== "string" || typeof opened.signature !== "string" || !opened.signature.length) fail("invalid_reasoning_state");
@@ -377,5 +398,5 @@ export function prepareResponsesRequest(input: unknown, options: RequestTranslat
   if (pending.size) fail("invalid_tool_history", "Unanswered tool calls cannot be sent for another model turn.");
   if (!nativeBody.messages.length) fail();
   if (system.length) nativeBody.system = system;
-  return { nativeBody, tools, stream: request.stream ?? false, model };
+  return { nativeBody, tools, stream: request.stream ?? false, model, stateContext };
 }
