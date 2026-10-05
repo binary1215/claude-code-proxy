@@ -20,7 +20,7 @@ or modify LiteLLM source/license flags.
 | Cache accounting | Repeated eligible native prefix, provider cache read/write/fresh/output counts and matching relay history | Prior native/temporary-gateway Haiku cache hits exist; new Responses/deployed gateway measurements do not |
 | Gateway authorization | Missing/expired/revoked keys, allowed/denied routes, relay model ACL, caller/provider secret separation | Stock source/helper audit exists; actual gateway DB-backed virtual-key acceptance remains |
 | Gateway accounting | Stream completion/failure/cancellation usage and persisted spend compared with known source counters | Generic pass-through accounting is not verified; unknown cost must not be presented as zero or a saving |
-| Coding-session envelope | Actual tool schema, model metadata, context limit, follow-up behavior and compaction choice | Short synthetic smoke is not long-session certification; unsupported grammar/remote compaction currently fail explicitly |
+| Coding-session envelope | Actual tool schema, model metadata, context limit, follow-up behavior and compaction choice | [Source-qualified Codex gaps](CODEX-QUALIFICATION.md): apply-patch grammar, local compaction tool history, later developer instructions; remote compaction also unsupported |
 | Deployment and rollback | Backed-up config/database, preserved state key, exact target, no unrelated service change, healthy rollback target | Existing test container still uses native revision `0ca7575`; no production cutover has been authorized by a test result |
 | Additional client | OpenCode with the same explicitly selected native model through gateway/relay | Direct fake-provider comparison only; not a replacement for mandatory clients |
 

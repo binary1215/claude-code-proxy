@@ -120,5 +120,8 @@ failed because an empty `output_tokens_details` object lacked the Codex-required
 `reasoning_tokens`; omitting the unknown split fixed it without fabricating zero.
 
 This is a short synthetic protocol smoke, not a full coding session or provider
-signature validation. Long-session remote compaction is explicitly unsupported.
+signature validation. Remote compaction is unsupported; the default custom
+provider's **local** compaction also has an unresolved historical-tool contract,
+alongside apply-patch grammar and later developer instructions. See the
+[source-qualified gaps](../../docs/CODEX-QUALIFICATION.md).
 See [adapter design, configuration and limitations](../../docs/RESPONSES-ADAPTER.md).

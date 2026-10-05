@@ -183,8 +183,11 @@ Responses compaction, WebSockets, built-in server tools/search, grammar tools,
 strict tool-schema guarantees, structured output, automatic truncation, arbitrary
 future block types and late system-message relocation. Historical tool calls
 currently require their definitions in the current request. These return explicit
-errors instead of silently changing semantics. Long-running Codex sessions that
-request unsupported remote compaction are **not certified** by a short tool smoke.
+errors instead of silently changing semantics. Long-running Codex sessions are
+**not certified** by a short tool smoke. The pinned custom-provider client uses
+local compaction with empty current tools; historical tool validation currently
+conflicts with that path. Normal apply-patch grammar and later developer
+instructions also need further work. See [coding-session qualification gaps](CODEX-QUALIFICATION.md).
 Initial system/developer messages necessarily share Anthropic's system channel;
 this is not a claim that the providers have identical instruction hierarchies.
 
