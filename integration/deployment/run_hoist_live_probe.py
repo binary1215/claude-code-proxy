@@ -17,8 +17,8 @@ import uuid
 from lifecycle_smoke import HarnessError, run as bounded_docker
 
 SOURCE_NAME = 'test-claudemock'
-SOURCE_ID = 'e818d18871aef221db9410031c27c9b2993f413d04b424629901109f732f1ccc'
-SOURCE_IMAGE = 'sha256:12d35112176de03ab3d1e2ae46a91a8ca6a98168478c98fd6aaf37fcb9b85fc3'
+SOURCE_ID = '33c92dff38b532887475f7e6056a68b355e3d01127640c642b0f751ba649937d'
+SOURCE_IMAGE = 'sha256:bc6d2ef8c42f8209d741ac6c7b93855073b12cf052144bb1aafb81170be00718'
 CANDIDATE = 'sha256:bc6d2ef8c42f8209d741ac6c7b93855073b12cf052144bb1aafb81170be00718'
 LABEL = 'io.claude-relay.hoist-live-owner'
 KIND = 'hoist-haiku-live-v1'

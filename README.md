@@ -153,9 +153,16 @@ The corrected 2026-10-06 candidate passes **149/149 Docker regressions** and a
 three-call real Haiku Responses sequence: signed reasoning/tool output, replay
 after developer hoisting, and identical replay. Cache reads were 0 → 5503 → 5651
 tokens; fresh input was 10 → 5 → 5. This fixes the earlier native metadata
-compatibility failure. The existing service was not replaced. Actual `.7`
+compatibility failure. That probe did not replace the existing service. Actual `.7`
 gateway/client sessions remain the next integration step, not part of this direct
 probe; see [the measured result and limits](docs/VERIFICATION.md#metadata-compatibility-fix-and-live-responses-replay-2026-10-06).
+
+The `.64:13457` **test-claudemock** service subsequently received that exact
+image with Responses and developer hoisting explicitly enabled for testing.
+The existing relay key, provider credential, volume and 21 history rows were
+preserved. Native rollback and re-upgrade with the same durable state key both
+passed local route/startup checks. Other containers and `.7` were unchanged;
+see [the current test deployment and rollback commands](docs/VERIFICATION.md#test-service-update-and-native-rollback-2026-10-06).
 
 The required acceptance clients are **Claude Code and Codex**, with OpenCode as an additional comparison. [Actual client tests](integration/clients/README.md) show that Codex 0.160.0 loses signed reasoning through stock LiteLLM 1.103.1's normal Responses conversion. The new pass-through → proxy Responses route passes both synthetic actual-Codex tool round trips, including split signatures, signed-empty and redacted blocks. This is protocol evidence, not real upstream authorization, production rollout or full coding-workflow certification. Free pass-through authentication is supported by the pinned backend despite the UI's Premium label, but complete header forwarding requires owner-applied configuration; [policy constraints](integration/litellm/README.md#free-authentication-and-configuration-constraints) remain rollout requirements.
 

@@ -13,7 +13,7 @@
 - Token counts are observed counters, not invoices, proven USD savings or
   measured model-quality improvements.
 
-## Existing diagnostics deployment
+## Original diagnostics deployment
 
 Implementation commit: `0ca75751d407b0bce2f9c15675b1e0d8fd8075c4`.
 
@@ -743,10 +743,77 @@ Evidence:
   `C:/Users/binary/AppData/Local/Temp/claude-metadata-20261006/final-image-regression.txt`,
   SHA-256 `1f74eef23d867f5f807f89a5ca3087c9e838c3de41460d65991b7fdc0cc96c60`.
 
-The next functional step is actual-client integration through `.7`, not another
-security-audit gate. Gateway configuration remains owned by `LiteLLM 관리`;
-original Portainer Stack access is pending, and the existing test service still
-runs the native-only baseline.
+At this probe's completion, the test service still ran the native-only baseline.
+The subsequent test deployment below makes the Responses endpoint available for
+actual-client integration. Gateway configuration remains owned by `LiteLLM 관리`;
+original Portainer Stack access is still pending.
+
+### Test service update and native rollback (2026-10-06)
+
+**Current test service:** `192.168.0.64:13457`, `test-claudemock`, image
+`sha256:bc6d2ef8c42f8209d741ac6c7b93855073b12cf052144bb1aafb81170be00718`
+(`f27c51e`), container
+`33c92dff38b532887475f7e6056a68b355e3d01127640c642b0f751ba649937d`, started
+`2026-10-06T12:10:55.105138143Z`. Responses is enabled, developer mode is `hoist`,
+apply-patch remains `reject`. A separate generated state key is persisted in the
+private runtime Compose configuration and was reused after rollback.
+
+The current private configuration and the rollback configuration are under
+`/opt/test-claudemock/responses-update-ma7p5bmb/`, mode 700. Both JSON Compose
+files are mode 600 and contain credentials: do not print, commit or upload them.
+The prior YAML, private environment and relay-key file are retained there too.
+The DB was backed up with SQLite's online backup API (not a raw live-file copy):
+integrity `ok`, no foreign-key errors, 1 API key, 0 settings, 21 history rows;
+backup SHA-256 `3ff677addd4361059c326b951df14ce572ee0b08daad1cc60d0d19fcf97308c8`.
+
+The exact `0ca7575` → `f27c51e` DB migration, key and history source files are
+unchanged. Actual update, rollback to that retained native image, and re-upgrade
+all passed these checks:
+
+- Health 200, authenticated admin task list empty, SQLite integrity `ok`.
+- Existing key/settings/history rows preserved; key last-used timestamps may
+  change during authenticated checks, but key identity/policy is unchanged.
+- Same named volume, LAN address/port and all original native environment values.
+- Existing relay key reaches both route parsers (empty body 400); absent key 401.
+  During native rollback only, the authenticated Responses route returns 404.
+- Same durable state key after re-upgrade; all other container IDs/images/start
+  times/running states unchanged. No volume deletion or production replacement.
+- **Zero provider calls** during these deployment checks; history stays at 21.
+  These checks establish operational availability, not model generation or `.7`
+  end-to-end acceptance. Real capsule replay across this particular restart was
+  not part of these checks.
+
+[Sanitized three-stage deployment report](evidence/test-deployment-20261006.json).
+Operational preparation/switch scripts and their captures are retained locally
+under `home_server_proj/.agent-work/20261006-test-responses-deploy/`; private
+configuration/backups stay only on the server. The live probe runner's source
+container/image pins now refer to the final deployed test service; it was not
+rerun against that source in this deployment step.
+
+To retain the Responses deployment on subsequent updates, use its actual private
+configuration, not the old `compose.test.yml` (which still describes native-only):
+
+```sh
+docker compose -p test-claudemock \
+  -f /opt/test-claudemock/responses-update-ma7p5bmb/candidate.compose.json \
+  up -d --no-deps --no-build --pull never claude-proxy
+```
+
+For the tested native rollback, drain active requests and use the retained exact
+old image/config against the same unchanged-schema volume:
+
+```sh
+docker compose -p test-claudemock \
+  -f /opt/test-claudemock/responses-update-ma7p5bmb/rollback.compose.json \
+  up -d --no-deps --no-build --pull never claude-proxy
+```
+
+This restores native availability, not Responses. Do not restore the older DB
+over newer history/revocations automatically. Keep both private configurations
+and the backup; preserving the candidate file preserves its state key.
+The gateway owner was notified that `.64` backend readiness is resolved. `.7`
+routes, actual gateway accounting and mandatory real-client sessions are still
+to be completed; no extra vulnerability review was introduced.
 
 ### Remaining end-to-end constraints
 

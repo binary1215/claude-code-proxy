@@ -1,0 +1,86 @@
+{
+  "final": {
+    "pass": true,
+    "action": "candidate",
+    "container_id": "33c92dff38b532887475f7e6056a68b355e3d01127640c642b0f751ba649937d",
+    "image": "sha256:bc6d2ef8c42f8209d741ac6c7b93855073b12cf052144bb1aafb81170be00718",
+    "started_at": "2026-10-06T12:10:55.105138143Z",
+    "health_status": 200,
+    "native_environment_preserved": true,
+    "original_db_rows_preserved": true,
+    "history_rows": 21,
+    "existing_key_accepted": true,
+    "route_checks": {
+      "/v1/messages": {
+        "no_key_status": 401,
+        "existing_key_empty_request_status": 400
+      },
+      "/v1/responses": {
+        "no_key_status": 401,
+        "existing_key_empty_request_status": 400
+      }
+    },
+    "responses_enabled": "true",
+    "developer_mode": "hoist",
+    "apply_patch_mode": "reject",
+    "state_key_matches_durable_config": true,
+    "other_containers_unchanged": true,
+    "provider_calls": 0
+  },
+  "rollback": {
+    "pass": true,
+    "action": "rollback",
+    "container_id": "59c64b70a7f10749c5859ad0c7b3ba5f92a193818988e266317f896109f1708d",
+    "image": "sha256:12d35112176de03ab3d1e2ae46a91a8ca6a98168478c98fd6aaf37fcb9b85fc3",
+    "started_at": "2026-10-06T12:10:51.536472955Z",
+    "health_status": 200,
+    "native_environment_preserved": true,
+    "original_db_rows_preserved": true,
+    "history_rows": 21,
+    "existing_key_accepted": true,
+    "route_checks": {
+      "/v1/messages": {
+        "no_key_status": 401,
+        "existing_key_empty_request_status": 400
+      },
+      "/v1/responses": {
+        "no_key_status": 401,
+        "existing_key_empty_request_status": 404
+      }
+    },
+    "responses_enabled": "false",
+    "developer_mode": "reject",
+    "apply_patch_mode": "reject",
+    "state_key_matches_durable_config": null,
+    "other_containers_unchanged": true,
+    "provider_calls": 0
+  },
+  "initial": {
+    "pass": true,
+    "action": "candidate",
+    "container_id": "29fdc5865e092bbc1381403a4c2750409303f1d2834c515b994dabfc9fa6a9ae",
+    "image": "sha256:bc6d2ef8c42f8209d741ac6c7b93855073b12cf052144bb1aafb81170be00718",
+    "started_at": "2026-10-06T12:10:12.023027526Z",
+    "health_status": 200,
+    "native_environment_preserved": true,
+    "original_db_rows_preserved": true,
+    "history_rows": 21,
+    "existing_key_accepted": true,
+    "route_checks": {
+      "/v1/messages": {
+        "no_key_status": 401,
+        "existing_key_empty_request_status": 400
+      },
+      "/v1/responses": {
+        "no_key_status": 401,
+        "existing_key_empty_request_status": 400
+      }
+    },
+    "responses_enabled": "true",
+    "developer_mode": "hoist",
+    "apply_patch_mode": "reject",
+    "state_key_matches_durable_config": true,
+    "other_containers_unchanged": true,
+    "provider_calls": 0
+  }
+}

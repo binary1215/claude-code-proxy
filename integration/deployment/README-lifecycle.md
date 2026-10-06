@@ -80,6 +80,12 @@ another provider call. The two earlier failing seed calls remain historical
 evidence, making five provider calls across the failed and corrected stages.
 No actual client or deployed gateway participated in this probe.
 
+The `.64` test service has since been updated and its native rollback/re-upgrade
+checked. The runner now pins that new source container/image; recreating it again
+requires inspecting and updating those exact pins. This is not an automatic
+reason to repeat real calls. See the
+[current private deployment configuration and rollback commands](../../docs/VERIFICATION.md#test-service-update-and-native-rollback-2026-10-06).
+
 Offline checks (no provider calls):
 
 ```sh
