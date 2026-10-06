@@ -9,6 +9,9 @@ spoofing, paid-key fallback, or production replacement is implied by these tests
 
 | Client / route | Evidence | Remaining gap |
 | --- | --- | --- |
+| Claude Code 2.1.289 → actual `.7` native pass-through → `.64` → real Haiku | Three requests: Read + resumed user follow-up, exact signed-state replay, cache reads 4628 / 4865; relay usage matches | Client removes tool `caller` metadata; no live signed-empty/redacted or split-signature emission in this sample; broader editing/long sessions remain |
+| Codex 0.160.0 → actual `.7` Responses pass-through → `.64` adapter → real Haiku | Five requests: get_goal tool, actual compaction, two follow-ups; exact opaque replay. Eligible-prefix run reads cache 6911 / 7505 | Limited no-I/O profile, not ordinary shell/apply_patch coding; gateway usage/spend is not accounted |
+| OpenCode 1.18.34 → actual `.7` native pass-through → `.64` → real Haiku | Single request reached provider, returned 400 third-party plan/extra-usage restriction | Not a protocol-format error; no retry, client impersonation or paid fallback authorized |
 | Claude Code 2.1.289 → native test relay → real Claude | Earlier isolated Opus control succeeded with a real cache hit | Actual `.7` route, tool-rich multi-turn acceptance, gateway policy/accounting |
 | Claude Code 2.1.289 → stock pass-through → native relay → fake Anthropic | Single-signature-event control preserves signed/empty/redacted/tool history; real Read and final answer succeed | Split-signature-event stress loses a fragment in the client; stock route removes top-level metadata; not whole-body fidelity |
 | Codex 0.160.0 → stock LiteLLM 1.103.1 Responses → fake Anthropic | Actual CLI completes a tool round trip, but signed reasoning is lost | **Not fidelity-compatible on this tested route**; real authorization also unresolved |
@@ -27,11 +30,18 @@ The [Claude Code harness](README-claude-code.md) distinguishes its passing
 single-event state subset from split-event and whole-body preservation losses.
 The [Codex coding-tool harness](README-codex-patch.md) separately gates transport
 replay, actual file editing, and invalid-patch rejection.
-The [manual compaction harness](README-codex-compaction.md) separately gates
-history preservation during compaction and the next ordinary user turn; only
-the former currently passes.
+The [manual compaction harness](README-codex-compaction.md) separates
+history preservation during compaction from the next ordinary user turn; the
+opt-in hoist path now also passes the bounded real-provider sequence above.
 None of these rows establishes universal client compatibility or a measured
 quality/cost improvement.
+
+Live runners: [Claude Code](README-live-claude-code.md),
+[Codex](README-live-codex.md), [OpenCode](README-live-opencode.md).
+They use the already deployed routes and an approved gateway key supplied by an
+environment-variable name; no installation, normal client configuration edit,
+provider credential export or gateway restart is performed. Each writes a safe
+report and retains its separate synthetic client session outside the repository.
 
 ## Codex + stock Responses reproduction
 

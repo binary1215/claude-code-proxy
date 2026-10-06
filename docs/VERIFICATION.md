@@ -873,6 +873,148 @@ A configuration rollback does not require restoring the database. The database
 dump is 62,784,997 bytes and its archive listing was verified; no live database
 restore was performed. The `.64` relay was not changed by this gateway rollout.
 
+### Actual shared-gateway clients (2026-10-06)
+
+The owner issued a separate 24-hour gateway key after explicit user approval.
+It expires at **2026-10-07 22:20:54 KST** and permits only the two custom routes;
+the original four keys remain unchanged. Authorized empty requests reach relay
+validation, while `/model/info` and generic `/v1/responses` return 403. No real
+key, provider token, prompt, signature or opaque capsule is in committed evidence.
+
+All live calls below use `claude-haiku-4-5-20251001`, actual installed clients,
+the shared `.7:4000` gateway and `.64:13457` relay. A temporary local observer
+forwards original bodies/SSE; it is not a replacement gateway. No client or
+LiteLLM source, user project, normal client config, or production container was
+changed. Client-edge observations do not establish byte equality inside `.7`.
+
+**Claude Code 2.1.289:** three requests complete a real Read of a generated file
+and a resumed user follow-up. Both replays preserve the returned signed thinking.
+Ordered block types, text, tool ID/name/input and matching tool results survive.
+Full object equality is false: the client removes `tool_use.caller` on replay.
+Value-free field diagnostics isolate that difference; no signed field changed.
+On the final image, provider/relay history rows 35–37 match:
+
+| Request | Fresh input | Cache write | Cache read | Output |
+| --- | ---: | ---: | ---: | ---: |
+| Read call | 10 | 4628 | 0 | 160 |
+| Read result | 8 | 237 | 4628 | 103 |
+| Resumed follow-up | 10 | 181 | 4865 | 131 |
+
+The first attempt's report stopped after two successful requests because the
+checker expected no space after `READ_CONFIRMED:`. The exact marker was present.
+The checker now accepts formatting, not wrong or conflicting markers. Earlier
+reports remain retained; two subsequent fresh sessions pass, not a re-labelled
+old failure. Live signed-empty/redacted/split-signature emissions were absent.
+Prior synthetic native-client limitations still apply.
+
+**Codex 0.160.0:** initial get_goal no-I/O tool/result (two requests), actual
+`thread/compact/start` (one), and two normal follow-ups all complete. The client
+replays identical opaque reasoning into tool continuation and compaction. After
+compaction it intentionally replaces old history with its summary; newly emitted
+post-compaction reasoning replays exactly on the next turn. This is client-owned
+compaction, not the proxy silently stripping reasoning.
+
+The first Codex request failed inside HTTP200 SSE with `malformed_tool_input`.
+Reproduction found that an empty streamed JSON buffer was parsed instead of
+retaining initial `{}`. `f5031f3` treats exactly empty deltas as no-ops, matching the
+[official Anthropic SDK accumulator](https://raw.githubusercontent.com/anthropics/anthropic-sdk-typescript/main/src/internal/message-stream-utils.ts).
+Nonempty malformed/non-object input still fails. The original upstream bytes
+were not captured, so this is a reproduced compatible failure mechanism followed
+by passing reruns, not proof of the exact original wire fragment. Three added
+regressions bring local backend coverage to **152/152**.
+
+The first successful Codex sequence used only 1148–3156 native input tokens and
+had zero cache counts. The separate `--cache-fixture` run adds stable inert
+reference material in the temporary test catalog. Haiku 4.5's
+[documented minimum cache length is 4096 tokens](https://platform.claude.com/docs/en/build-with-claude/prompt-caching#cache-limitations).
+The eligible-prefix run passes all five phases; provider/relay rows 38–42 match:
+
+| Request | Fresh input | Cache write (5m) | Cache read | Output |
+| --- | ---: | ---: | ---: | ---: |
+| Tool call | 10 | 6911 | 0 | 126 |
+| Tool result | 5 | 163 | 6911 | 14 |
+| Compaction | 9 | 5421 | 0 | 823 |
+| First post-compaction turn | 10 | 7505 | 0 | 188 |
+| Second post-compaction turn | 10 | 58 | 7505 | 120 |
+
+Compaction and its first follow-up do not reuse the prior cache in this sample;
+the changed history/tools/prefix mean a hit is not guaranteed. The next turn does
+reuse the newly cached prefix. Cache usage is proven, not invoice savings or a
+controlled answer-quality improvement. This catalog deliberately disables shell
+and apply_patch, so it is not a full ordinary Codex coding profile.
+
+**OpenCode 1.18.34:** one request reached the provider and returned HTTP400
+`invalid_request_error`. Read-only inspection of that exact generated synthetic
+session classified the provider message as a third-party plan/extra-usage
+restriction, not a schema/beta-header error. No retry, identity substitution,
+paid setting change or fallback was attempted. No charge/invoice was inspected.
+
+Across all attempts, relay history rows 23–42 contain 20 provider requests:
+eight successful Claude native requests, one OpenCode rejection, ten successful
+Codex Responses requests and the first failed Codex stream. No claim of unseen
+gateway internal attempts follows solely from client-edge counts.
+
+Evidence: [sanitized live-client projections and report digests](evidence/client-live-20261006.json).
+The three [live runners](../integration/clients/README.md) have **32/32 offline
+observer regressions**, run without provider credentials or client processes.
+The original safe reports and separate generated client sessions remain under
+the system temporary directory; raw model signatures are not exported to Git.
+
+#### Updated test image and rollback
+
+Source `f5031f32bd34417cac0c3cc1667dbc7017d752e5` was built as image
+`sha256:433b37a638c11dd1a3bd7903b85c59414b40be6a540b8498af7cc38f5dc1cf8f`.
+Active container: `5580e970871c04ba79ec9e6415c329fab7f4673a39b1d7234f2d0f333339bed7`,
+started `2026-10-06T13:33:10.226582162Z`. The image-only replacement preserved all
+configured environment values including the durable state key, volume, port,
+API keys, settings and all 29 pre-update history rows; SQLite integrity is `ok`.
+The initial verifier incorrectly checked loopback despite the port binding being
+`192.168.0.64`; the corrected published-address health check returns 200. No
+second apply/rollback or LiteLLM restart was needed. A historical sibling
+container snapshot was stale, so no whole-host before/after assertion is made.
+
+Current private Compose (contains credentials; never commit):
+
+```sh
+docker compose -p test-claudemock \
+  -f /opt/test-claudemock/empty-tool-update-673bseqo/candidate.compose.json \
+  up -d --no-deps --no-build --pull never claude-proxy
+```
+
+Rollback to the preceding Responses-enabled `f27c51e` image with the same state
+key/configuration (reintroduces the empty-tool-stream defect):
+
+```sh
+docker compose -p test-claudemock \
+  -f /opt/test-claudemock/empty-tool-update-673bseqo/rollback.compose.json \
+  up -d --no-deps --no-build --pull never claude-proxy
+```
+
+That directory also holds the consistent pre-update DB backup. Do not restore it
+over later usage/revocations automatically. The earlier native-only rollback is
+still separately retained; no new rollback cycle or real DB restoration was run.
+
+#### Actual gateway authorization and accounting limits
+
+Owner read-only snapshot, **22:21:06–22:41:38 KST**, contains exactly 20 persisted
+test-key rows: Messages success 8, Responses success 11, unattributed HTTP 400
+failure 1. All report **zero input/output/spend**, no provider cache read/write
+fields or response usage. Key spend is also 0. The first Responses SSE failure is
+among the gateway's HTTP200 successes. `cache_hit=False` is LiteLLM response-cache
+metadata, not an upstream prompt-cache miss. Therefore this route cannot use the
+gateway's counters as token billing, completion or cost-saving truth.
+
+The installed `get_model_from_request()` returns `None` for dispatched custom
+pass-through requests. Standard gateway model allowlists do not constrain the
+body's native model here; the test key also has `models=[]`. The relay supports
+its own model ACL, but the actual single relay key currently has
+`allowed_models=NULL`: no per-key model allowlist is configured. Haiku-only
+scope in these runs was enforced by the harness, not either key's model ACL.
+No policy was silently tightened. This was source/config inspection, not unauthorized model
+inference. A shared relay key is one relay principal, not per-virtual-key capsule
+isolation. Route authentication remains useful, but it is not managed-model
+accounting equivalence. Evidence: [final persisted aggregate](evidence/gateway-accounting-20261006.json).
+
 ### Remaining end-to-end constraints
 
 - General-purpose subscription-token relay eligibility and premium-model raw
@@ -883,7 +1025,12 @@ restore was performed. The `.64` relay was not changed by this gateway rollout.
 - Clients cannot recover discarded signatures. No universal coding-client
   fidelity, cross-account signature portability, conversation persistence or
   `previous_response_id` store is provided.
-- Pass-through has not established managed-route-equivalent model permissions,
-  budgets, aliases, accounting or logs. Verify before rollout.
+- Pass-through does not have managed-route-equivalent model permissions or
+  accounting in the measured deployment; zero gateway spend is not billing truth.
+  Aliases, per-user budgets/isolation and broad coding profiles are not supplied
+  by these two routes. No new paid-account configuration is authorized.
+- Actual Codex file editing remains unverified and the deployed apply_patch mode
+  is still `reject`. Native client synthetic split-signature preservation is not
+  complete; it is not excused by successful single-signature live samples.
 - Production/master are not replaced. The local admin UI build is separate
   from the backend-only test deployment.

@@ -112,7 +112,12 @@ routes using YAML and a user-approved restart, without changing LiteLLM source
 or version. Dynamic header delivery was measured with a pre-inference rejection.
 See [deployment evidence and rollback](../../docs/VERIFICATION.md#shared-gateway-routes-2026-10-06).
 The configuration limitation below describes why YAML was chosen, not a current
-access blocker. Virtual-key and accounting acceptance remain separate.
+access blocker. A separate approved 24-hour virtual key subsequently passed the
+two allowed routes and rejected generic Responses/model-info access. Real
+Claude Code and Codex tests pass their bounded profiles. The measured gateway
+logs still record **zero tokens/spend and no provider cache usage for all 20
+requests**, including a failed SSE stream recorded as success. This is missing
+accounting, not free usage. See [live results and accounting limitations](../../docs/VERIFICATION.md#actual-shared-gateway-clients-2026-10-06).
 
 The deployed 1.103.1 UI disables its pass-through authentication toggle with a
 Premium label. The pinned backend intentionally supports `auth: true` without

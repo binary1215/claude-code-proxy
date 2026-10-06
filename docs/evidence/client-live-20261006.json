@@ -1,0 +1,456 @@
+{
+  "date": "2026-10-06",
+  "model": "claude-haiku-4-5-20251001",
+  "routes": {
+    "messages": "http://192.168.0.7:4000/claude-native/v1/messages",
+    "responses": "http://192.168.0.7:4000/claude-responses/v1/responses",
+    "relay": "192.168.0.64:13457"
+  },
+  "proxy": {
+    "source_commit": "f5031f32bd34417cac0c3cc1667dbc7017d752e5",
+    "image": "sha256:433b37a638c11dd1a3bd7903b85c59414b40be6a540b8498af7cc38f5dc1cf8f",
+    "container": "5580e970871c04ba79ec9e6415c329fab7f4673a39b1d7234f2d0f333339bed7",
+    "responses_enabled": true,
+    "developer_mode": "hoist",
+    "apply_patch_mode": "reject",
+    "state_key_and_existing_environment_preserved": true,
+    "volume_preserved": true,
+    "pre_update_database_rows_exact": true,
+    "pre_update_history_rows": 29,
+    "health_status": 200,
+    "regressions": {
+      "environment": "local",
+      "passed": 152
+    },
+    "active_compose": "/opt/test-claudemock/empty-tool-update-673bseqo/candidate.compose.json",
+    "rollback_compose": "/opt/test-claudemock/empty-tool-update-673bseqo/rollback.compose.json",
+    "rollback_image": "sha256:bc6d2ef8c42f8209d741ac6c7b93855073b12cf052144bb1aafb81170be00718"
+  },
+  "claude_code": {
+    "version": "2.1.289",
+    "report_sha256": "fbb80bc370ff0b9f2309e2e95f4ae51dbe722a1d5c1b4624d470082f2075f29c",
+    "functional_pass": true,
+    "signed_state_pass": true,
+    "outgoing_gateway_requests": 3,
+    "native_usage": [
+      {
+        "input_tokens": 10,
+        "output_tokens": 160,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 4628
+      },
+      {
+        "input_tokens": 8,
+        "output_tokens": 103,
+        "cache_read_input_tokens": 4628,
+        "cache_creation_input_tokens": 237
+      },
+      {
+        "input_tokens": 10,
+        "output_tokens": 131,
+        "cache_read_input_tokens": 4865,
+        "cache_creation_input_tokens": 181
+      }
+    ],
+    "replays": [
+      {
+        "after": "Read",
+        "one_tool_result_replayed": true,
+        "fixture_marker_in_tool_result": true,
+        "ordered_content_exact": false,
+        "content_exact_without_cache_control": false,
+        "shape_diagnostics": {
+          "returned_block_count": 2,
+          "replayed_block_count": 2,
+          "returned_types": [
+            "thinking",
+            "tool_use"
+          ],
+          "replayed_types": [
+            "thinking",
+            "tool_use"
+          ],
+          "diagnostic_truncated": false,
+          "block_differences": [
+            {
+              "index": 1,
+              "returned_type": "tool_use",
+              "replayed_type": "tool_use",
+              "known_fields_removed": [
+                "caller"
+              ],
+              "known_fields_added": [],
+              "known_fields_changed": [],
+              "unknown_field_differences": 0
+            }
+          ],
+          "concatenated_text_exact": true,
+          "tool_id_name_input_exact": true
+        },
+        "returned_thinking_or_redacted_count": 1,
+        "signed_blocks_preserved": true
+      },
+      {
+        "after": "user_followup",
+        "one_tool_result_replayed": true,
+        "fixture_marker_in_tool_result": true,
+        "ordered_content_exact": false,
+        "content_exact_without_cache_control": false,
+        "shape_diagnostics": {
+          "returned_block_count": 4,
+          "replayed_block_count": 4,
+          "returned_types": [
+            "thinking",
+            "tool_use",
+            "thinking",
+            "text"
+          ],
+          "replayed_types": [
+            "thinking",
+            "tool_use",
+            "thinking",
+            "text"
+          ],
+          "diagnostic_truncated": false,
+          "block_differences": [
+            {
+              "index": 1,
+              "returned_type": "tool_use",
+              "replayed_type": "tool_use",
+              "known_fields_removed": [
+                "caller"
+              ],
+              "known_fields_added": [],
+              "known_fields_changed": [],
+              "unknown_field_differences": 0
+            }
+          ],
+          "concatenated_text_exact": true,
+          "tool_id_name_input_exact": true
+        },
+        "returned_thinking_or_redacted_count": 2,
+        "signed_blocks_preserved": true
+      }
+    ],
+    "relay_history_ids": [
+      35,
+      36,
+      37
+    ],
+    "relay_usage_matches": true
+  },
+  "codex_short": {
+    "version": "0.160.0",
+    "report_sha256": "87adc0fd1234b28d6a4e1bf6360fcae05944a70224415b54395a56a76ccc895f",
+    "functional_pass": true,
+    "gateway_request_attempts": 5,
+    "observed_no_retries": true,
+    "observed_reasoning_preserved": true,
+    "local_compaction_pass": true,
+    "post_compaction_followups_pass": true,
+    "phases": {
+      "initial": {
+        "functional_pass": true,
+        "client_requests": 2,
+        "initial_reasoning_replay_exact": true,
+        "get_goal_tool_result_success": true,
+        "usage": [
+          {
+            "native_input_tokens": 2639,
+            "native_output_tokens": 138,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0,
+            "input_tokens": 2639,
+            "output_tokens": 138,
+            "total_tokens": 2777,
+            "cached_tokens": 0,
+            "cache_write_tokens": 0
+          },
+          {
+            "native_input_tokens": 2809,
+            "native_output_tokens": 14,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0,
+            "input_tokens": 2809,
+            "output_tokens": 14,
+            "total_tokens": 2823,
+            "cached_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        ]
+      },
+      "compact": {
+        "functional_pass": true,
+        "client_requests": 1,
+        "initial_reasoning_compaction_replay_exact": true,
+        "usage": [
+          {
+            "native_input_tokens": 1148,
+            "native_output_tokens": 555,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0,
+            "input_tokens": 1148,
+            "output_tokens": 555,
+            "total_tokens": 1703,
+            "cached_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        ]
+      },
+      "followup": {
+        "functional_pass": true,
+        "client_requests": 1,
+        "post_compaction_input_has_no_old_reasoning": true,
+        "usage": [
+          {
+            "native_input_tokens": 3098,
+            "native_output_tokens": 545,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0,
+            "input_tokens": 3098,
+            "output_tokens": 545,
+            "total_tokens": 3643,
+            "cached_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        ]
+      },
+      "followup_second": {
+        "functional_pass": true,
+        "client_requests": 1,
+        "post_compaction_reasoning_replay_exact": true,
+        "usage": [
+          {
+            "native_input_tokens": 3156,
+            "native_output_tokens": 107,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0,
+            "input_tokens": 3156,
+            "output_tokens": 107,
+            "total_tokens": 3263,
+            "cached_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        ]
+      }
+    },
+    "relay_history_ids": [
+      30,
+      31,
+      32,
+      33,
+      34
+    ],
+    "relay_usage_matches": true
+  },
+  "codex_eligible_cache": {
+    "version": "0.160.0",
+    "report_sha256": "cbb38e4ac78469424f88de8f9abf95d2ec37b456ae6e1e9c60999d88d4021825",
+    "functional_pass": true,
+    "gateway_request_attempts": 5,
+    "observed_no_retries": true,
+    "observed_reasoning_preserved": true,
+    "local_compaction_pass": true,
+    "post_compaction_followups_pass": true,
+    "cache_fixture_requested": true,
+    "cache_fixture_utf8_bytes": 18846,
+    "cache_fixture_words": 3107,
+    "cache_write_observed": true,
+    "cache_hit_observed": true,
+    "phases": {
+      "initial": {
+        "functional_pass": true,
+        "client_requests": 2,
+        "initial_reasoning_replay_exact": true,
+        "get_goal_tool_result_success": true,
+        "usage": [
+          {
+            "native_input_tokens": 10,
+            "native_output_tokens": 126,
+            "cache_creation_input_tokens": 6911,
+            "cache_read_input_tokens": 0,
+            "ephemeral_5m_input_tokens": 6911,
+            "ephemeral_1h_input_tokens": 0,
+            "input_tokens": 6921,
+            "output_tokens": 126,
+            "total_tokens": 7047,
+            "cached_tokens": 0,
+            "cache_write_tokens": 6911
+          },
+          {
+            "native_input_tokens": 5,
+            "native_output_tokens": 14,
+            "cache_creation_input_tokens": 163,
+            "cache_read_input_tokens": 6911,
+            "ephemeral_5m_input_tokens": 163,
+            "ephemeral_1h_input_tokens": 0,
+            "input_tokens": 7079,
+            "output_tokens": 14,
+            "total_tokens": 7093,
+            "cached_tokens": 6911,
+            "cache_write_tokens": 163
+          }
+        ]
+      },
+      "compact": {
+        "functional_pass": true,
+        "client_requests": 1,
+        "initial_reasoning_compaction_replay_exact": true,
+        "usage": [
+          {
+            "native_input_tokens": 9,
+            "native_output_tokens": 823,
+            "cache_creation_input_tokens": 5421,
+            "cache_read_input_tokens": 0,
+            "ephemeral_5m_input_tokens": 5421,
+            "ephemeral_1h_input_tokens": 0,
+            "input_tokens": 5430,
+            "output_tokens": 823,
+            "total_tokens": 6253,
+            "cached_tokens": 0,
+            "cache_write_tokens": 5421
+          }
+        ]
+      },
+      "followup": {
+        "functional_pass": true,
+        "client_requests": 1,
+        "post_compaction_input_has_no_old_reasoning": true,
+        "usage": [
+          {
+            "native_input_tokens": 10,
+            "native_output_tokens": 188,
+            "cache_creation_input_tokens": 7505,
+            "cache_read_input_tokens": 0,
+            "ephemeral_5m_input_tokens": 7505,
+            "ephemeral_1h_input_tokens": 0,
+            "input_tokens": 7515,
+            "output_tokens": 188,
+            "total_tokens": 7703,
+            "cached_tokens": 0,
+            "cache_write_tokens": 7505
+          }
+        ]
+      },
+      "followup_second": {
+        "functional_pass": true,
+        "client_requests": 1,
+        "post_compaction_reasoning_replay_exact": true,
+        "usage": [
+          {
+            "native_input_tokens": 10,
+            "native_output_tokens": 120,
+            "cache_creation_input_tokens": 58,
+            "cache_read_input_tokens": 7505,
+            "ephemeral_5m_input_tokens": 58,
+            "ephemeral_1h_input_tokens": 0,
+            "input_tokens": 7573,
+            "output_tokens": 120,
+            "total_tokens": 7693,
+            "cached_tokens": 7505,
+            "cache_write_tokens": 58
+          }
+        ]
+      }
+    },
+    "relay_history_ids": [
+      38,
+      39,
+      40,
+      41,
+      42
+    ],
+    "relay_usage_matches": true
+  },
+  "opencode": {
+    "version": "1.18.34",
+    "report_sha256": "89a5743b1af38a7af98da02a6a1f6cdcf7ac0c2d10933a0674b7cf9103475f30",
+    "functional_pass": false,
+    "outgoing_gateway_attempts": 1,
+    "http_status": 400,
+    "relay_history_id": 29,
+    "provider_error_type": "invalid_request_error",
+    "provider_reason": "third_party_plan_usage_restriction",
+    "classification_source": "read-only inspection of the exact generated synthetic OpenCode session after the report; not inferred from HTTP status alone",
+    "retry": false,
+    "paid_fallback": false,
+    "invoice_or_charge_observed": false
+  },
+  "attempt_ledger": [
+    {
+      "label": "Claude first marker-checker false failure",
+      "relay_history_ids": [
+        23,
+        24
+      ],
+      "outcome": "correct marker contained a formatting space; original report retained"
+    },
+    {
+      "label": "Codex first before empty-tool fix",
+      "relay_history_ids": [
+        25
+      ],
+      "outcome": "HTTP200 SSE failure: malformed_tool_input; exact upstream bytes not retained"
+    },
+    {
+      "label": "Claude successful pre-fix image",
+      "relay_history_ids": [
+        26,
+        27,
+        28
+      ],
+      "outcome": "signed replay and native cache observed"
+    },
+    {
+      "label": "OpenCode provider rejection",
+      "relay_history_ids": [
+        29
+      ]
+    },
+    {
+      "label": "Codex successful short fixture",
+      "relay_history_ids": [
+        30,
+        31,
+        32,
+        33,
+        34
+      ]
+    },
+    {
+      "label": "Claude successful final image",
+      "relay_history_ids": [
+        35,
+        36,
+        37
+      ]
+    },
+    {
+      "label": "Codex successful eligible-cache fixture",
+      "relay_history_ids": [
+        38,
+        39,
+        40,
+        41,
+        42
+      ]
+    }
+  ],
+  "limitations": [
+    "Client-edge bytes and relay numeric usage were observed, not byte identity on .7-to-.64.",
+    "Native client removes tool_use.caller; full assistant-object identity is false while tested signed/tool/text/order content matches.",
+    "Live signed-empty/redacted blocks were not emitted; prior synthetic tests are separate.",
+    "No universal client coding profile, apply_patch/file-writing acceptance, automatic long-session compaction, quality gain, entitlement or actual billing claim.",
+    "No source change to Codex or LiteLLM; no impersonation or automatic paid fallback."
+  ]
+}

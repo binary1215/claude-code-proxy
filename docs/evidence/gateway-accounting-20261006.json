@@ -1,0 +1,114 @@
+{
+  "snapshot_utc": "2026-10-06T13:41:38.830624+00:00",
+  "baseline_utc": "2026-10-06T13:21:06.767649Z",
+  "total_persisted_rows": 20,
+  "groups": [
+    {
+      "route": "unattributed",
+      "status": "failure",
+      "requests": 1,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "spend": 0,
+      "rows_with_cache_read_field": 0,
+      "rows_with_cache_write_field": 0,
+      "rows_with_response_usage": 0,
+      "first_start_utc": "2026-10-06T13:31:46.609",
+      "last_start_utc": "2026-10-06T13:31:46.609"
+    },
+    {
+      "route": "/claude-responses/v1/responses",
+      "status": "success",
+      "requests": 11,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "spend": 0,
+      "rows_with_cache_read_field": 0,
+      "rows_with_cache_write_field": 0,
+      "rows_with_response_usage": 0,
+      "first_start_utc": "2026-10-06T13:23:31.865",
+      "last_start_utc": "2026-10-06T13:39:28.43"
+    },
+    {
+      "route": "/claude-native/v1/messages",
+      "status": "success",
+      "requests": 8,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "spend": 0,
+      "rows_with_cache_read_field": 0,
+      "rows_with_cache_write_field": 0,
+      "rows_with_response_usage": 0,
+      "first_start_utc": "2026-10-06T13:22:35.147",
+      "last_start_utc": "2026-10-06T13:36:38.759"
+    }
+  ],
+  "failure_metadata": [
+    {
+      "route": "unattributed",
+      "error_code": "400",
+      "error_class": "HTTPException",
+      "requests": 1
+    }
+  ],
+  "usage_object_nonzero_rows": 0,
+  "cache_hit_false_rows": 20,
+  "http_access_log_all_keys": [
+    {
+      "path": "/claude-native/v1/messages",
+      "method": "POST",
+      "http": 200,
+      "requests": 8
+    },
+    {
+      "path": "/claude-native/v1/messages",
+      "method": "POST",
+      "http": 400,
+      "requests": 1
+    },
+    {
+      "path": "/claude-responses/v1/responses",
+      "method": "POST",
+      "http": 200,
+      "requests": 11
+    }
+  ],
+  "access_log_scope_note": "HTTP access lines do not identify the API key; these counts cover all callers on only the two routes during the same time window.",
+  "key_spend": 0,
+  "key_models": [],
+  "relay_model_policy_readonly_check": {
+    "key_rows": 1,
+    "allowlist_configured": false,
+    "allowed_models_is_null": true,
+    "note": "Haiku-only scope was enforced by the test harness, not a gateway or relay key model allowlist. No policy change was made."
+  },
+  "key_max_budget": null,
+  "limitations": [
+    "Persisted success means LiteLLM logging/transport success, not proof that the coding client accepted every stream event.",
+    "Missing cache read/write usage is not zero cache use. cache_hit=False is LiteLLM response-cache metadata, not provider prompt-cache usage.",
+    "Rows without a recorded target URL cannot be assigned to a route from persisted logs alone.",
+    "Snapshot is bounded by snapshot_utc; additional calls and delayed log writes may follow.",
+    "Source get_model_from_request returns None for a dispatched custom pass-through handler, so gateway-managed model allowlists do not restrict the body model here. The current test key also has models=[]."
+  ],
+  "prior_snapshot": {
+    "file": "test-key-usage-snapshot.json",
+    "sha256": "ce7ef8051c8208e376bb1946f2515eb82de63a64ab8d239fd19be18af0162d41",
+    "preserved": true
+  },
+  "client_outcome_context": {
+    "source": "test-owner report",
+    "first_responses_http_200_contained_sse_response_failed": true,
+    "note": "HTTP/persisted success does not imply successful SSE completion."
+  },
+  "operation": "One read-only final aggregation after test-owner reported completion; no inference, configuration, key or restart changes.",
+  "source_evidence": {
+    "file": "litellm/proxy/auth/auth_utils.py",
+    "function": "get_model_from_request",
+    "line": 1995,
+    "custom_pass_through_behavior": "returns None before managed-model access and budget target resolution",
+    "source_changed": false
+  }
+}

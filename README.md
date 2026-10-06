@@ -149,12 +149,12 @@ Backend tests use real loopback HTTP, in-memory SQLite and synthetic credentials
 
 Passing offline tests demonstrates transport mechanics, not provider eligibility, billing savings or universal coding-client compatibility. Separate live evidence was obtained on an isolated `test-claudemock` Docker deployment; existing production services were not replaced. See [recorded verification results](docs/VERIFICATION.md) for the distinction between offline, live relay and gateway checks.
 
-The corrected 2026-10-06 candidate passes **149/149 Docker regressions** and a
+The earlier corrected 2026-10-06 candidate passed **149/149 Docker regressions** and a
 three-call real Haiku Responses sequence: signed reasoning/tool output, replay
 after developer hoisting, and identical replay. Cache reads were 0 → 5503 → 5651
 tokens; fresh input was 10 → 5 → 5. This fixes the earlier native metadata
 compatibility failure. That probe did not replace the existing service. Actual `.7`
-gateway/client sessions remain the next integration step, not part of this direct
+gateway/client sessions were subsequently tested below, not as part of this direct
 probe; see [the measured result and limits](docs/VERIFICATION.md#metadata-compatibility-fix-and-live-responses-replay-2026-10-06).
 
 The `.64:13457` **test-claudemock** service subsequently received that exact
@@ -162,7 +162,7 @@ image with Responses and developer hoisting explicitly enabled for testing.
 The existing relay key, provider credential, volume and 21 history rows were
 preserved. Native rollback and re-upgrade with the same durable state key both
 passed local route/startup checks. Other containers and `.7` were unchanged;
-see [the current test deployment and rollback commands](docs/VERIFICATION.md#test-service-update-and-native-rollback-2026-10-06).
+see [the earlier deployment and native rollback](docs/VERIFICATION.md#test-service-update-and-native-rollback-2026-10-06).
 
 The gateway owner subsequently deployed both authenticated `.7` pass-through
 routes with `forward_headers: true`, preserving all 24 existing model records,
@@ -171,7 +171,37 @@ Responses relay and is rejected before inference. This establishes routing and
 dynamic header delivery, not actual-client/provider acceptance or spend accuracy.
 See [gateway deployment and rollback](docs/VERIFICATION.md#shared-gateway-routes-2026-10-06).
 
-The required acceptance clients are **Claude Code and Codex**, with OpenCode as an additional comparison. [Actual client tests](integration/clients/README.md) show that Codex 0.160.0 loses signed reasoning through stock LiteLLM 1.103.1's normal Responses conversion. The new pass-through → proxy Responses route passes both synthetic actual-Codex tool round trips, including split signatures, signed-empty and redacted blocks. This is protocol evidence, not real upstream authorization, production rollout or full coding-workflow certification. Free pass-through authentication is supported by the pinned backend despite the UI's Premium label. The owner-applied header configuration is now deployed; virtual-key/model/accounting [policy constraints](integration/litellm/README.md#free-authentication-and-configuration-constraints) remain separately unqualified.
+### Actual shared-gateway results (2026-10-06)
+
+**Claude Code 2.1.289 and Codex 0.160.0 both completed real Haiku multi-turn
+tests through `.7`**, using a separate 24-hour key restricted to the two routes.
+Neither client nor LiteLLM source was modified. The proxy converts Codex Responses
+to native Messages; LiteLLM pass-through avoids a second, lossy conversion.
+
+- Claude Code: real file Read, resumed follow-up, exact signed thinking replay,
+  and cache reads of **4,628 / 4,865 tokens**. The client omits `tool_use.caller`
+  on replay; tool IDs/names/inputs, text and ordered block types remain exact.
+- Codex: no-I/O tool round trip, actual manual compaction and two follow-ups.
+  Opaque reasoning replay and provider acceptance pass. With an eligible fixed
+  prefix, cache reads are **6,911 / 7,505 tokens**; short inputs had no cache hit.
+- OpenCode: one native request was rejected by the provider with HTTP 400 and a
+  third-party plan/extra-usage restriction. No spoofing, retry or paid fallback.
+- LiteLLM generic pass-through logs record **zero tokens/spend and no provider
+  cache usage**, even for these real requests. This is missing accounting, not
+  free usage. Gateway model allowlists also do not enforce the body model here.
+  The relay supports its own model ACL, but the current shared key has none
+  configured; Haiku-only test scope was enforced by the harness.
+
+An empty tool-argument stream bug was fixed in `f5031f3`; **152/152 local backend
+regressions** pass. The image is deployed to **test-claudemock only**, preserving
+its volume, keys and state key. See [current image, evidence and rollback](docs/VERIFICATION.md#actual-shared-gateway-clients-2026-10-06)
+and the [client profiles](integration/clients/README.md).
+
+These are bounded profiles, not universal coding-client certification. Codex
+`apply_patch` remains disabled on this test service, native clients have known
+synthetic split-signature limitations, and subscription acceptance is not a
+general provider entitlement or a measured billing/quality guarantee. Production
+and `master` have not been replaced.
 
 ## Source map
 

@@ -46,6 +46,10 @@ The 2026-10-05 `.64` host execution passed all eight phases and cleanup; seven g
 `run_hoist_live_probe.py` and `hoist_live_probe.mjs` are **not** the synthetic
 lifecycle fixture above. They are a host-specific manual qualification of the
 exact `f27c51e` image recorded in [verification](../../docs/VERIFICATION.md#metadata-compatibility-fix-and-live-responses-replay-2026-10-06).
+This is a historical pinned probe: the active test service was subsequently
+updated to `f5031f3`, so this runner intentionally refuses its changed identity.
+Use the [actual shared-gateway live client runners](../clients/README.md) for
+the newer deployment; do not casually repin a provider-credential-reading probe.
 They deliberately contact the real Anthropic endpoint with the existing test
 container's selected OAuth credential. Review the code and obtain bounded live
 call authorization before use; these are not CI commands or auto-retry helpers.
