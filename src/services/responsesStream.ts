@@ -352,7 +352,9 @@ export class ResponsesStream {
       keys(delta, ["type", "signature"]);
       if (typeof delta.signature !== "string") problem("invalid_upstream_event");
       state.signatureStarted = true;
-      state.native.signature = (state.native.signature ?? "") + delta.signature;
+      // Match Anthropic's SDK accumulator: each event carries the signature
+      // value, unlike thinking/text and partial JSON, which are appended.
+      state.native.signature = delta.signature;
       return [];
     }
     if (state.native.type === "text" && delta.type === "text_delta") {

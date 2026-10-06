@@ -197,10 +197,13 @@ regressions** pass. The image is deployed to **test-claudemock only**, preservin
 its volume, keys and state key. See [current image, evidence and rollback](docs/VERIFICATION.md#actual-shared-gateway-clients-2026-10-06)
 and the [client profiles](integration/clients/README.md).
 
-These are bounded profiles, not universal coding-client certification. Codex
-`apply_patch` remains disabled on this test service, native clients have known
-synthetic split-signature limitations, and subscription acceptance is not a
-general provider entitlement or a measured billing/quality guarantee. Production
+These are bounded profiles, not universal coding-client certification. Test-only
+`apply_patch=validated` is now enabled; Linux editing preflight is currently
+blocked by the test container's inner-sandbox namespace restriction.
+The historical synthetic split-signature defect claim was
+[corrected against official SDK semantics](docs/VERIFICATION.md#signature-oracle-correction-2026-10-06).
+Subscription acceptance is not a general provider entitlement or a measured
+billing/quality guarantee. Production
 and `master` have not been replaced.
 
 ## Source map

@@ -20,10 +20,13 @@ the harness neither downloads, extracts, installs nor patches it:
   --output 'C:/Users/binary/AppData/Local/Temp/opencode-gateway-NEW-UNIQUE-NAME'
 ```
 
-The output must be a NEW system-temp child outside the repository. Default exit
-is strict and **nonzero if any required state/body case loses fidelity**.
-Explicit `--observe-only` permits zero only for completed observations; it never
-changes the recorded state/control/stress/strict predicates into successes.
+The output must be a NEW system-temp child outside the repository. The default
+`--signature-events single` runs two normal state/body qualification cases and
+exits nonzero if either loses required fidelity. Optional `replacement` tests
+SDK last-full-value assignment; optional `split` is only a non-normative
+historical observation and cannot fail signature qualification. Explicit
+`--observe-only` permits zero for completed observations without changing the
+recorded qualification predicates.
 
 Official [release v1.18.34](https://github.com/anomalyco/opencode/releases/tag/v1.18.34),
 source `aec0b9a6d8898f68f923aaf08b7306d931fd9d76`:
@@ -68,28 +71,41 @@ Thirteen relevant stock source identities must match before/after.
 Every client/fake request is bounded to 1 MiB; response capture to 4 MiB; client
 stdout/stderr to 1 MiB each; client execution to 60 seconds. Each case requires
 exactly two model requests per hop, with extra attempts failing the observer.
-Fresh client state separates all four cases; local processes/listeners close in
+Fresh client state separates both selected cases; local processes/listeners close in
 `finally`. Evidence contains only this generated synthetic conversation.
 
-## Control versus stress
+## Qualification versus non-normative observation
 
-The matrix is two content sets × two signature-event patterns. All four fake
-streams use 7-byte UTF-8/CRLF writes (TCP can coalesce writes) and fragmented
+Each invocation tests two content sets with one selected signature-event mode.
+All streams use 7-byte UTF-8/CRLF writes (TCP can coalesce writes) and fragmented
 tool-input JSON:
 
 - `signed_nonempty`: thinking plus read tool_use.
 - `full_opaque`: nonempty thinking, empty signed thinking, redacted thinking,
   then read tool_use, in strict order.
-- `single`: one full signature_delta immediately before block stop. Empty signed
+- `single` (default): one full signature_delta immediately before block stop. Empty signed
   thinking includes an explicit `thinking_delta` with `thinking: ""`.
-- `split`: two separate signature_delta events for each signature, a deliberate
-  synthetic fragmentation stress.
+- `replacement`: two complete synthetic signature values, with the last value
+  expected in replay. This is an SDK-assembly control, not ordinary stream frequency evidence.
+- `split`: two partial values sent as separate signature_delta events. This
+  historical input is observational only; concatenation is not required.
 
 The [official streaming documentation](https://platform.claude.com/docs/en/build-with-claude/streaming#thinking-delta)
 describes the single-signature sequence and, for omitted display, an empty
 thinking delta followed by a single signature delta. This fixture **does not
 claim normal real-provider streams emit multiple signature events**, or that
-this synthetic combination proves any live model/display configuration.
+this synthetic combination proves any live model/display configuration. The
+pinned official [TypeScript SDK](https://github.com/anthropics/anthropic-sdk-typescript/blob/d49bdab458000bcdffe77bd84b03293f31824fb3/src/lib/MessageStream.ts)
+and [Python SDK](https://github.com/anthropics/anthropic-sdk-python/blob/18f25547f20cf5f01da69ac611e700e3bc9ebf21/src/anthropic/lib/streaming/_messages.py)
+replace the signature with each event's value; they do not concatenate separate
+signature events. Transport byte fragmentation does not alter this rule.
+
+In split mode, `state_subset_pass`, `strict_qualification_pass`, the legacy
+`state_stress_pass` and `split_signature_preserved` are null, not failed client
+fidelity claims. `split_concat_matches_observed` and
+`split_sdk_last_event_matches_observed` retain separate descriptive comparisons.
+Exit zero means the observation completed, never that a split signature was
+cryptographically valid. Single/replacement modes use normal strict results.
 
 Before-gateway client requests and after-relay native requests are captured
 separately. Original-issued equality, the explicitly observed client-added tool
@@ -97,11 +113,13 @@ cache marker, gateway/native assistant equality, whole-body semantic equality,
 request-byte equality, response SSE bytes and beta-header equality are separate
 checks. Known client mutation is reported, not silently erased from evidence.
 
-## Actual observed result (2026-10-05)
+## Historical observed result (2026-10-05), interpretation corrected
 
 Evidence directory:
 `C:/Users/binary/AppData/Local/Temp/opencode-gateway-qualified-2e4d8a321feb44c99a829b52fc3f0c3a/`.
 Repository HEAD: `3b57e550443a65600d4a74c6f47eb0979758e977`.
+
+These are the original saved fields, **not the corrected qualification rule**:
 
 ```text
 observation_completed          true
@@ -121,12 +139,13 @@ replayed tool_use. Thus equality against the unmarked originally issued block
 is false; equality against the independently reported exact cache-marked client
 form is true. Thinking/signature/redacted data remained exact.
 
-Both **split-signature stress cases failed state fidelity**: OpenCode replayed
-only the second signature fragment. The loss is already present in the actual
-client request **before LiteLLM**, for nonempty and empty thinking. Client and
-upstream assistant blocks are identical; the relay did not repair or modify the
-damaged signature. Redacted state and actual read still survived. A permissive
-fake provider/client exit 0 was not counted as state success.
+Both historical split cases replayed the second signature event value, already
+visible before LiteLLM, for nonempty and empty thinking. This matches the
+official SDK's assignment behavior. The old concatenation oracle was unsupported,
+so those comparisons **do not establish an OpenCode signature-loss defect**.
+Client and upstream assistant blocks were identical; the relay did not repair
+or reinterpret them. Redacted state and actual read survived. The fake provider
+did not establish cryptographic validity of any synthetic signature.
 
 All four cases had whole-body semantic **and byte** equality from client
 observer to native provider, exact provider→client SSE bytes and beta values,
@@ -138,14 +157,16 @@ and this result does not disprove that known conditional behavior.
 
 Each case made one offline npm-registry request and one official-release proxy
 attempt; both were rejected and never forwarded. No model request retry hid a
-failure. All captures finished; only stress fidelity makes the strict result
-nonzero. An earlier complete observation had a Windows-generated fixture CRLF
+failure. All captures finished; the old unsupported concatenation expectation
+made the historical strict result nonzero. An earlier complete observation had a Windows-generated fixture CRLF
 versus LF assertion error; that artifact was preserved. The final run changed
-only the harness's seeded fixture bytes, not a client/proxy behavior or failed
-signature expectation.
+only the harness's seeded fixture bytes, not client/proxy behavior. The current
+oracle correction retains every old evidence file unchanged. No actual client
+or provider was rerun for it; syntax/pure-source checks are not new live evidence.
 
 Not tested: actual upstream cryptographic acceptance, entitlement, pricing/cache
 hits, long sessions, compaction, cancellation, restart persistence, model
 switches, arbitrary unknown blocks or production deployment. The result is a
-narrow passing documented-shape control plus an independently visible synthetic
-stress loss, **not whole-goal/full-fidelity acceptance**.
+narrow passing documented-shape control plus a non-normative historical
+comparison, **not whole-goal/full-fidelity acceptance**. Previously passing
+single-signature real-client controls remain unaffected.

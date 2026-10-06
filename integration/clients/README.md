@@ -13,21 +13,23 @@ spoofing, paid-key fallback, or production replacement is implied by these tests
 | Codex 0.160.0 → actual `.7` Responses pass-through → `.64` adapter → real Haiku | Five requests: get_goal tool, actual compaction, two follow-ups; exact opaque replay. Eligible-prefix run reads cache 6911 / 7505 | Limited no-I/O profile, not ordinary shell/apply_patch coding; gateway usage/spend is not accounted |
 | OpenCode 1.18.34 → actual `.7` native pass-through → `.64` → real Haiku | Single request reached provider, returned 400 third-party plan/extra-usage restriction | Not a protocol-format error; no retry, client impersonation or paid fallback authorized |
 | Claude Code 2.1.289 → native test relay → real Claude | Earlier isolated Opus control succeeded with a real cache hit | Actual `.7` route, tool-rich multi-turn acceptance, gateway policy/accounting |
-| Claude Code 2.1.289 → stock pass-through → native relay → fake Anthropic | Single-signature-event control preserves signed/empty/redacted/tool history; real Read and final answer succeed | Split-signature-event stress loses a fragment in the client; stock route removes top-level metadata; not whole-body fidelity |
+| Claude Code 2.1.289 → stock pass-through → native relay → fake Anthropic | Single-signature-event control preserves signed/empty/redacted/tool history; real Read and final answer succeed | Historical split-part concatenation oracle was incorrect, not a client defect; stock route removes top-level metadata; not whole-body fidelity |
 | Codex 0.160.0 → stock LiteLLM 1.103.1 Responses → fake Anthropic | Actual CLI completes a tool round trip, but signed reasoning is lost | **Not fidelity-compatible on this tested route**; real authorization also unresolved |
 | Codex 0.160.0 → stock LiteLLM pass-through → new proxy Responses adapter → fake Anthropic | Both tool round trips preserve exact ordered thinking/signature/signed-empty/redacted/tool history | Real authorization, actual `.7` rollout, long coding sessions/compaction, gateway accounting |
 | Codex 0.160.0 apply_patch → stock pass-through → validated adapter → fake Anthropic | Real freeform grammar and signed-state replay preserved; malformed patch blocked before delivery | File editing denied by actual Windows read-only policy; not coding-tool success, real provider or rollout proof |
 | Codex 0.160.0 manual local compaction → stock pass-through → adapter → fake Anthropic | Default reject reproduces late-developer 400. Explicit hoist passes compaction + two follow-ups with exact system and opaque replay | Real-provider acceptance, automatic compaction, dynamic instruction changes with old capsules and long sessions unqualified; hoist is a semantic opt-in |
 | OpenCode 1.18.34 → fake Anthropic directly | Actual CLI preserves tested signed/redacted history and tool replay | Signed-empty blocks, stock gateway chain, real upstream, cache/accounting |
-| OpenCode 1.18.34 → stock pass-through → native relay → fake Anthropic | Single-signature-event controls preserve signed-nonempty/empty/redacted/tool state; real Read succeeds; tested request bodies and SSE remain exact across the chain | Multiple-signature-event stress loses earlier fragments in the client. Metadata absent in these requests, so known stock metadata removal is not exercised; real `.7`/provider/cache acceptance remains |
+| OpenCode 1.18.34 → stock pass-through → native relay → fake Anthropic | Single-signature-event controls preserve signed-nonempty/empty/redacted/tool state; real Read succeeds; tested request bodies and SSE remain exact across the chain | Historical split-part concatenation oracle was incorrect, not a client defect. Metadata absent in these requests, so known stock metadata removal is not exercised; real provider rejected the live comparison |
 
 See [project verification](../../docs/VERIFICATION.md) for live-test boundaries,
 and [OpenCode instructions](README-opencode.md) for its separate smoke test.
-The [OpenCode gateway-chain harness](README-opencode-gateway.md) adds four actual
-client cases, separating documented single-signature controls from multiple-
+The [OpenCode gateway-chain harness](README-opencode-gateway.md) defaults to two
+single-signature client cases, separating those controls from optional multiple-
 signature-event stress and client-added cache controls from gateway preservation.
 The [Claude Code harness](README-claude-code.md) distinguishes its passing
-single-event state subset from split-event and whole-body preservation losses.
+single-event state subset from non-normative split-event observations and
+whole-body preservation differences. See the
+[signature-oracle correction](../../docs/VERIFICATION.md#signature-oracle-correction-2026-10-06).
 The [Codex coding-tool harness](README-codex-patch.md) separately gates transport
 replay, actual file editing, and invalid-patch rejection.
 The [manual compaction harness](README-codex-compaction.md) separates
@@ -37,7 +39,8 @@ None of these rows establishes universal client compatibility or a measured
 quality/cost improvement.
 
 Live runners: [Claude Code](README-live-claude-code.md),
-[Codex](README-live-codex.md), [OpenCode](README-live-opencode.md).
+[Codex](README-live-codex.md), [OpenCode](README-live-opencode.md),
+and the separate [Linux Codex patch preflight/live runner](README-live-codex-patch.md).
 They use the already deployed routes and an approved gateway key supplied by an
 environment-variable name; no installation, normal client configuration edit,
 provider credential export or gateway restart is performed. Each writes a safe
@@ -81,7 +84,8 @@ configuration isolation, **not an OS-enforced egress sandbox**. The observer
 forwards response bytes while changing HTTP transport framing; it is not a
 production component or a wire-framing fidelity test.
 
-Two cases emit fragmented signature deltas: nonempty thinking; and nonempty,
+Two cases emit one complete signature event per thinking block, with fragmented
+transport bytes: nonempty thinking; and nonempty,
 signed-empty, redacted thinking plus a tool call. The local fake returns a final
 marker after a tool result so execution completion can be distinguished from
 history preservation. It is not a real signature validator. Acceptance also
@@ -104,9 +108,11 @@ Nevertheless `full_fidelity=false`:
 2. Actual Codex's next Responses request replays that reasoning ID and summary
    with `encrypted_content:null`. The subsequent Anthropic request contains the
    tool call but no thinking or redacted blocks.
-3. Independently, the completed response's opaque content is already incorrect:
-   two signature fragments become separate thinking blocks, with duplicated
-   thinking text. Signed-empty thinking is lost in aggregation as well.
+3. The historical split-part fixture produced separate thinking blocks and
+   duplicated text; its concatenation expectation was subsequently corrected
+   against official SDK behavior. Signed-empty aggregation and missing
+   incremental opaque state remain distinct observations, not validated by
+   that discarded concatenation assumption.
 
 The stock source explains both gateway-side defects:
 [incremental reasoning completion](https://github.com/BerriAI/litellm/blob/580bde9a2d148714889ec1c04a9872819e78a778/litellm/responses/litellm_completion_transformation/streaming_iterator.py),
@@ -131,7 +137,9 @@ Actual Codex 0.160.0 → unmodified LiteLLM 1.103.1 pass-through → built new a
 exactly two requests per hop, the requested read-only tool result and final
 marker, and exact ordered native assistant replay. Complete authenticated
 reasoning capsules are identical in `output_item.done`, `response.completed`
-and the next actual client request. Split signatures concatenate once;
+and the next actual client request. That historical run expected signature
+concatenation; the current adapter instead follows SDK signature replacement.
+Its normal fixtures now emit complete signatures with transport fragmentation;
 signed-empty and redacted blocks are retained. No gateway/relay key reaches
 the fake provider; 13 guarded stock files remain unchanged.
 

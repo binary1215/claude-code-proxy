@@ -65,7 +65,7 @@ def event(name, body):
 
 
 def issued_sse():
-    """Fake-issued tool turn: UTF-8/text/signature/JSON fragments, not a provider call."""
+    """Fake-issued tool turn: one signature event, fragmented bytes/text/JSON."""
     wire = ": untouched comment\r\n\r\n" + event("message_start", {"type": "message_start", "message": {**REPLY, "content": [], "stop_reason": None, "usage": {**USAGE, "output_tokens": 0}}})
     for index, block in enumerate(CONTENT):
         kind = block["type"]
@@ -76,8 +76,7 @@ def issued_sse():
             for fragment in (text[:6], text[6:]):
                 if fragment:
                     wire += event("content_block_delta", {"type": "content_block_delta", "index": index, "delta": {"type": "thinking_delta", "thinking": fragment}})
-            for fragment in (signature[:12], signature[12:]):
-                wire += event("content_block_delta", {"type": "content_block_delta", "index": index, "delta": {"type": "signature_delta", "signature": fragment}})
+            wire += event("content_block_delta", {"type": "content_block_delta", "index": index, "delta": {"type": "signature_delta", "signature": signature}})
         elif kind == "tool_use":
             encoded = json.dumps(block["input"], ensure_ascii=False)
             for fragment in (encoded[:7], encoded[7:]):
@@ -114,9 +113,10 @@ def accumulate_native_sse(chunks):
             elif kind == "content_block_delta":
                 index, delta = item["index"], item["delta"]
                 assert index not in stopped, "Delta after block stop"
-                if delta["type"] in ("thinking_delta", "signature_delta"):
-                    key = "thinking" if delta["type"] == "thinking_delta" else "signature"
-                    blocks[index][key] = blocks[index].get(key, "") + delta[key]
+                if delta["type"] == "thinking_delta":
+                    blocks[index]["thinking"] = blocks[index].get("thinking", "") + delta["thinking"]
+                elif delta["type"] == "signature_delta":
+                    blocks[index]["signature"] = delta["signature"]
                 elif delta["type"] == "input_json_delta":
                     tool_json[index] = tool_json.get(index, "") + delta["partial_json"]
                 else:
@@ -336,7 +336,7 @@ try:
                 })
             checks["sse_comments_preserved"] = b": untouched comment\r\n\r\n" in response_raw
             checks["sse_future_event_preserved"] = b"event: future_event\r\n" in response_raw
-            checks["sse_signature_fragments_preserved"] = all(fragment.encode() in response_raw for fragment in (SIGNED["signature"][:12], SIGNED["signature"][12:]))
+            checks["sse_signature_values_preserved"] = all(block["signature"].encode() in response_raw for block in (SIGNED, EMPTY_SIGNED))
             normalized_response_headers = {k.lower(): v for k, v in response_headers.items()}
             checks["response_selected_headers_exact"] = all(normalized_response_headers.get(key) == value for key, value in {"request-id": "upstream-request-id", "x-native-response": "unchanged", "anthropic-ratelimit-tokens-remaining": "12345", "cache-control": "no-store"}.items())
             try:
@@ -398,7 +398,7 @@ try:
             checks = {
                 "seed_status": seed_code, "seed_upstream_request_count": len(issued), "actual_http_chunks": len(chunks),
                 "client_accumulation_exact": generated["content"] == CONTENT,
-                "fragmented_signatures_assembled_exact": [b.get("signature") for b in generated["content"] if b["type"] == "thinking"] == [SIGNED["signature"], EMPTY_SIGNED["signature"]],
+                "signature_values_assembled_exact": [b.get("signature") for b in generated["content"] if b["type"] == "thinking"] == [SIGNED["signature"], EMPTY_SIGNED["signature"]],
                 "unknown_sse_event_preserved": unknown == [{"type": "future_event", "opaque": "preserve🙂"}],
                 "response_sse_bytes_exact": seed_wire == SSE_BYTES,
                 "status": code, "upstream_request_count": len(received),
@@ -509,7 +509,7 @@ for trip in report["round_trips"]:
     checks = trip["checks"]
     label = trip["fixture_prefix"]
     require(checks["seed_upstream_request_count"] == 1 and checks["upstream_request_count"] == 1, label + ": unexpected retry")
-    require(all(checks[key] for key in ("client_accumulation_exact", "fragmented_signatures_assembled_exact", "unknown_sse_event_preserved", "redacted_history_exact", "tool_input_and_id_exact", "tool_result_is_error_exact", "tool_result_exact", "cache_ttls_exact")), label + ": fragmented fixture or retained fields mismatch")
+    require(all(checks[key] for key in ("client_accumulation_exact", "signature_values_assembled_exact", "unknown_sse_event_preserved", "redacted_history_exact", "tool_input_and_id_exact", "tool_result_is_error_exact", "tool_result_exact", "cache_ttls_exact")), label + ": fragmented fixture or retained fields mismatch")
     require(all(checks["fixture_oracle_rejects_mutations"].values()), label + ": validation oracle accepted mutated opaque state")
     if trip["route"] == "/v1/messages" and not args.collision:
         require(checks["loss_detected_by_fake"] and not checks["opaque_history_exact"] and not checks["signed_empty_history_exact"], label + ": failed to detect stock signed-empty history loss")
@@ -553,7 +553,8 @@ report["acceptance"] = {
     "route_collision_experiment": args.collision,
     "unasserted_collision_route": "/v1/messages" if args.collision else None,
     "pristine_source_files_verified": len(report["before"]),
-    "fragmentation_scope": "Two signature_delta frames per signed block, fragmented thinking/tool JSON, and 7-byte client reads (including UTF-8 boundaries); TCP packet boundaries are not asserted.",
+    "signature_event_semantics": "SDK-compatible value replacement; one complete signature_delta per signed block in the provider fixture.",
+    "fragmentation_scope": "One complete signature_delta frame per signed block, fragmented thinking/tool JSON, and 7-byte client reads (including UTF-8 boundaries); TCP packet boundaries are not asserted.",
 }
 (HERE / "gateway-audit.json").write_text(json.dumps(report, ensure_ascii=False, indent=2).replace(MASTER, "[LOCAL_RANDOM_MASTER_KEY]"), encoding="utf-8")
 print("Report:", HERE / "gateway-audit.json", flush=True)

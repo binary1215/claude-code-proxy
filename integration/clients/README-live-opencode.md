@@ -90,9 +90,16 @@ the initial input object, while nonempty malformed JSON still fails parsing.
 Fidelity is recorded independently: ordered assistant content, cache-annotation-only
 differences, thinking/signature, signed-empty, redacted data, tool input/ID/order
 and tool-result order. Missing newly emitted thinking is not a failure; an
-unemitted block type is `null`, not “preserved.” Observed signature deltas are
-concatenated for comparison, including a real split if one happens. The harness
-does not synthesize split-signature stress against the live provider.
+unemitted block type is `null`, not “preserved.” Each `signature_delta` replaces
+the block's signature, matching the official TypeScript/Python SDKs; event counts
+are retained separately. Text/thinking and tool JSON fragments still append.
+The harness does not synthesize signature stress against the live provider.
+
+Offline regressions distinguish one complete signature event with SSE bytes
+reassembled from small chunks from repeated complete events where the last value
+wins. The earlier synthetic split-event concatenation assumption was not a
+normative contract and does not prove an OpenCode defect. Single-signature real
+results are unaffected, and old evidence artifacts are not rewritten.
 
 SSE usage, including cache read/write and 5-minute/1-hour creation when present,
 is reported separately from OpenCode's CLI usage. Null usage updates do not
@@ -115,6 +122,7 @@ requires a separately approved live run and inspection of its report.
 - Pinned [SDK retry default](https://github.com/anomalyco/opencode/blob/aec0b9a6d8898f68f923aaf08b7306d931fd9d76/packages/opencode/src/session/llm.ts) and separate [session retry](https://github.com/anomalyco/opencode/blob/aec0b9a6d8898f68f923aaf08b7306d931fd9d76/packages/opencode/src/session/processor.ts).
 - [OpenCode environment substitutions and inline configuration](https://opencode.ai/docs/config/).
 
-Existing fake-provider controls and the known split-signature stress limitation
-remain documented separately in `README-opencode-gateway.md`; they are not
-reclassified as live evidence by this harness.
+Existing fake-provider controls and the historical split-signature test are
+documented separately in `README-opencode-gateway.md`; the old concatenation
+expectation is not a normative client-fidelity failure. Neither those synthetic
+observations nor this oracle correction are reclassified as live evidence.

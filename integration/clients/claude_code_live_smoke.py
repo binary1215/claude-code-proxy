@@ -126,7 +126,7 @@ def marker_retrieved(text, marker):
 
 
 def parse_sse(wire):
-    """Assemble native content using all deltas, without persisting opaque data."""
+    """Match SDK assembly: replace signatures; append text and tool JSON."""
     try:
         text = wire.decode('utf-8').replace('\r\n', '\n')
         events = []
@@ -146,7 +146,11 @@ def parse_sse(wire):
             elif kind == 'content_block_delta':
                 index = event['index']; delta = event['delta']; block = blocks[index]
                 field = {'text_delta': 'text', 'thinking_delta': 'thinking', 'signature_delta': 'signature'}.get(delta.get('type'))
-                if field:
+                if field == 'signature':
+                    # SDK signature_delta values replace the signature. They
+                    # are not text fragments to concatenate across events.
+                    block[field] = delta[field]
+                elif field:
                     block[field] = block.get(field, '') + delta[field]
                 elif delta.get('type') == 'input_json_delta':
                     inputs[index] = inputs.get(index, '') + delta['partial_json']

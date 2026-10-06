@@ -14,6 +14,43 @@ import claude_code_live_smoke as observer
 MARKER = 'CLAUDE_LIVE_FIXTURE_0123456789abcdef01234567'
 
 
+def signature_stream(repeated=False):
+    events = [{'type': 'message_start', 'message': {'content': [], 'usage': {}}}]
+    for index, text, stem in ((0, 'Synthetic 생각 🧪', 'synthetic-thinking'),
+                               (1, '', 'synthetic-empty')):
+        events.append({'type': 'content_block_start', 'index': index,
+                       'content_block': {'type': 'thinking', 'thinking': '',
+                                         'synthetic_metadata': {'retained': True}}})
+        for fragment in (text[:10], text[10:]):
+            events.append({'type': 'content_block_delta', 'index': index,
+                           'delta': {'type': 'thinking_delta', 'thinking': fragment}})
+        values = [stem + '-signature-v1', stem + '-signature-v2'] if repeated else [stem + '-signature-v2']
+        for value in values:
+            events.append({'type': 'content_block_delta', 'index': index,
+                           'delta': {'type': 'signature_delta', 'signature': value}})
+        events.append({'type': 'content_block_stop', 'index': index})
+    events += [
+        {'type': 'content_block_start', 'index': 2,
+         'content_block': {'type': 'redacted_thinking', 'data': 'synthetic-opaque-data'}},
+        {'type': 'content_block_stop', 'index': 2},
+        {'type': 'content_block_start', 'index': 3, 'content_block': {'type': 'text', 'text': ''}},
+        {'type': 'content_block_delta', 'index': 3, 'delta': {'type': 'text_delta', 'text': 'Synthetic '}},
+        {'type': 'content_block_delta', 'index': 3, 'delta': {'type': 'text_delta', 'text': 'answer 🧪'}},
+        {'type': 'content_block_stop', 'index': 3},
+        {'type': 'content_block_start', 'index': 4,
+         'content_block': {'type': 'tool_use', 'id': 'synthetic-read', 'name': 'Read', 'input': {}}},
+        {'type': 'content_block_delta', 'index': 4,
+         'delta': {'type': 'input_json_delta', 'partial_json': '{"file_path":'}},
+        {'type': 'content_block_delta', 'index': 4,
+         'delta': {'type': 'input_json_delta', 'partial_json': '"synthetic-fixture.txt"}'}},
+        {'type': 'content_block_stop', 'index': 4},
+        {'type': 'message_delta', 'delta': {'stop_reason': 'tool_use'}, 'usage': {'output_tokens': 3}},
+        {'type': 'message_stop'},
+    ]
+    return ''.join('data: ' + json.dumps(event, ensure_ascii=False) + '\r\n\r\n'
+                   for event in events).encode('utf-8')
+
+
 def input_stream(partial_json):
     events = [
         {'type': 'message_start', 'message': {'usage': {'input_tokens': 7, 'cache_read_input_tokens': 11}}},
@@ -76,6 +113,33 @@ class LiveClaudeObserverTests(unittest.TestCase):
             with self.subTest(partial=partial):
                 with self.assertRaisesRegex(observer.Failure, '^native_sse_invalid$'):
                     observer.parse_sse(input_stream(partial))
+
+    def test_single_complete_signature_survives_byte_fragment_reassembly(self):
+        wire = signature_stream()
+        for size in (1, 7):
+            with self.subTest(byte_chunk_size=size):
+                captured = bytearray()
+                for offset in range(0, len(wire), size):
+                    captured.extend(wire[offset:offset + size])
+                message = observer.parse_sse(bytes(captured))
+                self.assertEqual(message['content'][0]['signature'], 'synthetic-thinking-signature-v2')
+                self.assertEqual(message['content'][1]['signature'], 'synthetic-empty-signature-v2')
+                self.assertEqual(message['content'][1]['thinking'], '')
+
+    def test_repeated_complete_signature_replaces_instead_of_concatenating(self):
+        message = observer.parse_sse(signature_stream(repeated=True))
+        self.assertEqual(message['content'][0]['signature'], 'synthetic-thinking-signature-v2')
+        self.assertEqual(message['content'][1]['signature'], 'synthetic-empty-signature-v2')
+        self.assertEqual(message['content'][0]['synthetic_metadata'], {'retained': True})
+        self.assertEqual([block['type'] for block in message['content']],
+                         ['thinking', 'thinking', 'redacted_thinking', 'text', 'tool_use'])
+        self.assertEqual(message['content'][2]['data'], 'synthetic-opaque-data')
+
+    def test_signature_replacement_keeps_text_thinking_and_json_append(self):
+        message = observer.parse_sse(signature_stream(repeated=True))
+        self.assertEqual(message['content'][0]['thinking'], 'Synthetic 생각 🧪')
+        self.assertEqual(message['content'][3]['text'], 'Synthetic answer 🧪')
+        self.assertEqual(message['content'][4]['input'], {'file_path': 'synthetic-fixture.txt'})
 
     def test_shape_projection_explains_caller_removal_without_exposing_values(self):
         returned = [

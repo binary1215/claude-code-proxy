@@ -19,7 +19,8 @@ the new endpoint requires explicit enablement and a dedicated state key.
 
 ## Protocol and state contract
 
-- Stream native thinking and signature fragments independently. A block closes
+- Append native thinking/text/JSON deltas, but replace the signature with each
+  `signature_delta.signature`, matching Anthropic SDK accumulation. A block closes
   only at `content_block_stop`; signed-empty and redacted blocks remain present.
 - Each original thinking/redacted block becomes a Responses reasoning item.
   Its `encrypted_content` is a versioned AES-256-GCM capsule containing that
@@ -348,7 +349,8 @@ earlier failed capture did not record its third extra message key or values.
 ### Regression and client checks
 
 The HTTP/unit tests cover capsule mutation/scope/expiry, signed-empty/redacted
-replay, fragmented UTF-8/signatures/tool JSON, block order, namespace/custom tool
+replay, byte-fragmented UTF-8/SSE, complete and repeated replacement signatures,
+fragmented tool JSON, block order, namespace/custom tool
 mapping, cache controls, accounting uncertainty, exact-once upstream rejection,
 timeouts/cancellation, safe history, and failure without a success terminal.
 

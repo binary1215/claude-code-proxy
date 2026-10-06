@@ -23,13 +23,13 @@ listed separately below.
 | --- | --- | --- |
 | Reproducible implementation | Exact Git/image revision, native and Responses regression tests | `f5031f3` fixes empty tool input deltas; 152/152 local backend regressions. Exact image deployed to test-claudemock, not production |
 | Actual clients | Claude Code and Codex on selected gateway routes, streaming, tool execution/result, further turns | Actual `.7` + real Haiku: Claude Code Read/resume (3 requests) and Codex get_goal/compaction/two follow-ups (5 requests) pass. Ordinary unrestricted coding profile is not covered |
-| Reasoning continuity | Ordered thinking/signatures, signed-empty/redacted and tool IDs survive replay; corruption fails explicitly | Actual signed-state replay passes both mandatory clients; Codex opaque state survives tool and compaction input. Native Claude client omits tool caller metadata, but IDs/name/input/text/order match. Synthetic native split-signature loss remains; live signed-empty/redacted not emitted |
+| Reasoning continuity | Ordered thinking/signatures, signed-empty/redacted and tool IDs survive replay; corruption fails explicitly | Actual signed-state replay passes both mandatory clients; Codex opaque state survives tool and compaction input. Native Claude client omits tool caller metadata, but IDs/name/input/text/order match. Historical split-part concat oracle corrected to SDK replacement, not a client defect; live signed-empty/redacted not emitted |
 | Cache accounting | Eligible prefix, provider cache read/write/fresh/output counts and matching relay history | Actual Claude Code reads 0/4628/4865. Actual Codex eligible-prefix sequence reads 0/6911/0/0/7505, writes 6911/163/5421/7505/58. Relay DB equals client-observed provider counts; these are not invoice savings |
 | Gateway authorization | Missing/expired/revoked keys, allowed/denied routes, relay model ACL, secret separation | Separate 24h test key: two routes work, generic Responses/model-info denied 403, missing key 401. Custom pass-through bypasses normal gateway model resolution; current relay key also has no model allowlist (NULL). Haiku scope was harness-enforced. Real expiry/revocation and in-flight cancellation remain untested |
 | Gateway accounting | Completion/failure/cancellation usage and persisted spend versus source counts | Actual gateway records zero input/output/spend and no cache usage. Its HTTP200 success includes a failed SSE response. These are verified limitations, not free usage or billing truth |
-| Coding-session envelope | Actual tool schema, metadata, context limit, follow-ups and compaction | Codex actual manual compaction + two follow-ups pass with hoist. apply_patch remains disabled on the deployed service; actual file editing and broader shell/tool profile remain. Prior synthetic patch transport passed but Windows denied editing. Remote compaction unsupported |
+| Coding-session envelope | Actual tool schema, metadata, context limit, follow-ups and compaction | Codex actual manual compaction + two follow-ups pass with hoist. Test-only apply_patch validated mode is now enabled. Linux offline patch failed before writing; a sandbox probe cannot create a namespace in the default test container. No real patch inference attempted. Prior Windows test also denied editing. Remote compaction unsupported |
 | Deployment and rollback | Backups, preserved state key, exact target, healthy rollback | `f5031f3` image-only update preserves config/state key/volume and all29 pre-update history rows. Prior native rollback/re-upgrade succeeded. New rollback config pins the previously working f27c51e image; not rerun during this update. Real backup restore into a fresh volume remains untested |
-| Additional client | OpenCode comparison on the same native route/model | Actual single request reached provider; 400 third-party plan/extra-usage restriction. No retry, impersonation or paid fallback. Prior synthetic single-signature controls pass, split-signature loss remains |
+| Additional client | OpenCode comparison on the same native route/model | Actual single request reached provider; 400 third-party plan/extra-usage restriction. No retry, impersonation or paid fallback. Prior synthetic single-signature controls pass; old split-part concat interpretation withdrawn |
 
 For Codex, the [official gateway contract](https://learn.chatgpt.com/docs/enterprise/gateway-compatibility)
 requires actual streaming, continuation, tool, routing and authentication evidence.
@@ -77,8 +77,9 @@ using an isolated client and a narrowly scoped gateway credential.
   unchanged. This does not reduce mandatory acceptance:
   actual provider replay, cache behavior and instruction-change semantics
   remain separate measurements. The bounded direct-provider sequence now passes;
-  actual client/gateway integration now passes the bounded live profiles. Proxy-only validated apply-patch activation is a separate
-  choice, not implied by this experiment or by leaving Codex unchanged.
+  actual client/gateway integration now passes the bounded live profiles.
+  Separately, the operator explicitly approved proxy-only validated apply-patch
+  activation and isolated Linux fixture editing; the test service now enables it.
 - The shared gateway UI does not preserve `forward_headers` through the audited
   typed admin schema. On 2026-10-06 the operator approved YAML application and
   restart, and the gateway owner deployed both routes without a source/version

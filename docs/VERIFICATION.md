@@ -13,6 +13,28 @@
 - Token counts are observed counters, not invoices, proven USD savings or
   measured model-quality improvements.
 
+## Signature-oracle correction (2026-10-06)
+
+Earlier synthetic tests split one invented signature across two SSE events and
+expected concatenation. Calling the actual clients' last-event replay a
+"signature-loss bug" was not justified. Official SDKs **replace** the signature
+field for each event, unlike text/thinking/partial JSON accumulation:
+[TypeScript implementation](https://github.com/anthropics/anthropic-sdk-typescript/blob/d49bdab458000bcdffe77bd84b03293f31824fb3/src/lib/MessageStream.ts),
+[Python implementation](https://github.com/anthropics/anthropic-sdk-python/blob/18f25547f20cf5f01da69ac611e700e3bc9ebf21/src/anthropic/lib/streaming/_messages.py).
+[Streaming documentation](https://platform.claude.com/docs/en/build-with-claude/streaming#thinking-delta)
+describes the signature event before block-stop and explicitly one event for
+omitted thinking. This does not establish a general prohibition on repeated
+signature events.
+
+The current adapter and live observers follow replacement semantics. Normal
+synthetic streams send complete signatures while still fragmenting transport
+bytes; repeated-full-signature regression checks replacement without adding a
+rejection gate. Native relay bytes remain unchanged. Historical captures and
+their reported outcomes below are retained, but their split-part concatenation
+claims are superseded by this correction. Single-signature live replay/cache
+results are unaffected. This correction is not a new real-provider test or
+proof of broad client fidelity.
+
 ## Original diagnostics deployment
 
 Implementation commit: `0ca75751d407b0bce2f9c15675b1e0d8fd8075c4`.
@@ -1029,8 +1051,50 @@ accounting equivalence. Evidence: [final persisted aggregate](evidence/gateway-a
   accounting in the measured deployment; zero gateway spend is not billing truth.
   Aliases, per-user budgets/isolation and broad coding profiles are not supplied
   by these two routes. No new paid-account configuration is authorized.
-- Actual Codex file editing remains unverified and the deployed apply_patch mode
-  is still `reject`. Native client synthetic split-signature preservation is not
-  complete; it is not excused by successful single-signature live samples.
+- Actual Codex file editing remains unverified; the operator has now enabled
+  test-only `validated` mode for isolated Linux qualification. The earlier
+  native split-part concatenation expectation was withdrawn (see correction
+  above); it is not evidence of a client defect.
 - Production/master are not replaced. The local admin UI build is separate
   from the backend-only test deployment.
+
+## Validated patch activation and Linux preflight (2026-10-06)
+
+The operator explicitly approved `RESPONSES_APPLY_PATCH_MODE=validated` on
+`test-claudemock` and fixture-only editing in an isolated Linux Codex container.
+Only that environment value changed; the deployed `f5031f3` image, other
+environment values, state key, volume and port were preserved. Health is 200.
+LiteLLM, production, Windows Codex settings and Codex source were not changed.
+The new signature-replacement source correction has **not** been deployed as
+part of this environment-only activation.
+
+Active private Compose is
+`/opt/test-claudemock/validated-patch-o5vf7lw0/candidate.compose.json`.
+The adjacent `rollback.compose.json` restores `reject` on the same image.
+Neither private file belongs in Git. The sanitized
+[activation/preflight evidence](evidence/validated-patch-enable-20261006.json)
+records the exact image/container and official Linux binary hash.
+
+The new standalone [patch runner](../integration/clients/README-live-codex-patch.md)
+first ran without credentials, with Docker network `none`, non-root UID1000,
+`workspace-write` and approval `never`. It offered freeform apply_patch without
+shell and observed the exact create patch, its tool result and signed-opaque
+synthetic replay over two local fake requests. **The fileChange failed and no
+fixture was written**, so this is not an editing pass and no live phase ran.
+The update phase was correctly not attempted. No provider request was made.
+
+A separate read-only `codex sandbox` probe in the same container configuration
+failed at bubblewrap namespace creation. Host user namespaces are enabled, so
+the runtime restriction is inside the container path; the generic apply_patch
+write error itself does not identify the failing syscall. No host setting,
+container security profile or Codex sandbox was relaxed. This is an execution
+environment gap, not evidence that the proxy's grammar conversion failed.
+The [pinned Codex sandbox implementation](https://github.com/openai/codex/blob/rust-v0.160.0/codex-rs/linux-sandbox/src/linux_run_main.rs)
+also rejects legacy Landlock for filesystem-restricted execution; it is not a
+workspace-write fallback. The probe does not distinguish Docker seccomp from
+an LSM or another runtime restriction. Further testing needs an explicitly
+approved sandbox-compatible container configuration, not a Codex bypass.
+
+Local source qualification after the signature correction: TypeScript build and
+**153/153 backend tests**, plus **45/45 pure client-observer tests**, passed.
+These checks do not replace an actual provider-backed file-editing result.

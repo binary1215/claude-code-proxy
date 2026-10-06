@@ -29,8 +29,8 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--claude', type=Path, required=True, help='Official pinned native Claude Code executable')
 parser.add_argument('--output', type=Path, required=True, help='New evidence directory outside repository')
 parser.add_argument('--node', type=Path, help='Existing Node executable (otherwise PATH node)')
-parser.add_argument('--signature-events', choices=['single', 'split'], default='split',
-                    help='One documented signature_delta, or two separate signature_delta stress events; both use seven-byte transport chunks')
+parser.add_argument('--signature-events', choices=['single', 'replacement', 'split'], default='single',
+                    help='Single full signature (default), repeated full-value replacement, or non-normative split-part observation; all use seven-byte transport chunks')
 parser.add_argument('--observe-only', action='store_true', help='Exit zero for a completed observation even when state or whole-body fidelity fails')
 args = parser.parse_args()
 root = Path(__file__).resolve().parents[2]
@@ -84,6 +84,27 @@ def stop_process(child):
 def event(kind, value):
     return ('event: ' + kind + '\r\ndata: ' + json.dumps(value, ensure_ascii=False) + '\r\n\r\n').encode()
 
+
+def signature_event_values(signature, mode):
+    if mode == 'single':
+        return [signature]
+    if mode == 'replacement':
+        return ['synthetic-previous-complete-signature+/=', signature]
+    if mode == 'split':
+        # Historical unsupported oracle input, not a concatenation contract.
+        return [signature[:8], signature[8:]]
+    raise ValueError('Unknown signature event fixture')
+
+
+def signature_qualification(mode, observation_completed, sdk_state_exact, whole_body_exact):
+    eligible = mode != 'split'
+    return {'qualification_scope': 'single_full_signature' if mode == 'single' else
+            'sdk_full_value_replacement' if eligible else 'non_normative_split_observation',
+            'state_subset_pass': bool(observation_completed and sdk_state_exact) if eligible else None,
+            'strict_qualification_pass': bool(observation_completed and sdk_state_exact and whole_body_exact) if eligible else None,
+            'split_signature_preserved': None}
+
+
 class Fake(BaseHTTPRequestHandler):
     def log_message(self, *_): pass
     def do_POST(self):
@@ -130,9 +151,10 @@ class Fake(BaseHTTPRequestHandler):
             if kind == 'thinking':
                 text = block['thinking']
                 deltas += [{'type': 'thinking_delta', 'thinking': part} for part in [text[:9], text[9:]] if part]
+                if not text: deltas.append({'type': 'thinking_delta', 'thinking': ''})
                 signature = block['signature']
-                fragments = [signature] if args.signature_events == 'single' else [signature[:8], signature[8:]]
-                deltas += [{'type': 'signature_delta', 'signature': part} for part in fragments]
+                values = signature_event_values(signature, args.signature_events)
+                deltas += [{'type': 'signature_delta', 'signature': value} for value in values]
             elif kind == 'tool_use':
                 encoded = json.dumps(block['input'], ensure_ascii=False)
                 deltas += [{'type': 'input_json_delta', 'partial_json': part} for part in [encoded[:9], encoded[9:]]]
@@ -292,11 +314,19 @@ try:
             'metadata' in sent['request'] and 'metadata' not in received['body']
             and {name: value for name, value in sent['request'].items() if name != 'metadata'} == received['body']
             for sent, received in zip(observer.records, fake.requests))
+        sdk_expected = copy.deepcopy(fake.issued)
+        for block in sdk_expected:
+            if block.get('type') == 'thinking':
+                block['signature'] = signature_event_values(block['signature'], args.signature_events)[-1]
+        normative = args.signature_events != 'split'
         item.update({'upstream_requests': len(fake.requests), 'gateway_requests': len(observer.records), 'fixture_failure': fake.failure,
             'tool_result_replayed': tool_result_ok, 'local_fixture_read': tool_result_has_fixture,
-            'ordered_assistant_exact': bool(fake.issued) and assistant == fake.issued,
-            'signed_nonempty_preserved': bool(signed) and signed[0] in assistant,
-            'signed_empty_preserved': None if mode != 'full_opaque' else len(signed) > 1 and signed[1] in assistant,
+            'signature_oracle': 'sdk_last_event_value', 'normative_signature_case': normative,
+            'ordered_assistant_original_value_match': bool(fake.issued) and assistant == fake.issued,
+            'ordered_assistant_exact': bool(fake.issued) and assistant == sdk_expected if normative else None,
+            'ordered_assistant_sdk_expected_exact': bool(fake.issued) and assistant == sdk_expected,
+            'signed_nonempty_preserved': bool(signed) and signed[0] in assistant if normative else None,
+            'signed_empty_preserved': None if mode != 'full_opaque' or not normative else len(signed) > 1 and signed[1] in assistant,
             'redacted_preserved': None if mode != 'full_opaque' else len(fake.issued) > 2 and fake.issued[2] in assistant,
             'native_request_bytes_exact': len(fake.raw_requests) == 2 and fake.raw_requests == observer.raw_requests,
             'native_request_objects_exact': len(fake.requests) == 2 and [record['body'] for record in fake.requests] == [record['request'] for record in observer.records],
@@ -327,16 +357,20 @@ finally:
         and item.get('upstream_requests') == 2 and item.get('gateway_requests') == 2 and item.get('http_success')
         and item.get('tool_result_replayed') and item.get('local_fixture_read') and item.get('synthetic_upstream_auth')
         and not item.get('gateway_key_leaked') and not item.get('relay_key_leaked') for item in report['scenarios'])
-    report['state_subset_pass'] = report['observation_completed'] and all(item.get('ordered_assistant_exact')
+    sdk_state_exact = all(item.get('ordered_assistant_sdk_expected_exact')
         and (item.get('native_request_objects_exact') or item.get('native_metadata_removed_only'))
         and item.get('native_sse_bytes_exact') and item.get('beta_headers_exact') for item in report['scenarios'])
     report['whole_body_semantic_exact'] = report['observation_completed'] and all(item.get('native_request_objects_exact') for item in report['scenarios'])
-    report['split_signature_preserved'] = None if args.signature_events == 'single' else report['observation_completed'] and all(
-        item.get('signed_nonempty_preserved') and (item.get('signed_empty_preserved') is None or item.get('signed_empty_preserved')) for item in report['scenarios'])
+    report.update(signature_qualification(args.signature_events, report['observation_completed'], sdk_state_exact,
+                                          report['whole_body_semantic_exact']))
+    report['split_concat_matches_observed'] = (report['observation_completed'] and all(
+        item.get('ordered_assistant_original_value_match') for item in report['scenarios'])) if args.signature_events == 'split' else None
+    report['split_sdk_last_event_matches_observed'] = (report['observation_completed'] and sdk_state_exact) if args.signature_events == 'split' else None
     (output / 'claude-code-smoke.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
 print('Report:', output / 'claude-code-smoke.json')
 print('State subset pass:', report['state_subset_pass'])
 print('Whole body semantic exact:', report['whole_body_semantic_exact'])
 print('Split signature preserved:', report['split_signature_preserved'])
-strict_pass = report['state_subset_pass'] and report['whole_body_semantic_exact']
-raise SystemExit(0 if strict_pass or args.observe_only and report['observation_completed'] else 1)
+strict_pass = report['strict_qualification_pass']
+observation_only = args.observe_only or args.signature_events == 'split'
+raise SystemExit(0 if strict_pass or observation_only and report['observation_completed'] else 1)

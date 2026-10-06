@@ -132,3 +132,13 @@ OS-enforced network isolation remain outside either test.
 
 SSE assembly retains the initial tool input when `input_json_delta` contributes
 an exactly empty JSON buffer. Nonempty malformed JSON is still rejected.
+
+`signature_delta` follows the official TypeScript/Python SDK assignment rule:
+each event replaces the block's signature; text/thinking deltas and tool JSON
+fragments still append. Offline tests cover one complete signature whose SSE
+bytes are reassembled from small chunks, and repeated complete signature events
+where the last value wins. Byte fragmentation is not the same as splitting one
+signature across separate events. The earlier synthetic concatenation assumption
+was not a normative signature contract and cannot establish a client defect.
+Previous real results with one signature event per block are unaffected; old
+evidence artifacts are retained unchanged.

@@ -37,8 +37,7 @@ function wire(message) {
     result+=ev('content_block_start',{index,content_block:start});
     if(b.type==='thinking') {
       result+=ev('content_block_delta',{index,delta:{type:'thinking_delta',thinking:b.thinking}});
-      result+=ev('content_block_delta',{index,delta:{type:'signature_delta',signature:b.signature.slice(0,8)}});
-      result+=ev('content_block_delta',{index,delta:{type:'signature_delta',signature:b.signature.slice(8)}});
+      result+=ev('content_block_delta',{index,delta:{type:'signature_delta',signature:b.signature}});
     }
     if(b.type==='tool_use') {
       const args=JSON.stringify(b.input);

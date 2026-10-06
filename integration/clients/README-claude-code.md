@@ -27,9 +27,13 @@ Build the current relay first. Use the existing pristine `litellm[proxy]==1.103.
   --output /new/task/temp/split-evidence
 ```
 
-Both commands use the same two cases: signed-nonempty reasoning plus Read; and signed-nonempty, signed-empty, redacted reasoning plus Read. `single` sends one complete `signature_delta` per thinking block; `split` sends two separate `signature_delta` events. **Both** send the SSE in seven-byte transport fragments, including Unicode and signature bytes. The official [streaming documentation](https://platform.claude.com/docs/en/build-with-claude/streaming) describes a signature event immediately before block-stop; event splitting and transport fragmentation are distinct tests.
+Both commands use the same two cases: signed-nonempty reasoning plus Read; and signed-nonempty, signed-empty, redacted reasoning plus Read. `single` sends one complete `signature_delta` per thinking block and is the default qualification path. All modes send SSE in seven-byte transport fragments, including Unicode and signature bytes. The official [streaming documentation](https://platform.claude.com/docs/en/build-with-claude/streaming) describes a signature event immediately before block-stop; splitting an event's bytes and inventing separate events are distinct tests.
 
-Strict mode exits nonzero unless both the tested state subset and whole-body semantic equality pass. The default is the split-event stress test. `--observe-only` permits exit zero after a complete diagnostic observation, including a negative fidelity result; it never changes the report's fidelity fields. Every invocation needs a new output directory outside the repository. `--node` selects an existing Node executable when it is not on PATH.
+Optional `--signature-events replacement` sends two complete synthetic signature values and expects the last one. This follows assignment semantics in the pinned official [TypeScript SDK](https://github.com/anthropics/anthropic-sdk-typescript/blob/d49bdab458000bcdffe77bd84b03293f31824fb3/src/lib/MessageStream.ts) and [Python SDK](https://github.com/anthropics/anthropic-sdk-python/blob/18f25547f20cf5f01da69ac611e700e3bc9ebf21/src/anthropic/lib/streaming/_messages.py). Text/thinking and tool JSON fragments still append. Repeated full values are an SDK-assembly control, not a claim that real providers normally emit them.
+
+`split` retains the historical two-part synthetic input solely as a **non-normative observation**. It does not require concatenation: SDK assembly uses the last event value, even when the fixture chose to make that value only a suffix. Its `state_subset_pass` and `strict_qualification_pass` are null; it exits zero only after observation completion, not as a fidelity qualification. `split_concat_matches_observed` and `split_sdk_last_event_matches_observed` show the separate raw comparisons. The legacy `split_signature_preserved` field is null, never a failed normative check.
+
+For `single` or `replacement`, strict mode exits nonzero unless the state subset and whole-body semantic equality both pass. `--observe-only` permits zero after a complete diagnostic observation without changing those fields. Every invocation needs a new output directory outside the repository. `--node` selects an existing Node executable when it is not on PATH.
 
 ## Isolation and evidence
 
@@ -41,10 +45,10 @@ All listeners and inference targets are loopback; an explicit rejecting proxy bl
 
 ## Actual observations on 2026-10-05
 
-| Result | Single signature event, seven-byte framing | Two signature events, same framing |
+| Historical result | Single signature event, seven-byte framing | Two partial-value events, same framing (non-normative) |
 | --- | --- | --- |
 | Both cases: successful real Read round trip and exact final result | Yes | Yes |
-| Ordered signed-nonempty/signed-empty/redacted/tool replay | Exact | Thinking text/order/redacted/tool preserved, signatures lose first fragment |
+| Ordered signed-nonempty/signed-empty/redacted/tool replay | Exact | Last signature event value replayed, consistent with SDK replacement; other listed state preserved |
 | Provider response SSE bytes and beta headers across the chain | Exact | Exact |
 | Gateway/relay credential reaches fake provider | No | No |
 | Selected stock source files modified | No | No |
@@ -52,10 +56,10 @@ All listeners and inference targets are loopback; an explicit rejecting proxy bl
 
 The single-event run supplies positive **state-subset** evidence, not full fidelity or achievement of the whole project goal. Native `metadata` is present in both actual client requests but absent at the fake provider; all other request fields are equal. Stock's reserved metadata handling [pops that field](https://github.com/BerriAI/litellm/blob/580bde9a2d148714889ec1c04a9872819e78a778/litellm/proxy/pass_through_endpoints/pass_through_endpoints.py#L579-L588). Request wire bytes also differ and are reported separately; they are not conflated with semantic preservation.
 
-In the split-event run, the actual client's next request already contains only the second signature fragment for **both** thinking blocks. The observer sees that loss before LiteLLM; the fake receives the same thinking blocks, and the delivered SSE is unchanged. This locates the observed split-signature loss at the client boundary. The native relay does not strip, repair, combine, substitute or retry the broken signature. This result does not prove real Anthropic normally emits multiple signature events, nor cryptographic validity of the synthetic values.
+In the historical split-event run, the client's next request contains the second event value for **both** thinking blocks. The observer sees the same value before LiteLLM and after the native relay, with unchanged delivered SSE. The old oracle incorrectly assumed these event values must concatenate. The official SDK replacement rule explains the observed result, so it **does not establish a Claude Code defect or signature-loss bug**. The relay did not repair or reinterpret the synthetic values. This observation proves neither real-provider multi-event behavior nor cryptographic validity.
 
-Final metrics deliberately separate `state_subset_pass`, `whole_body_semantic_exact` and `split_signature_preserved`. The older diagnostic artifacts used a generic `full_tested_fidelity:false`; the current harness avoids presenting a subset result as whole-outcome success.
+Current metrics separate `state_subset_pass`, `whole_body_semantic_exact`, `strict_qualification_pass` and the non-normative split observations. Historical artifacts and their old booleans remain unchanged, including older `full_tested_fidelity:false`; the incorrect concatenation interpretation is corrected here, not by rewriting evidence. Previously passing single-event state results are unaffected.
 
 The original local evidence directories were `claude-code-single-5a478164c16748eda05968d11c4611b7` and `claude-code-chain-f5c178e1177640aa9d88e99cf00b034f` under the task temp root. Each contains both cases, the complete synthetic request/SSE observations, client result events and unchanged source identities. No real provider call was added to resolve either negative result.
 
-An independent rerun of the final harness in single-event observation mode is recorded in `claude-code-chain-final-single-20261005`: both cases again preserve the tested state subset, while whole-body semantics remain unequal solely because stock removes `metadata`. Its final fields are `observation_completed:true`, `state_subset_pass:true`, `whole_body_semantic_exact:false`, and `split_signature_preserved:null`. The earlier split-event observation was not rerun after the reporting-field refactor.
+An independent historical rerun in single-event observation mode is recorded in `claude-code-chain-final-single-20261005`: both cases again preserve the tested state subset, while whole-body semantics remain unequal solely because stock removes `metadata`. Its saved fields are `observation_completed:true`, `state_subset_pass:true`, `whole_body_semantic_exact:false`, and `split_signature_preserved:null`. Neither the split case nor actual clients were rerun for this oracle correction; local syntax/pure-source checks do not create new client evidence.

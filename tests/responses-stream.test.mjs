@@ -48,15 +48,14 @@ test('documented nullable metadata passes message_start without changing reasoni
   }
 });
 
-test('signed-empty, split signature, redacted: exact sealed blocks/order and done/completed identity', () => {
+test('signed-empty, complete signature event, redacted: exact sealed blocks/order and done/completed identity', () => {
   const { stream, sealed } = fixture();
   const original = { type: 'thinking', thinking: '', cache_control: { type: 'ephemeral', ttl: '1h' },
     synthetic_extension: { count: 1 } };
   const redacted = { type: 'redacted_thinking', data: 'SYNTHETIC_REDACTED', cache_control: { type: 'ephemeral' } };
   const events = run(stream, [start(), block(0, original),
     delta(0, { type: 'thinking_delta', thinking: '' }),
-    delta(0, { type: 'signature_delta', signature: 'SYNTHETIC_' }),
-    delta(0, { type: 'signature_delta', signature: 'SIGNATURE' }), stop(0), block(1, redacted), stop(1),
+    delta(0, { type: 'signature_delta', signature: 'SYNTHETIC_SIGNATURE' }), stop(0), block(1, redacted), stop(1),
     block(2, { type: 'text', text: '' }), delta(2, { type: 'text_delta', text: '漢글 🧪 done' }), stop(2),
     messageDelta(), messageStop]);
   stream.finish();
@@ -80,18 +79,38 @@ test('signed-empty, split signature, redacted: exact sealed blocks/order and don
   assert.notEqual(stream.response.output[0].encrypted_content, 'caller_mutation');
 });
 
-test('thinking summary uses text only, signature fragments never become thinking text', () => {
+test('thinking summary appends text only; complete signature never becomes thinking text', () => {
   const { stream, sealed } = fixture();
   const events = run(stream, [start(), block(0, { type: 'thinking', thinking: 'initial ', signature: '' }),
-    delta(0, { type: 'thinking_delta', thinking: 'Δ🧪' }),
-    delta(0, { type: 'signature_delta', signature: 'secret-a' }),
-    delta(0, { type: 'signature_delta', signature: '-b' }), stop(0), messageDelta(), messageStop]);
+    delta(0, { type: 'thinking_delta', thinking: 'Δ' }),
+    delta(0, { type: 'thinking_delta', thinking: '🧪' }),
+    delta(0, { type: 'signature_delta', signature: 'secret-a-b' }), stop(0), messageDelta(), messageStop]);
   const done = events.find((event) => event.type === 'response.output_item.done').item;
   assert.deepEqual(done.summary, [{ type: 'summary_text', text: 'initial Δ🧪' }]);
   assert.equal(sealed[0].block.signature, 'secret-a-b');
   assert.equal(sealed[0].block.thinking, 'initial Δ🧪');
   assert.equal(events.filter((event) => event.type === 'response.reasoning_summary_text.delta').map((event) => event.delta).join(''), 'initial Δ🧪');
   assert.deepEqual(done, completed(events).output[0]);
+});
+
+test('repeated complete signature events replace earlier values as in Anthropic SDKs', () => {
+  // Characterize accumulator compatibility, not a claim that the provider
+  // normally emits multiple signature events or that such events are forbidden.
+  // SDK reference: anthropic-sdk-typescript d49bdab458000bcdffe77bd84b03293f31824fb3.
+  for (const signatures of [['COMPLETE_FIRST', 'COMPLETE_LAST'], ['COMPLETE_SAME', 'COMPLETE_SAME']]) {
+    const { stream, sealed } = fixture();
+    const events = run(stream, [start(), block(0, { type: 'thinking', thinking: '', signature: 'INITIAL_VALUE' }),
+      ...signatures.map(signature => delta(0, { type: 'signature_delta', signature }))]);
+    assert.equal(stream.terminal, false);
+    assert.deepEqual(sealed, [], 'A signature event does not close its block');
+    events.push(...run(stream, [stop(0), messageDelta(), messageStop]));
+    stream.finish();
+    assert.equal(sealed[0].block.signature, signatures.at(-1));
+    assert.equal(sealed[0].block.thinking, '');
+    assert(!events.some(event => event.type === 'response.failed'));
+    const done = events.find(event => event.type === 'response.output_item.done').item;
+    assert.deepEqual(done, completed(events).output[0]);
+  }
 });
 
 test('text standard events and truthful cumulative cache-inclusive usage', () => {

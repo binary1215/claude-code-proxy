@@ -39,8 +39,7 @@ function wire() {
     bytes+=event('content_block_start',{index,content_block:start});
     if(b.type==='thinking') {
       bytes+=event('content_block_delta',{index,delta:{type:'thinking_delta',thinking:b.thinking}});
-      for(const signature of [b.signature.slice(0,9),b.signature.slice(9)])
-        bytes+=event('content_block_delta',{index,delta:{type:'signature_delta',signature}});
+      bytes+=event('content_block_delta',{index,delta:{type:'signature_delta',signature:b.signature}});
     }
     if(b.type==='text') bytes+=event('content_block_delta',{index,delta:{type:'text_delta',text:b.text}});
     bytes+=event('content_block_stop',{index});

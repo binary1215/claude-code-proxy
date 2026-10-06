@@ -57,8 +57,8 @@ proof for arbitrary dependency internals, so this is not a zero-egress audit.
 The harness performs the official app-server handshake, starts a fresh thread,
 and sends one synthetic normal turn. Only the built-in no-I/O `get_goal` is
 requested by the fake model. The fake emits nonempty signed thinking, empty
-signed thinking, redacted thinking, and tool_use, with fragmented signature
-deltas and 7-byte UTF-8/CRLF SSE writes. It then sends a final text marker after
+signed thinking, redacted thinking, and tool_use, with one complete signature
+event per thinking block and 7-byte UTF-8/CRLF SSE writes. It then sends a final text marker after
 the actual tool result is returned.
 
 Next, the host explicitly requests `thread/compact/start`. It does not inject

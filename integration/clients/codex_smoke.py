@@ -116,7 +116,7 @@ class Fake(BaseHTTPRequestHandler):
             deltas = []
             if kind == 'thinking':
                 if block['thinking']: deltas.append({'type': 'thinking_delta', 'thinking': block['thinking']})
-                deltas += [{'type': 'signature_delta', 'signature': part} for part in (block['signature'][:8], block['signature'][8:])]
+                deltas.append({'type': 'signature_delta', 'signature': block['signature']})
             elif kind == 'tool_use':
                 encoded = json.dumps(block['input']); deltas += [{'type': 'input_json_delta', 'partial_json': part} for part in (encoded[:8], encoded[8:])]
             elif kind == 'text': deltas.append({'type': 'text_delta', 'text': block['text']})

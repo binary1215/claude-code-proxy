@@ -38,6 +38,23 @@ def blocks(body,role=None):
     return [b for m in (body or {}).get('messages',[]) if role is None or m.get('role')==role
             for b in m.get('content',[]) if isinstance(b,dict)]
 
+
+def signature_event_values(signature, mode):
+    if mode == 'single': return [signature]
+    if mode == 'replacement': return ['synthetic-previous-complete-signature+/=', signature]
+    if mode == 'split': return [signature[:8], signature[8:]]
+    raise ValueError('Unknown signature event fixture')
+
+
+def signature_qualification(mode, observation_completed, sdk_state_exact, whole_body_exact):
+    eligible = mode != 'split'
+    return {'qualification_scope': 'single_full_signature' if mode == 'single' else
+            'sdk_full_value_replacement' if eligible else 'non_normative_split_observation',
+            'state_subset_pass': bool(observation_completed and sdk_state_exact) if eligible else None,
+            'strict_qualification_pass': bool(observation_completed and sdk_state_exact and whole_body_exact) if eligible else None,
+            'split_signature_preserved': None}
+
+
 class Fake(BaseHTTPRequestHandler):
     def log_message(self,*_): pass
     def do_POST(self):
@@ -72,8 +89,8 @@ class Fake(BaseHTTPRequestHandler):
             if kind=='thinking':
                 text=block['thinking']; deltas += [{'type':'thinking_delta','thinking':p} for p in [text[:22],text[22:]] if p]
                 if not text: deltas.append({'type':'thinking_delta','thinking':''})
-                signature=block['signature']; parts=[signature] if self.server.signatures=='single' else [signature[:8],signature[8:]]
-                deltas += [{'type':'signature_delta','signature':p} for p in parts]
+                values=signature_event_values(block['signature'],self.server.signatures)
+                deltas += [{'type':'signature_delta','signature':value} for value in values]
             elif kind=='tool_use':
                 text=json.dumps(block['input'],ensure_ascii=False); deltas += [{'type':'input_json_delta','partial_json':p} for p in [text[:19],text[19:]]]
             elif kind=='text': deltas=[{'type':'text_delta','text':block['text']}]
@@ -160,6 +177,8 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__); parser.add_argument('--binary',type=Path,required=True)
     parser.add_argument('--archive',type=Path,required=True,help='Existing pinned official release ZIP; verify without download/extract')
     parser.add_argument('--node',type=Path); parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--signature-events',choices=['single','replacement','split'],default='single',
+                        help='Single full signature (default), repeated full replacement, or non-normative split observation')
     parser.add_argument('--observe-only',action='store_true',help='Explicit completed-observation exit zero, never changes fidelity predicates')
     args=parser.parse_args(); output=args.output.resolve(); temp=Path(tempfile.gettempdir()).resolve()
     if output.exists() or temp not in output.parents or ROOT in output.parents: raise SystemExit('Use a NEW system-temp child outside the repository')
@@ -170,7 +189,7 @@ def main():
     output.mkdir(parents=True)
     report={'scope':'actual OpenCode / unmodified stock free authenticated passthrough / actual native relay / loopback fake Anthropic',
         'opencode_source_commit':SOURCE,'archive_sha256':archive_hash,'litellm_version':importlib.metadata.version('litellm'),
-        'before':identities(),'scenarios':[],'not_tested':['real-provider authorization/signature validity','billing/cache hits','OS network/filesystem sandbox enforcement','deployment','long sessions/compaction/cancellation','model switch','unknown opaque types']}
+        'before':identities(),'signature_events':args.signature_events,'scenarios':[],'not_tested':['real-provider authorization/signature validity','billing/cache hits','OS network/filesystem sandbox enforcement','deployment','long sessions/compaction/cancellation','model switch','unknown opaque types']}
     with binary.open('rb') as file: report['binary_sha256']=hashlib.file_digest(file,'sha256').hexdigest()
     if report['binary_sha256']!=BINARY_SHA256: raise SystemExit('Pinned extracted executable identity mismatch')
     report['repository_head']=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
@@ -209,7 +228,7 @@ def main():
             except Exception:
                 if time.monotonic()>deadline: raise RuntimeError('Gateway health timeout')
                 time.sleep(.1)
-        for signatures in ['single','split']:
+        for signatures in [args.signature_events]:
             for mode in ['signed_nonempty','full_opaque']:
                 folder=output/(signatures+'_'+mode); folder.mkdir(); workspace=folder/'fixture'; workspace.mkdir()
                 fixture=workspace/'fixture.txt'; fixture.write_bytes((FIXTURE+'\n').encode()); env,client_config=client_env(folder,binary,node,fixture,origin,gateway_key)
@@ -231,9 +250,10 @@ def main():
                 client_assistant=blocks(client_replay,'assistant'); native_assistant=blocks(fake.replayed,'assistant'); issued=fake.issued
                 signed=[b for b in issued if b['type']=='thinking']; expected_cache=copy.deepcopy(issued)
                 if expected_cache: expected_cache[-1]['cache_control']={'type':'ephemeral'}
-                expected_suffix=copy.deepcopy(expected_cache)
-                for block in expected_suffix:
-                    if block['type']=='thinking': block['signature']=block['signature'][8:]
+                expected_sdk=copy.deepcopy(expected_cache)
+                for block in expected_sdk:
+                    if block['type']=='thinking': block['signature']=signature_event_values(block['signature'],signatures)[-1]
+                normative=signatures!='split'
                 results=[b for b in blocks(fake.replayed,'user') if b.get('type')=='tool_result']
                 item={'signature_events':signatures,'mode':mode,'exit_code':code,'timed_out':timed_out,'capture_overflow':overflow,'event_parse_error':event_parse_error,
                     'responses_requests':len(observer.records),'upstream_requests':len(fake.requests),'fixture_failure':fake.failure,'observer_failure':observer.failure,
@@ -242,19 +262,23 @@ def main():
                     'last_event_finished':bool(events) and events[-1].get('type')=='step_finish','client_error_event':any(e.get('type')=='error' for e in events),
                     'only_read_offered':bool(fake.requests) and all([t.get('name') for t in r['body'].get('tools',[])]==['read'] for r in fake.requests),
                     'read_executed':len(results)==1 and results[0].get('tool_use_id')=='toolu_fake_opencode_01' and not results[0].get('is_error',False) and FIXTURE in json.dumps(results[0].get('content')),
-                    'signed_nonempty_preserved_client':bool(signed) and signed[0] in client_assistant,
-                    'signed_nonempty_preserved_upstream':bool(signed) and signed[0] in native_assistant,
-                    'signed_empty_preserved_client':None if mode!='full_opaque' else len(signed)>1 and signed[1] in client_assistant,
-                    'signed_empty_preserved_upstream':None if mode!='full_opaque' else len(signed)>1 and signed[1] in native_assistant,
+                    'signature_oracle':'sdk_last_event_value','normative_signature_case':normative,
+                    'signed_nonempty_preserved_client':bool(signed) and signed[0] in client_assistant if normative else None,
+                    'signed_nonempty_preserved_upstream':bool(signed) and signed[0] in native_assistant if normative else None,
+                    'signed_empty_preserved_client':None if mode!='full_opaque' or not normative else len(signed)>1 and signed[1] in client_assistant,
+                    'signed_empty_preserved_upstream':None if mode!='full_opaque' or not normative else len(signed)>1 and signed[1] in native_assistant,
                     'redacted_preserved_client':None if mode!='full_opaque' else issued[2] in client_assistant,
                     'redacted_preserved_upstream':None if mode!='full_opaque' else issued[2] in native_assistant,
                     'ordered_assistant_issued_exact_client':bool(issued) and client_assistant==issued,
                     'ordered_assistant_issued_exact_upstream':bool(issued) and native_assistant==issued,
                     'ordered_assistant_expected_client_cache_marker_exact':bool(issued) and client_assistant==expected_cache,
                     'ordered_assistant_expected_upstream_cache_marker_exact':bool(issued) and native_assistant==expected_cache,
+                    'ordered_assistant_sdk_expected_client_exact':bool(issued) and client_assistant==expected_sdk,
+                    'ordered_assistant_sdk_expected_upstream_exact':bool(issued) and native_assistant==expected_sdk,
                     'gateway_native_assistant_exact':bool(client_replay) and client_assistant==native_assistant,
                     'client_tool_cache_marker_added_exact':bool(expected_cache) and [b for b in client_assistant if b.get('type')=='tool_use']==[expected_cache[-1]],
-                    'split_signature_last_fragment_only':None if signatures!='split' else client_assistant==expected_suffix,
+                    'split_sdk_last_event_matches_observed':None if signatures!='split' else client_assistant==expected_sdk,
+                    'split_concat_matches_observed':None if signatures!='split' else client_assistant==expected_cache,
                     'client_metadata_field_present':['metadata' in r['body'] for r in observer.records],
                     'whole_body_semantic_exact':len(observer.records)==len(fake.requests)==2 and all(r['body']==n['body'] for r,n in zip(observer.records,fake.requests)),
                     'wire_request_bytes_exact':len(observer.raw_requests)==len(fake.raw_requests)==2 and observer.raw_requests==fake.raw_requests,
@@ -269,8 +293,9 @@ def main():
                 item['top_level_added_fields']=[sorted(set(n['body'])-set(r['body'])) for r,n in zip(observer.records,fake.requests)]
                 item['http_success']=len(observer.records)==2 and all(r['status']==200 for r in observer.records)
                 item['observation_completed']=code==0 and not timed_out and not overflow and not event_parse_error and fake.failure is None and observer.failure is None and item['responses_requests']==item['upstream_requests']==2 and all(item[k] for k in ['http_success','final_exact','steps_exact','last_event_finished','read_executed','only_read_offered','response_sse_bytes_exact','beta_headers_exact','client_gateway_auth_exact','upstream_auth_exact','workspace_exact']) and not item['credential_leak'] and not item['client_error_event']
-                item['state_subset_pass']=item['observation_completed'] and item['ordered_assistant_expected_client_cache_marker_exact'] and item['ordered_assistant_expected_upstream_cache_marker_exact'] and item['gateway_native_assistant_exact']
-                item['strict_case_pass']=item['state_subset_pass'] and item['whole_body_semantic_exact']
+                sdk_state_exact=item['ordered_assistant_sdk_expected_client_exact'] and item['ordered_assistant_sdk_expected_upstream_exact'] and item['gateway_native_assistant_exact']
+                item.update(signature_qualification(signatures,item['observation_completed'],sdk_state_exact,item['whole_body_semantic_exact']))
+                item['strict_case_pass']=item['strict_qualification_pass']
                 report['scenarios'].append(item)
                 (folder/'client-requests.json').write_text(redact(json.dumps(observer.records,indent=2)),encoding='utf-8')
                 (folder/'fake-requests.json').write_text(redact(json.dumps(fake.requests,indent=2)),encoding='utf-8')
@@ -284,16 +309,18 @@ def main():
         for child,thread,logs,name in reversed(children): stop(child); thread.join(3); child.stdout.close(); (output/name).write_text(redact(''.join(logs)),encoding='utf-8')
         fake.shutdown(); fake.server_close(); fake_thread.join(3)
         report['after']=identities(); report['stock_unchanged']=report['before']==report['after']
-        report['observation_completed']=not report.get('harness_error') and report['stock_unchanged'] and len(report['scenarios'])==4 and all(s['observation_completed'] for s in report['scenarios'])
-        report['state_subset_pass']=report['observation_completed'] and all(s['state_subset_pass'] for s in report['scenarios'])
-        controls=[s for s in report['scenarios'] if s['signature_events']=='single']; stress=[s for s in report['scenarios'] if s['signature_events']=='split']
-        report['state_control_pass']=report['stock_unchanged'] and len(controls)==2 and all(s['state_subset_pass'] for s in controls)
-        report['state_stress_pass']=report['stock_unchanged'] and len(stress)==2 and all(s['state_subset_pass'] for s in stress)
-        report['split_signature_preserved']=report['stock_unchanged'] and len(stress)==2 and all(s['signed_nonempty_preserved_client'] and s['signed_nonempty_preserved_upstream'] and (s['mode']!='full_opaque' or s['signed_empty_preserved_client'] and s['signed_empty_preserved_upstream']) for s in stress)
+        report['observation_completed']=not report.get('harness_error') and report['stock_unchanged'] and len(report['scenarios'])==2 and all(s['observation_completed'] for s in report['scenarios'])
+        sdk_state_exact=all(s['ordered_assistant_sdk_expected_client_exact'] and s['ordered_assistant_sdk_expected_upstream_exact'] and s['gateway_native_assistant_exact'] for s in report['scenarios'])
         report['whole_body_semantic_exact']=report['observation_completed'] and all(s['whole_body_semantic_exact'] for s in report['scenarios'])
-        report['strict_qualification_pass']=report['state_subset_pass'] and report['whole_body_semantic_exact']
+        report.update(signature_qualification(args.signature_events,report['observation_completed'],sdk_state_exact,report['whole_body_semantic_exact']))
+        report['state_control_pass']=report['state_subset_pass'] if args.signature_events=='single' else None
+        report['state_replacement_pass']=report['state_subset_pass'] if args.signature_events=='replacement' else None
+        report['state_stress_pass']=None
+        report['split_concat_matches_observed']=(report['observation_completed'] and all(s['split_concat_matches_observed'] for s in report['scenarios'])) if args.signature_events=='split' else None
+        report['split_sdk_last_event_matches_observed']=(report['observation_completed'] and sdk_state_exact) if args.signature_events=='split' else None
         (output/'opencode-gateway-smoke.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
     print('Report:',output/'opencode-gateway-smoke.json'); print('Strict qualification:',report['strict_qualification_pass'])
-    return 0 if report['strict_qualification_pass'] or args.observe_only and report['observation_completed'] else 1
+    observation_only=args.observe_only or args.signature_events=='split'
+    return 0 if report['strict_qualification_pass'] or observation_only and report['observation_completed'] else 1
 
 if __name__=='__main__': raise SystemExit(main())

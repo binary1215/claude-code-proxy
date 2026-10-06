@@ -81,7 +81,7 @@ def usage_counts(usage):
 
 
 def parse_sse(wire):
-    """Preserve every signature delta and ignore nullable usage updates."""
+    """SDK signature replacement, event counts, and non-null usage updates."""
     try:
         events = []
         for frame in wire.decode('utf-8').replace('\r\n', '\n').split('\n\n'):
@@ -101,10 +101,13 @@ def parse_sse(wire):
             elif kind == 'content_block_delta':
                 index = event['index']; delta = event['delta']; block = blocks[index]
                 field = {'text_delta': 'text', 'thinking_delta': 'thinking', 'signature_delta': 'signature'}.get(delta.get('type'))
-                if field:
+                if field == 'signature':
+                    # A complete event value replaces the signature, matching
+                    # the official SDKs; transport byte chunks are separate.
+                    block[field] = delta[field]
+                    signatures[index] = signatures.get(index, 0) + 1
+                elif field:
                     block[field] = block.get(field, '') + delta[field]
-                    if field == 'signature':
-                        signatures[index] = signatures.get(index, 0) + 1
                 elif delta.get('type') == 'input_json_delta':
                     inputs[index] = inputs.get(index, '') + delta['partial_json']
                 else:
