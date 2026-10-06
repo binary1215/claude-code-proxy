@@ -1162,3 +1162,56 @@ adapter round trips (four requests), and actual Codex synthetic hoist compaction
 plus two follow-ups (five requests). Known normal-route losses and pass-through
 metadata removal remain visible. See the
 [separate synthetic qualification summary](evidence/corrected-signature-qualification-20261006.json).
+
+## OpenCode Responses comparison (2026-10-07 KST)
+
+The operator requested the same OpenCode client through the existing Responses
+route. A separate [bounded runner](../integration/clients/README-live-opencode-responses.md)
+uses unmodified OpenCode 1.18.34's bundled OpenAI Responses provider with native
+Haiku model ID, `store:false`, and `include:["reasoning.encrypted_content"]`.
+Default client prompt and User-Agent are retained. Neither client, LiteLLM,
+proxy implementation nor deployment was changed for this comparison.
+
+Two different failures were observed; they must not be conflated:
+
+1. **Offline replay compatibility:** actual OpenCode and the built local proxy,
+   with a fake native provider, returned 200 on the first request and executed
+   the real fixture Read. The second request preserved all three encrypted
+   reasoning values but omitted their item IDs. The proxy rejected it with
+   HTTP 400 `invalid_reasoning_state`, before a second fake-native call.
+   The `ccpr1` codec authenticates the external item ID and the request parser
+   requires it; ciphertext preservation alone is insufficient for this current
+   adapter. This is a proxy/client-format compatibility gap, not evidence of
+   lost thinking text or a provider entitlement rejection. Synthetic signed,
+   signed-empty and redacted blocks are not real-provider signature validation.
+2. **Actual first-request provider rejection:** one explicitly bounded request
+   through `.7/claude-responses/v1/responses` and `.64 test-claudemock` received
+   HTTP 400 `invalid_request_error`, classified from the provider message as
+   `third_party_plan_usage_restriction`. Relay history row **47** independently
+   records upstream 400 with OAuth and `provider_error`, at
+   **2026-10-06 15:01:22–23 UTC / 2026-10-07 00:01:22–23 KST**. No reasoning
+   replay had yet occurred, so the missing-ID issue did not cause this rejection.
+
+The live observer forwarded exactly one request. There was one new relay
+history row, no automatic retry, identity substitution, paid fallback, live
+tool execution or follow-up. The container and `f5031f3` image stayed unchanged.
+Provider usage/cache counters were unavailable, not zero-cost evidence; the
+gateway's persisted accounting was not re-audited for this probe.
+
+Thus switching this OpenCode configuration to Responses **alone does not solve
+the observed provider restriction**. The result does not isolate which header,
+prompt or other request feature caused the different outcome from earlier
+Codex tests, and does not establish general authorization for either client.
+The independent missing-ID compatibility gap remains unfixed. Its repair would
+not itself alter the provider's first-request usage decision.
+
+Both original offline failure reports remain unchanged. The historical q2
+`function_calls_exact:false` compares serialization; it does not establish
+different parsed tool arguments. The new runner reports parsed JSON equality
+separately. Sanitized reports, original report hashes and read-only deployment/
+history correlation are in [the comparison evidence](evidence/opencode-responses-20261007.json).
+No private client history, prompt, ciphertext or credential is published.
+
+Local verification: TypeScript build and **153/153 backend tests** passed;
+**63/63 pure observer tests** passed, including 18 new Responses-runner checks.
+These regressions do not turn either failed client comparison into a pass.

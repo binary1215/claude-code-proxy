@@ -13,6 +13,8 @@ spoofing, paid-key fallback, or production replacement is implied by these tests
 | Codex 0.160.0 → actual `.7` Responses pass-through → `.64` adapter → real Haiku | Five requests: get_goal tool, actual compaction, two follow-ups; exact opaque replay. Eligible-prefix run reads cache 6911 / 7505 | Limited no-I/O profile, not ordinary shell/apply_patch coding; gateway usage/spend is not accounted |
 | Linux Codex 0.160.0 apply_patch → actual `.7` → `.64` validated adapter → real Haiku | Four requests: actual fixture creation and same-thread update, two successful fileChange/tool results, exact file bytes, five observed opaque-state checks | Patch-only profile; no shell or multi-file repository task. Short input has zero cache reads/writes; relay usage matches, gateway accounting separate |
 | OpenCode 1.18.34 → actual `.7` native pass-through → `.64` → real Haiku | Single request reached provider, returned 400 third-party plan/extra-usage restriction | Not a protocol-format error; no retry, client impersonation or paid fallback authorized |
+| OpenCode 1.18.34 → actual `.7` Responses pass-through → `.64` adapter → real Haiku | One first-request probe also returned upstream 400 third-party plan/extra-usage restriction; proxy history row 47, unchanged deployment | Responses route alone did not resolve rejection; exact classification trigger unknown. No live tool/replay or multi-turn success |
+| OpenCode 1.18.34 → actual local Responses adapter → fake Anthropic | First request 200 and actual Read complete; replay preserves all three ciphertexts but omits reasoning IDs | Second request rejected locally with `invalid_reasoning_state`; one fake-native call. Separate adapter compatibility gap, not the live provider refusal |
 | Claude Code 2.1.289 → native test relay → real Claude | Earlier isolated Opus control succeeded with a real cache hit | Actual `.7` route, tool-rich multi-turn acceptance, gateway policy/accounting |
 | Claude Code 2.1.289 → stock pass-through → native relay → fake Anthropic | Single-signature-event control preserves signed/empty/redacted/tool history; real Read and final answer succeed | Historical split-part concatenation oracle was incorrect, not a client defect; stock route removes top-level metadata; not whole-body fidelity |
 | Codex 0.160.0 → stock LiteLLM 1.103.1 Responses → fake Anthropic | Actual CLI completes a tool round trip, but signed reasoning is lost | **Not fidelity-compatible on this tested route**; real authorization also unresolved |
@@ -41,6 +43,7 @@ quality/cost improvement.
 
 Live runners: [Claude Code](README-live-claude-code.md),
 [Codex](README-live-codex.md), [OpenCode](README-live-opencode.md),
+the [OpenCode Responses comparison](README-live-opencode-responses.md),
 and the separate [Linux Codex patch preflight/live runner](README-live-codex-patch.md).
 They use the already deployed routes and an approved gateway key supplied by an
 environment-variable name; no installation, normal client configuration edit,

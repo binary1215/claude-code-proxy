@@ -1,0 +1,410 @@
+{
+  "date_kst": "2026-10-07",
+  "observed_at_utc": "2026-10-06T15:01:23Z",
+  "source_basis": "503555d6522f37f9c07d977f633c2a5cbfd96755",
+  "scope": "OpenCode 1.18.34: local Responses replay qualification, then one actual shared-gateway Responses acceptance probe; no deployment changes",
+  "report_sha256": {
+    "offline_initial": "41c333092b3ab3203e4287a4e1106e319222d8a0cbfaeda882ea6469f19cfae1",
+    "offline_diagnostic": "b309b741f352fc6e5e85c44f1a34d89ae5b41028fe52e462b7aa6ff04f848e54",
+    "live_first_request": "38c015a3efb511ce8f0b0e6d8df9586196d24b5deee958f7cef3cc034eed51df",
+    "relay_correlation": "a42967881ef6b243cef42d97638235712e7fa2dc6ac0a26da9048cc06363ef3e"
+  },
+  "conclusions": {
+    "responses_route_alone_resolved_provider_rejection": false,
+    "real_provider_reason": "third_party_plan_usage_restriction",
+    "exact_provider_classification_trigger_established": false,
+    "live_first_request_accepted": false,
+    "live_multiturn_tested": false,
+    "offline_first_request_and_real_read_tool_succeeded": true,
+    "offline_replay_rejected_by_proxy": "invalid_reasoning_state",
+    "offline_reasoning_ciphertexts_preserved": true,
+    "offline_reasoning_item_ids_omitted": true,
+    "no_silent_reasoning_removal": true,
+    "client_or_gateway_source_modified": false,
+    "provider_identity_spoofed": false,
+    "paid_fallback": false,
+    "invoice_or_charge_observed": false,
+    "limitations": [
+      "The offline missing-ID failure and the live third-party-plan rejection are separate failures at different hops.",
+      "The changed provider/transport is not a one-variable experiment on the provider's classification mechanism.",
+      "Live null usage does not establish zero billing.",
+      "Original failed reports are retained unchanged; synthetic signatures do not establish provider signature validity."
+    ]
+  },
+  "offline": {
+    "functional_pass": false,
+    "phases": [
+      {
+        "exit_code": 1,
+        "timed_out": false,
+        "overflow": false,
+        "stopped_on_observer_failure": true,
+        "event_count": 4,
+        "event_parse_ok": true,
+        "session_id_observed": true,
+        "final_marker_present": false,
+        "final_step_stop": false,
+        "error_event": true,
+        "read_tool_completions": 1,
+        "other_tool_events": 0,
+        "client_usage": [
+          {
+            "input_tokens": 100,
+            "output_tokens": 20,
+            "reasoning_tokens": 0,
+            "cache_read_input_tokens": 30,
+            "cache_creation_input_tokens": 20
+          }
+        ],
+        "functional_pass": false,
+        "phase": "read",
+        "actual_read_roundtrip": false
+      }
+    ],
+    "harness_error": "gateway_http_failure",
+    "mode": "offline",
+    "opencode_version": "1.18.34",
+    "opencode_sha256": "184f196ec97c843a64b2e1a2b49165f25e73a5d6993e2f842c9958c2b1f7a5b2",
+    "model": "claude-haiku-4-5-20251001",
+    "provider": "bundled @ai-sdk/openai Responses",
+    "gateway_endpoint": null,
+    "local_proxy_started": true,
+    "local_gateway_started": false,
+    "direct_deployed_relay_calls": false,
+    "maximum_gateway_attempts": 0,
+    "maximum_client_attempts": 4,
+    "client_source_modified": false,
+    "client_system_prompt_replaced": false,
+    "client_user_agent_replaced": false,
+    "paid_fallback": false,
+    "observer_body_repair": false,
+    "not_tested": [
+      "deployed downstream wire fidelity/retries",
+      "gateway accounting/model ACL",
+      "real signed-empty/redacted if not emitted",
+      "compaction/cancellation/model switch",
+      "OS-enforced filesystem/network sandbox"
+    ],
+    "observer_failure": "gateway_http_failure",
+    "client_edge_requests": 2,
+    "outgoing_gateway_attempts": 0,
+    "blocked_model_attempts": 0,
+    "blocked_incidental_requests": 2,
+    "responses": [
+      {
+        "phase": "read",
+        "http_status": 200,
+        "complete": true,
+        "usage": {
+          "input_tokens": 150,
+          "output_tokens": 20,
+          "total_tokens": 170,
+          "input_tokens_details": {
+            "cached_tokens": 30,
+            "cache_write_tokens": 20
+          },
+          "output_tokens_details": {},
+          "anthropic_usage": {
+            "input_tokens": 100,
+            "output_tokens": 20,
+            "cache_read_input_tokens": 30,
+            "cache_creation_input_tokens": 20
+          }
+        },
+        "error_diagnostics": null,
+        "sse_failure_codes": [],
+        "request_fields": [
+          "include",
+          "input",
+          "max_output_tokens",
+          "model",
+          "prompt_cache_key",
+          "store",
+          "stream",
+          "tool_choice",
+          "tools"
+        ],
+        "unknown_inventory_fields": [],
+        "input_item_types": [
+          "message",
+          "message"
+        ],
+        "input_message_roles": [
+          "developer",
+          "user"
+        ],
+        "store_false": true,
+        "previous_response_id_present": false,
+        "encrypted_content_requested": true,
+        "instructions_present": false,
+        "system_message_present": false,
+        "opencode_user_agent_present": true,
+        "beta_header_present": false,
+        "observer_request_bytes_unchanged": true,
+        "observer_response_bytes_unchanged": true,
+        "reasoning_count": 3,
+        "opaque_done_completed_exact": true,
+        "encrypted_content_present": true,
+        "function_call_count": 1
+      },
+      {
+        "phase": "read",
+        "http_status": 400,
+        "complete": false,
+        "usage": {
+          "input_tokens_details": {},
+          "output_tokens_details": {},
+          "anthropic_usage": {}
+        },
+        "error_diagnostics": {
+          "error_type": "invalid_request_error",
+          "reason": "unclassified_provider_error",
+          "adapter_error_code": "invalid_reasoning_state"
+        },
+        "sse_failure_codes": [],
+        "request_fields": [
+          "include",
+          "input",
+          "max_output_tokens",
+          "model",
+          "prompt_cache_key",
+          "store",
+          "stream",
+          "tool_choice",
+          "tools"
+        ],
+        "unknown_inventory_fields": [],
+        "input_item_types": [
+          "message",
+          "message",
+          "reasoning",
+          "reasoning",
+          "reasoning",
+          "function_call",
+          "function_call_output"
+        ],
+        "input_message_roles": [
+          "developer",
+          "user"
+        ],
+        "store_false": true,
+        "previous_response_id_present": false,
+        "encrypted_content_requested": true,
+        "instructions_present": false,
+        "system_message_present": false,
+        "opencode_user_agent_present": true,
+        "beta_header_present": false,
+        "observer_request_bytes_unchanged": true,
+        "observer_response_bytes_unchanged": true,
+        "reasoning_count": 0,
+        "opaque_done_completed_exact": null,
+        "encrypted_content_present": null,
+        "function_call_count": 0
+      }
+    ],
+    "replays": [
+      {
+        "phase": "read",
+        "issued_reasoning_count": 3,
+        "opaque_reasoning_exact": false,
+        "reasoning_item_fields": [
+          [
+            "encrypted_content",
+            "summary",
+            "type"
+          ],
+          [
+            "encrypted_content",
+            "summary",
+            "type"
+          ],
+          [
+            "encrypted_content",
+            "summary",
+            "type"
+          ]
+        ],
+        "reasoning_ids_exact": false,
+        "reasoning_ciphertexts_exact": true,
+        "reasoning_id_present": [
+          false,
+          false,
+          false
+        ],
+        "reasoning_ciphertext_present": [
+          true,
+          true,
+          true
+        ],
+        "function_calls_exact": false,
+        "tool_result_ids_match_issued_order": true,
+        "fixture_read_result_present": true
+      }
+    ],
+    "observed_opaque_state_pass": false,
+    "offline_native_requests": 1,
+    "offline_native_replay": [],
+    "offline_native_replay_pass": null,
+    "deployed_gateway_to_relay_body_fidelity": null,
+    "downstream_provider_call_count": null,
+    "downstream_retry_count": null,
+    "gateway_usage_cost_accounting_exact": null
+  },
+  "live": {
+    "functional_pass": false,
+    "phases": [
+      {
+        "phase": "first_request_probe",
+        "exit_code": 1,
+        "timed_out": false,
+        "overflow": false,
+        "stopped_on_observer_failure": true
+      }
+    ],
+    "harness_error": "gateway_http_failure",
+    "mode": "live",
+    "opencode_version": "1.18.34",
+    "opencode_sha256": "184f196ec97c843a64b2e1a2b49165f25e73a5d6993e2f842c9958c2b1f7a5b2",
+    "model": "claude-haiku-4-5-20251001",
+    "provider": "bundled @ai-sdk/openai Responses",
+    "gateway_endpoint": "http://192.168.0.7:4000/claude-responses/v1/responses",
+    "local_proxy_started": false,
+    "local_gateway_started": false,
+    "direct_deployed_relay_calls": false,
+    "maximum_gateway_attempts": 1,
+    "maximum_client_attempts": 1,
+    "first_request_only": true,
+    "client_source_modified": false,
+    "client_system_prompt_replaced": false,
+    "client_user_agent_replaced": false,
+    "paid_fallback": false,
+    "observer_body_repair": false,
+    "not_tested": [
+      "deployed downstream wire fidelity/retries",
+      "gateway accounting/model ACL",
+      "real signed-empty/redacted if not emitted",
+      "compaction/cancellation/model switch",
+      "OS-enforced filesystem/network sandbox"
+    ],
+    "first_request_probe_complete": true,
+    "first_request_accepted": false,
+    "expected_probe_stop": false,
+    "multi_turn_tested": false,
+    "observer_failure": "gateway_http_failure",
+    "client_edge_requests": 1,
+    "outgoing_gateway_attempts": 1,
+    "blocked_model_attempts": 0,
+    "blocked_incidental_requests": 2,
+    "responses": [
+      {
+        "phase": "read",
+        "http_status": 400,
+        "complete": false,
+        "usage": {
+          "input_tokens_details": {},
+          "output_tokens_details": {},
+          "anthropic_usage": {}
+        },
+        "error_diagnostics": {
+          "error_type": "invalid_request_error",
+          "reason": "third_party_plan_usage_restriction",
+          "adapter_error_code": null
+        },
+        "sse_failure_codes": [],
+        "request_fields": [
+          "include",
+          "input",
+          "max_output_tokens",
+          "model",
+          "prompt_cache_key",
+          "store",
+          "stream",
+          "tool_choice",
+          "tools"
+        ],
+        "unknown_inventory_fields": [],
+        "input_item_types": [
+          "message",
+          "message"
+        ],
+        "input_message_roles": [
+          "developer",
+          "user"
+        ],
+        "store_false": true,
+        "previous_response_id_present": false,
+        "encrypted_content_requested": true,
+        "instructions_present": false,
+        "system_message_present": false,
+        "opencode_user_agent_present": true,
+        "beta_header_present": false,
+        "observer_request_bytes_unchanged": true,
+        "observer_response_bytes_unchanged": true,
+        "reasoning_count": 0,
+        "opaque_done_completed_exact": null,
+        "encrypted_content_present": null,
+        "function_call_count": 0
+      }
+    ],
+    "replays": [],
+    "observed_opaque_state_pass": null,
+    "offline_native_requests": null,
+    "offline_native_replay": null,
+    "offline_native_replay_pass": null,
+    "deployed_gateway_to_relay_body_fidelity": null,
+    "downstream_provider_call_count": null,
+    "downstream_retry_count": null,
+    "gateway_usage_cost_accounting_exact": null
+  },
+  "relay": {
+    "before": {
+      "container_id": "59efc52a9d36fd9f879a36e24d55f592cc93b48b87df5d447f755ef7f3450d71",
+      "image": "sha256:433b37a638c11dd1a3bd7903b85c59414b40be6a540b8498af7cc38f5dc1cf8f",
+      "running": true,
+      "responses_enabled": true,
+      "upstream_auth_kind": "oauth",
+      "credential_configured": true,
+      "totals": {
+        "count": 46,
+        "last_id": 46,
+        "pending": 0
+      },
+      "rows": []
+    },
+    "after": {
+      "container_id": "59efc52a9d36fd9f879a36e24d55f592cc93b48b87df5d447f755ef7f3450d71",
+      "image": "sha256:433b37a638c11dd1a3bd7903b85c59414b40be6a540b8498af7cc38f5dc1cf8f",
+      "running": true,
+      "responses_enabled": true,
+      "upstream_auth_kind": "oauth",
+      "credential_configured": true,
+      "totals": {
+        "count": 47,
+        "last_id": 47,
+        "pending": 0
+      },
+      "rows": [
+        {
+          "id": 47,
+          "created_at": "2026-10-06 15:01:22",
+          "completed_at": "2026-10-06 15:01:23",
+          "status": "error",
+          "input_tokens": null,
+          "output_tokens": null,
+          "cache_creation_input_tokens": null,
+          "cache_read_input_tokens": null,
+          "usage_complete": 0,
+          "upstream_http_status": 400,
+          "upstream_error_type": "invalid_request_error",
+          "upstream_error_code": null,
+          "upstream_auth_kind": "oauth",
+          "upstream_diagnostic": "provider_error"
+        }
+      ]
+    },
+    "harness_exit_code": 1,
+    "automatic_retry": false,
+    "paid_fallback": false,
+    "deployment_unchanged": true
+  }
+}

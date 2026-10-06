@@ -171,7 +171,7 @@ Responses relay and is rejected before inference. This establishes routing and
 dynamic header delivery, not actual-client/provider acceptance or spend accuracy.
 See [gateway deployment and rollback](docs/VERIFICATION.md#shared-gateway-routes-2026-10-06).
 
-### Actual shared-gateway results (2026-10-06)
+### Actual shared-gateway results (2026-10-06; OpenCode comparison 2026-10-07 KST)
 
 **Claude Code 2.1.289 and Codex 0.160.0 both completed real Haiku multi-turn
 tests through `.7`**, using a separate 24-hour key restricted to the two routes.
@@ -187,8 +187,12 @@ to native Messages; LiteLLM pass-through avoids a second, lossy conversion.
   A separate Linux run also **created and updated a real fixture file** through
   `apply_patch=validated`: four Haiku requests, exact final bytes and tool results,
   with opaque reasoning replay preserved.
-- OpenCode: one native request was rejected by the provider with HTTP 400 and a
-  third-party plan/extra-usage restriction. No spoofing, retry or paid fallback.
+- OpenCode: one native and one Responses request were each rejected by the
+  provider with HTTP 400 and a third-party plan/extra-usage restriction.
+  Switching routes alone did not resolve rejection. Separately, offline
+  Responses replay preserves ciphertexts but omits reasoning IDs, which the
+  proxy currently requires. See the [two distinct findings](integration/clients/README-live-opencode-responses.md).
+  No spoofing, retry or paid fallback was used.
 - LiteLLM generic pass-through logs record **zero tokens/spend and no provider
   cache usage**, even for these real requests. This is missing accounting, not
   free usage. Gateway model allowlists also do not enforce the body model here.
