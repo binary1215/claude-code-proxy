@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "scope": "Actual shared .7 gateway deployment; no model inference",
+  "observed_date": "2026-10-06",
+  "run_id": "routes-20261006T130035Z",
+  "gateway": "192.168.0.7:4000",
+  "image": "ghcr.io/berriai/litellm:v1.103.1",
+  "container_id": "36736db6c7f3d1808e73205d4d04f76b96be678fdad3400fb88143331b4a7832",
+  "image_id_unchanged": true,
+  "prior_environment_preserved": true,
+  "model_database_rows_equal": true,
+  "model_count": 24,
+  "key_inventory_preserved": true,
+  "key_count": 4,
+  "log_level": "INFO",
+  "network": "litellm_default",
+  "health_http": 200,
+  "routes": [
+    {
+      "path": "/claude-native/v1/messages",
+      "target": "http://192.168.0.64:13457/v1/messages",
+      "methods": ["POST"],
+      "auth": true,
+      "forward_headers": true,
+      "unauthenticated_http": 401,
+      "authenticated_empty_body_http": 400
+    },
+    {
+      "path": "/claude-responses/v1/responses",
+      "target": "http://192.168.0.64:13457/v1/responses",
+      "methods": ["POST"],
+      "auth": true,
+      "forward_headers": true,
+      "unauthenticated_http": 401,
+      "authenticated_empty_body_http": 400,
+      "authenticated_empty_body_error_code": "invalid_model"
+    }
+  ],
+  "dynamic_header_probe": {
+    "path": "/claude-responses/v1/responses",
+    "model": "claude-haiku-4-5-20251001",
+    "input_omitted": true,
+    "malformed_native_options_header": true,
+    "http": 400,
+    "error_code": "invalid_native_options",
+    "dynamic_header_reached_relay": true,
+    "model_inference_requested": false
+  },
+  "configuration": {
+    "gateway_compose": "/volume2/docker/litellm/config/docker-compose.json",
+    "gateway_yaml": "/volume2/docker/litellm/config/claude-pass-through.yaml",
+    "container_yaml": "/app/config/claude-pass-through.yaml",
+    "yaml_mount_readonly": true,
+    "portainer_source_host": "192.168.0.64",
+    "portainer_source": "/DATA/AppData/portainer/compose/18/docker-compose.yml",
+    "source_synchronized": true,
+    "source_sha256": "2e7fe6ced23ef855f6fe06f324837db8d005c80ef1799fc079907b39459ed500"
+  },
+  "backups": {
+    "gateway": "/volume2/docker/litellm-updates/routes-20261006T130035Z",
+    "portainer_source": "/opt/litellm-stack18-backups/routes-20261006T130035Z",
+    "database_dump_bytes": 62784997,
+    "database_dump_list_verified": true
+  },
+  "timing": {
+    "final_apply_unavailable_seconds_approx": 60.24,
+    "first_attempt_elapsed_upper_bound_seconds": 61.75,
+    "automatic_rollback_unavailable_seconds_approx": 57.23,
+    "note": "First apply samples were not retained. Sampling and timeouts prevent an exact total downtime claim."
+  },
+  "first_attempt": {
+    "rolled_back": true,
+    "reason": "Verification incorrectly compared derived model-info metadata that is recomputed on restart.",
+    "database_model_rows_changed": false,
+    "resolution": "Compare stored model rows with the pre-deployment database dump; reapply successfully."
+  },
+  "not_proven": [
+    "Actual coding-client/provider end-to-end acceptance",
+    "Virtual-key route/model restrictions",
+    "Persisted gateway usage, spend and budget accuracy",
+    "General preservation of every possible header"
+  ]
+}

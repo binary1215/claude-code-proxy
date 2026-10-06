@@ -107,6 +107,13 @@ multi-turn seed/replay calls, for the local random gateway key.
 
 ## Free authentication and configuration constraints
 
+Deployment update, 2026-10-06: the owner applied the two `.7` Messages/Responses
+routes using YAML and a user-approved restart, without changing LiteLLM source
+or version. Dynamic header delivery was measured with a pre-inference rejection.
+See [deployment evidence and rollback](../../docs/VERIFICATION.md#shared-gateway-routes-2026-10-06).
+The configuration limitation below describes why YAML was chosen, not a current
+access blocker. Virtual-key and accounting acceptance remain separate.
+
 The deployed 1.103.1 UI disables its pass-through authentication toggle with a
 Premium label. The pinned backend intentionally supports `auth: true` without
 a license: registration attaches the real `user_api_key_auth` dependency even

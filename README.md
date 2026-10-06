@@ -164,7 +164,14 @@ preserved. Native rollback and re-upgrade with the same durable state key both
 passed local route/startup checks. Other containers and `.7` were unchanged;
 see [the current test deployment and rollback commands](docs/VERIFICATION.md#test-service-update-and-native-rollback-2026-10-06).
 
-The required acceptance clients are **Claude Code and Codex**, with OpenCode as an additional comparison. [Actual client tests](integration/clients/README.md) show that Codex 0.160.0 loses signed reasoning through stock LiteLLM 1.103.1's normal Responses conversion. The new pass-through → proxy Responses route passes both synthetic actual-Codex tool round trips, including split signatures, signed-empty and redacted blocks. This is protocol evidence, not real upstream authorization, production rollout or full coding-workflow certification. Free pass-through authentication is supported by the pinned backend despite the UI's Premium label, but complete header forwarding requires owner-applied configuration; [policy constraints](integration/litellm/README.md#free-authentication-and-configuration-constraints) remain rollout requirements.
+The gateway owner subsequently deployed both authenticated `.7` pass-through
+routes with `forward_headers: true`, preserving all 24 existing model records,
+four keys and LiteLLM `1.103.1`. A malformed native-options header reaches the
+Responses relay and is rejected before inference. This establishes routing and
+dynamic header delivery, not actual-client/provider acceptance or spend accuracy.
+See [gateway deployment and rollback](docs/VERIFICATION.md#shared-gateway-routes-2026-10-06).
+
+The required acceptance clients are **Claude Code and Codex**, with OpenCode as an additional comparison. [Actual client tests](integration/clients/README.md) show that Codex 0.160.0 loses signed reasoning through stock LiteLLM 1.103.1's normal Responses conversion. The new pass-through → proxy Responses route passes both synthetic actual-Codex tool round trips, including split signatures, signed-empty and redacted blocks. This is protocol evidence, not real upstream authorization, production rollout or full coding-workflow certification. Free pass-through authentication is supported by the pinned backend despite the UI's Premium label. The owner-applied header configuration is now deployed; virtual-key/model/accounting [policy constraints](integration/litellm/README.md#free-authentication-and-configuration-constraints) remain separately unqualified.
 
 ## Source map
 

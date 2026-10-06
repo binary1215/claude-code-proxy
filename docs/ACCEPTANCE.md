@@ -24,7 +24,7 @@ functional work can continue while gateway access is pending.
 | Actual clients | Claude Code and Codex on each selected gateway route, streaming, tool execution/result, further user turns | Codex synthetic chain passes; Claude Code single-signature-event state subset passes, but split-event client loss and gateway metadata removal remain; no deployed `.7` client acceptance |
 | Reasoning continuity | Ordered thinking/signatures, signed-empty/redacted blocks and tool IDs survive replay; corruption fails explicitly | Synthetic edge cases pass. Real Haiku returns signed reasoning + one tool call; hoisted and identical Responses replays succeed. This is provider acceptance, not local signature verification or actual client compaction |
 | Cache accounting | Repeated eligible native prefix, provider cache read/write/fresh/output counts and matching relay history | Direct Haiku Responses reads 0 → 5503 → 5651, writes 5503 → 148 → 0, fresh input 10 → 5 → 5. Native/Responses/history counts match; deployed gateway accounting is still unmeasured |
-| Gateway authorization | Missing/expired/revoked keys, allowed/denied routes, relay model ACL, caller/provider secret separation | Stock source/helper audit exists; actual gateway DB-backed virtual-key acceptance remains |
+| Gateway authorization | Missing/expired/revoked keys, allowed/denied routes, relay model ACL, caller/provider secret separation | Actual `.7` routes deployed with auth/forward_headers; absent key 401, admin-authenticated empty requests reach relay 400, dynamic options header reaches relay. DB-backed virtual-key route/model acceptance remains |
 | Gateway accounting | Stream completion/failure/cancellation usage and persisted spend compared with known source counters | Generic pass-through accounting is not verified; unknown cost must not be presented as zero or a saving |
 | Coding-session envelope | Actual tool schema, model metadata, context limit, follow-up behavior and compaction choice | Optional validated apply-patch transport passes synthetic replay; actual Windows CLI denied the file edit. Codex compaction + two follow-ups pass with opt-in hoist through stock LiteLLM/fake provider at `1d9bbf7`; default reject still fails on the late developer. Direct real-provider developer-position replay now passes; changed system with retained capsules fails 409 locally. Real-client/provider long sessions and deployment mode choice remain; remote compaction unsupported |
 | Deployment and rollback | Backed-up config/database, preserved state key, exact target, no unrelated service change, healthy rollback target | Actual test-claudemock updated to `f27c51e`, rolled back to native `0ca7575`, then re-upgraded with the same durable key. Original key/settings/history rows and other containers preserved. Consistent real DB backup passes integrity checks; restoring that real backup into a fresh volume is not tested. Prior 8/8 synthetic restoration evidence remains scoped to its older exact image pair |
@@ -79,8 +79,10 @@ using an isolated client and a narrowly scoped gateway credential.
   actual client/gateway integration is still to be tested. Proxy-only validated apply-patch activation is a separate
   choice, not implied by this experiment or by leaving Codex unchanged.
 - The shared gateway UI does not preserve `forward_headers` through the audited
-  typed admin schema. Dynamic header forwarding needs the gateway owner's YAML
-  and reload access; UI admin access alone is not equivalent.
+  typed admin schema. On 2026-10-06 the operator approved YAML application and
+  restart, and the gateway owner deployed both routes without a source/version
+  change. Dynamic header delivery is measured; actual client/provider tests and
+  virtual-key accounting remain separate. See the gateway deployment evidence.
 - Existing subscription-token acceptance by official Claude Code is not proof
   that Codex or another arbitrary client is authorized or accepted. This feature
   does not confer provider entitlement or approve separate API charges.

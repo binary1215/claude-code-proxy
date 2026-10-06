@@ -746,7 +746,8 @@ Evidence:
 At this probe's completion, the test service still ran the native-only baseline.
 The subsequent test deployment below makes the Responses endpoint available for
 actual-client integration. Gateway configuration remains owned by `LiteLLM 관리`;
-original Portainer Stack access is still pending.
+original Portainer Stack access was still pending at that stage and was resolved
+for the subsequent shared-gateway deployment below.
 
 ### Test service update and native rollback (2026-10-06)
 
@@ -811,9 +812,66 @@ docker compose -p test-claudemock \
 This restores native availability, not Responses. Do not restore the older DB
 over newer history/revocations automatically. Keep both private configurations
 and the backup; preserving the candidate file preserves its state key.
-The gateway owner was notified that `.64` backend readiness is resolved. `.7`
-routes, actual gateway accounting and mandatory real-client sessions are still
-to be completed; no extra vulnerability review was introduced.
+The gateway owner was notified that `.64` backend readiness is resolved. The
+subsequent gateway deployment is below; actual gateway accounting and mandatory
+real-client sessions remain unqualified.
+
+### Shared gateway routes (2026-10-06)
+
+After explicit operator approval, `LiteLLM 관리` deployed the two POST routes
+`/claude-native/v1/messages` and `/claude-responses/v1/responses` on `.7:4000`,
+targeting the corresponding `/v1` endpoints of `.64:13457`. Both load
+`auth: true` and `forward_headers: true`. No LiteLLM source/license/version
+change was made. Image `v1.103.1`, INFO, the original environment, network,
+24 stored model rows and four key identities were preserved. The source Stack
+file on `.64` was synchronized to the actual runtime instead of redeploying its
+stale `v1.81.14`/DEBUG configuration.
+
+Actual observations: health 200; absent gateway key 401 on both routes;
+admin-authenticated empty JSON reaches relay validation (400). A request with
+the permitted Haiku model, no input and malformed `x-claude-proxy-native-options`
+returns relay `invalid_native_options`, establishing dynamic header delivery.
+All these requests reject before inference. These are not virtual-key policy,
+model-generation, cache-hit or spend-accounting tests.
+
+The first apply was automatically rolled back because the verifier compared
+derived `/model/info` prices/options that are recomputed on restart. The DB
+model rows were unchanged. Correcting the comparison to stored rows allowed
+successful reapplication. Final unavailable time was approximately 60 seconds;
+rollback approximately 57 seconds. The first apply's exact unavailable interval
+was not retained; its whole apply window was at most approximately 62 seconds.
+
+Evidence: [sanitized deployment and header probe](evidence/gateway-deployment-20261006.json).
+Detailed local operational reports are in
+`home_server_proj/.agent-work/20261006-litellm-routes/`. Private Compose files
+and backups contain credentials; do not publish them.
+
+Current `.7` configuration:
+`/volume2/docker/litellm/config/docker-compose.json` and
+`/volume2/docker/litellm/config/claude-pass-through.yaml` (read-only container
+mount at `/app/config/claude-pass-through.yaml`). Portainer source on `.64`:
+`/DATA/AppData/portainer/compose/18/docker-compose.yml`.
+
+To restore the prior gateway configuration, run on `.7`:
+
+```sh
+sudo docker compose -p litellm \
+  -f /volume2/docker/litellm-updates/routes-20261006T130035Z/rollback.compose.json \
+  up -d --no-deps --pull never --no-build litellm
+```
+
+Then synchronize the matching rollback source on `.64`:
+
+```sh
+install -m 600 \
+  /opt/litellm-stack18-backups/routes-20261006T130035Z/rollback.current-runtime.compose.yaml \
+  /DATA/AppData/portainer/compose/18/docker-compose.yml
+```
+
+Use this current-runtime `v1.103.1`/INFO rollback, not the retained stale original.
+A configuration rollback does not require restoring the database. The database
+dump is 62,784,997 bytes and its archive listing was verified; no live database
+restore was performed. The `.64` relay was not changed by this gateway rollout.
 
 ### Remaining end-to-end constraints
 
