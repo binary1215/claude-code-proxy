@@ -365,6 +365,9 @@ export class ResponsesStream {
     if (state.native.type === "tool_use" && delta.type === "input_json_delta") {
       keys(delta, ["type", "partial_json"]);
       if (typeof delta.partial_json !== "string" || Object.keys(state.native.input).length) problem("malformed_tool_input");
+      // Anthropic's accumulator keeps {} when the JSON buffer stays empty.
+      // Empty fragments add no input; nonempty fragments still require valid JSON.
+      if (!delta.partial_json.length) return [];
       state.inputDeltaSeen = true;
       state.partialJSON += delta.partial_json;
       if (state.tool!.kind === "custom") return [];

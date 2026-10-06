@@ -130,6 +130,59 @@ test('native function tool name/namespace restored; fragmented arguments and cal
   assert.deepEqual(events.find((event) => event.type === 'response.output_item.done').item, item);
 });
 
+test('no-argument function accepts no JSON delta, one empty delta, or repeated empty deltas', () => {
+  for (const fragments of [[], [''], ['', '']]) {
+    const { stream } = fixture();
+    const events = run(stream, [start(), block(0, { type: 'tool_use', id: 'toolu_empty', name: 'native_fn', input: {} }),
+      ...fragments.map(partial_json => delta(0, { type: 'input_json_delta', partial_json })),
+      stop(0), messageDelta('tool_use'), messageStop]);
+    stream.finish();
+    const item = completed(events).output[0];
+    assert.equal(item.arguments, '{}');
+    assert.equal(item.status, 'completed');
+    assert.equal(events.filter(event => event.type === 'response.function_call_arguments.delta').map(event => event.delta).join(''), '{}');
+    assert.equal(events.find(event => event.type === 'response.function_call_arguments.done').arguments, '{}');
+    assert.deepEqual(events.find(event => event.type === 'response.output_item.done').item, item);
+  }
+});
+
+test('empty JSON fragments around nonempty function/custom input preserve the exact arguments', () => {
+  for (const [name, args] of [['native_fn', '{ "path": "漢字", "flag": true }'],
+    ['native_custom', '{ "input": "synthetic custom text" }']]) {
+    const { stream } = fixture();
+    const fragments = ['', args.slice(0, 9), '', args.slice(9), ''];
+    const events = run(stream, [start(), block(0, { type: 'tool_use', id: 'toolu_mixed', name, input: {} }),
+      ...fragments.map(partial_json => delta(0, { type: 'input_json_delta', partial_json })),
+      stop(0), messageDelta('tool_use'), messageStop]);
+    stream.finish();
+    const item = completed(events).output[0];
+    if (name === 'native_fn') {
+      assert.equal(item.arguments, args);
+      assert.equal(events.filter(event => event.type === 'response.function_call_arguments.delta').map(event => event.delta).join(''), args);
+      assert.equal(events.find(event => event.type === 'response.function_call_arguments.done').arguments, args);
+    } else {
+      assert.equal(item.input, JSON.parse(args).input);
+      assert.equal(events.find(event => event.type === 'response.custom_tool_call_input.done').input, item.input);
+    }
+    assert.deepEqual(events.find(event => event.type === 'response.output_item.done').item, item);
+  }
+});
+
+test('empty deltas do not repair nonempty malformed or non-object JSON, or invent custom input', () => {
+  for (const args of [' ', '{broken', '{"path":', 'null', '[]', '1', '{}trailing']) {
+    const { stream } = fixture();
+    const events = run(stream, [start(), block(0, { type: 'tool_use', id: 'toolu_bad', name: 'native_fn', input: {} }),
+      delta(0, { type: 'input_json_delta', partial_json: '' }),
+      delta(0, { type: 'input_json_delta', partial_json: args }),
+      delta(0, { type: 'input_json_delta', partial_json: '' }), stop(0)]);
+    assertFailure(events, 'malformed_tool_input');
+    assert(!events.some(event => event.type === 'response.function_call_arguments.done' || event.type === 'response.output_item.done'));
+  }
+  const { stream } = fixture();
+  assertFailure(run(stream, [start(), block(0, { type: 'tool_use', id: 'toolu_custom_empty', name: 'native_custom', input: {} }),
+    delta(0, { type: 'input_json_delta', partial_json: '' }), stop(0)]), 'malformed_tool_input');
+});
+
 test('custom tools restore only decoded input, not native JSONwrapper fragments', () => {
   const { stream } = fixture();
   const input = '*** Begin Patch\n+漢字 🧪\n*** End Patch';
