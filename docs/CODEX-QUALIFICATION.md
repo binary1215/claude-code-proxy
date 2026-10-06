@@ -1,12 +1,39 @@
 # Codex coding-session qualification gaps
 
-The passing actual-Codex smoke verifies a short synthetic tool round trip. It
-does not certify a full coding session. The original findings below came from
-**source review**. Implementation updates are identified separately; none is
-a newly executed long-session/provider qualification.
+The original findings below came from **source review** and remain useful for
+explaining the adapter's boundaries. Later synthetic and actual-provider results
+are identified separately. Neither a short tool round trip nor bounded manual
+compaction certifies an ordinary, full coding session.
 
-Inspected client: Codex `0.160.0`, official `rust-v0.160.0` commit
-`a956835d020762cb2b570053af06f643a11c0ecc`. Proxy basis: `591e44d`.
+Originally inspected client: Codex `0.160.0`, official `rust-v0.160.0` commit
+`a956835d020762cb2b570053af06f643a11c0ecc`. Original proxy basis: `591e44d`.
+
+## Current qualification status (2026-10-06)
+
+| Scope | Observed result |
+| --- | --- |
+| Actual Codex through the shared `.7` gateway and `.64` relay to Haiku | A tool round trip, manual local compaction and two follow-up turns pass in each of two five-request runs; no Codex or LiteLLM source modification |
+| Cache-eligible actual-provider fixture | Cache reads of 6,911 tokens on tool replay and 7,505 on the second post-compaction turn; changed-prefix compaction/first follow-up have cache misses |
+| Corrected-signature synthetic adapter rerun at `ba227e2` | Two scenarios, four requests at each hop; ordered native signed/empty/redacted/tool state and reasoning-capsule replay pass |
+| Corrected-signature synthetic hoist-compaction rerun at `ba227e2` | Five requests at each hop; manual compaction, two follow-ups and exact restored state pass |
+| Actual Linux client file editing | After user-approved test-only namespace support, Codex creates and updates one fixture through .7 and real Haiku in four requests; actual fileChange events, tool results, file bytes and opaque replay pass |
+
+The actual-provider runs used a temporary, bounded no-I/O tool catalog, not the
+ordinary shell/apply-patch coding profile. They establish provider acceptance
+of this compaction sequence, not automatic long-session behavior, measured
+quality or billed savings. The separate patch-only fixture establishes bounded
+file-edit success, not ordinary shell or multi-file repository work. Live signed-empty/redacted blocks
+were not emitted; those remain synthetic coverage. Gateway accounting still
+recorded zero tokens/spend rather than the observed provider usage.
+
+See [live evidence](evidence/client-live-20261006.json),
+[actual file-edit evidence](evidence/client-patch-live-20261006.json),
+[deployment and scope details](VERIFICATION.md#actual-shared-gateway-clients-2026-10-06)
+and the [corrected-signature summary](evidence/corrected-signature-qualification-20261006.json).
+The corrected fixtures use complete `signature_delta` values with SDK replacement
+semantics, not concatenated signature parts. Earlier split-part concatenation
+was an unsupported oracle assumption, not evidence of a client defect. Historical
+reports are retained; the single-signature live results are unaffected.
 
 ## 1. apply_patch grammar
 
@@ -31,15 +58,24 @@ positive cases and invalid-patch rejection without hidden retry or content repai
 This is post-generation checking, **not constrained sampling**; failure rate and
 token usage need not match GPT. The default remains `reject` until an operator
 explicitly accepts that distinction. See the [full contract](RESPONSES-ADAPTER.md#optional-codex-apply_patch-grammar-adaptation).
-No reduced editing profile has been installed. Server-side execution of tools
+No normal user editing profile has been replaced; isolated tests use explicit
+limited catalogs. Server-side execution of tools
 remains out of scope, and grammar validity is not filesystem or patch-execution
 validity.
 
 The [actual coding-tool fixture](../integration/clients/README-codex-patch.md)
-now confirms signed-state and patch/result transport through stock LiteLLM.
-Its malformed-patch negative passes, but the valid file edit was denied by the
-effective Windows read-only sandbox. This is not successful editing or provider
-qualification; no permission bypass or OS setup was used to make the test pass.
+confirms signed-state and patch/result transport through stock LiteLLM. Its
+malformed-patch negative passes, but the original valid file edit was denied by
+the effective Windows read-only sandbox.
+
+The operator subsequently enabled `validated` on the test relay, without changing
+its image or other settings. The later isolated Linux preflight exposed the
+actual freeform tool and replayed its result over two local fake-provider calls,
+but file execution failed because the container could not create the required
+sandbox namespace. No file was written and no real-provider edit phase ran.
+The newly approved test-container namespace adjustment and rerun are pending;
+neither approval nor successful transport is file-edit verification. See
+[activation and Linux preflight](VERIFICATION.md#validated-patch-activation-and-linux-preflight-2026-10-06).
 
 ## 2. Local compaction after tool turns
 
@@ -63,20 +99,24 @@ of a new call to a removed tool, in both streaming and nonstream modes.
 
 An absent old schema/grammar remains unknown; history is client-authored, not
 attested execution provenance. A matching current grammar still validates
-historical input. Actual provider acceptance of the resulting native history is
-a separate gate: the Messages API's optional `tools` field alone does not prove
-that empty current definitions plus historical client tool calls are accepted.
-No successful real-provider compaction is claimed. Remote Responses compaction
-remains unsupported.
+historical input. The original source review could not establish provider
+acceptance from the Messages API's optional `tools` field alone. Subsequent
+authorized Haiku tests through the shared gateway now establish acceptance of
+the tested tool history, manual local compaction and two follow-up turns, in
+both the short and cache-eligible five-request runs above. This does not extend
+to arbitrary historical schemas or full coding sessions. Remote Responses
+compaction remains unsupported.
 
 The [actual app-server fixture](../integration/clients/README-codex-compaction.md)
 now reproduces manual local compaction through unmodified LiteLLM: the CLI sends
 `tools: []` with the same three reasoning capsules and prior function call/result;
 the relay restores exact native blocks without `tools`, and compaction completes.
-An independent final-source rerun confirms this bounded synthetic subset. The
-next ordinary user turn fails at the late-developer boundary below in default
-`reject` mode, so that baseline's strict exit remains 1. The later opt-in hoist
-comparison passes the bounded continuation sequence, not whole-session acceptance.
+The historical default-`reject` baseline completes this bounded synthetic subset,
+then fails on the next ordinary user turn at the late-developer boundary below;
+its strict exit remains 1. The corrected-signature `ba227e2` rerun in opt-in
+`hoist` mode instead passes compaction and two follow-ups over five requests,
+with unchanged stock LiteLLM and no hidden retry. Both are bounded observations,
+not whole-session acceptance.
 
 ## 3. Mid-conversation developer instructions
 
@@ -109,9 +149,10 @@ merging it into ordinary user text, or rewriting the initial prefix changes the
 contract; no such automatic fallback is used. Model support alone is insufficient.
 
 Earlier operator direction on 2026-10-05 prohibited Codex modification and
-developer relocation. The later request explicitly authorizes **testing proxy-only
-developer-to-top-level-system relocation**. Codex remains unchanged; this does not
-authorize deployment, real-provider charges, or the separate apply-patch mode.
+developer relocation. The next authorization was limited to **testing proxy-only
+developer-to-top-level-system relocation**. Separate later approvals covered
+the test deployment, bounded actual-provider runs and optional apply-patch mode;
+the initial test permission did not imply those actions. Codex remains unchanged.
 
 Implementation: `RESPONSES_DEVELOPER_MESSAGE_MODE=hoist` collects developer text
 without deduplication or rewriting, preserving instruction encounter order and
@@ -122,7 +163,7 @@ also invalidates capsules. See the [exact contract](RESPONSES-ADAPTER.md#optiona
 This is a semantic compatibility tradeoff, not lossless instruction placement,
 guaranteed provider acceptance, cache savings, or whole-session qualification.
 
-Executed hoist comparison at `1d9bbf7`: actual Codex through stock LiteLLM completes
+Historical hoist comparison at `1d9bbf7`: actual Codex through stock LiteLLM completes
 manual compaction and **two** ordinary follow-up turns (five requests at each hop).
 The late developer role remains in the actual client request; proxy translation
 alone resolves the adapter rejection. System blocks are exact and equal before
@@ -131,6 +172,15 @@ signed-empty and redacted reasoning replays exactly on the second follow-up.
 The first follow-up has no old capsules. Default reject still reproduces 400
 (four client, three fake-provider requests). See the
 [complete comparison and evidence](../integration/clients/README-codex-compaction.md#opt-in-hoist-comparison-2026-10-05).
+
+The corrected-signature rerun at `ba227e2` independently repeats the five-request
+hoist sequence with complete signature events. It confirms exact initial and
+post-compaction native assistant state, system blocks and tool-result order;
+the first post-compaction input intentionally has no old reasoning capsules,
+and newly issued reasoning replays on the second follow-up. This supersedes the
+older split-part signature oracle, without rewriting its evidence. Actual Haiku
+acceptance is separately established by the live runs above, whose fixed-system
+fixture does not prove all possible mode/developer-instruction changes.
 
 ## Model metadata is necessary but insufficient
 
@@ -145,7 +195,10 @@ instruction template and present it as verified Claude metadata. The native
 context limit, compaction threshold, instructions, thinking policy and any
 reduced editing workflow still need explicit qualification.
 
-No catalog/profile was installed by this review. Next acceptance must include
-real coding-tool input/output, local compaction after a tool turn, a further
-user turn and a mode/developer-instruction change, in addition to the existing
-short signed-state test. See [whole-outcome gates](ACCEPTANCE.md).
+The source review did not install a user catalog/profile. Later tests used
+isolated temporary catalogs and did not alter the normal client profile. Local
+compaction after a no-I/O tool turn and further user turns now pass against the
+real provider. A separate actual-provider Linux patch-only profile now passes
+fixture creation and update. The ordinary shell/repository coding profile,
+automatic long-session compaction and broader mode/developer-instruction changes
+remain outside those results. See [whole-outcome scope](ACCEPTANCE.md).

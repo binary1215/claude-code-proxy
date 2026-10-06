@@ -184,6 +184,9 @@ to native Messages; LiteLLM pass-through avoids a second, lossy conversion.
 - Codex: no-I/O tool round trip, actual manual compaction and two follow-ups.
   Opaque reasoning replay and provider acceptance pass. With an eligible fixed
   prefix, cache reads are **6,911 / 7,505 tokens**; short inputs had no cache hit.
+  A separate Linux run also **created and updated a real fixture file** through
+  `apply_patch=validated`: four Haiku requests, exact final bytes and tool results,
+  with opaque reasoning replay preserved.
 - OpenCode: one native request was rejected by the provider with HTTP 400 and a
   third-party plan/extra-usage restriction. No spoofing, retry or paid fallback.
 - LiteLLM generic pass-through logs record **zero tokens/spend and no provider
@@ -198,8 +201,9 @@ its volume, keys and state key. See [current image, evidence and rollback](docs/
 and the [client profiles](integration/clients/README.md).
 
 These are bounded profiles, not universal coding-client certification. Test-only
-`apply_patch=validated` is now enabled; Linux editing preflight is currently
-blocked by the test container's inner-sandbox namespace restriction.
+`apply_patch=validated` is enabled and bounded Linux file editing now passes
+with user-approved, test-container-only namespace support. General shell and
+long repository editing sessions are not covered by that fixture.
 The historical synthetic split-signature defect claim was
 [corrected against official SDK semantics](docs/VERIFICATION.md#signature-oracle-correction-2026-10-06).
 Subscription acceptance is not a general provider entitlement or a measured

@@ -1,0 +1,431 @@
+{
+  "scope": "Actual official Linux Codex through existing .7 LiteLLM and .64 test-claudemock; fixture-only create and update",
+  "actual_client_version": "0.160.0",
+  "proxy_source_revision": "f5031f32bd34417cac0c3cc1667dbc7017d752e5",
+  "proxy_image": "sha256:433b37a638c11dd1a3bd7903b85c59414b40be6a540b8498af7cc38f5dc1cf8f",
+  "apply_patch_mode": "validated",
+  "signature_replacement_source_deployed": false,
+  "test_container": {
+    "root_user": false,
+    "uid": 1000,
+    "cap_drop": "ALL",
+    "privileged": false,
+    "host_global_settings_changed": false,
+    "seccomp_base": "Effective Docker 29.4.0 default captured from isolated non-root cap-drop-ALL OCI bundle",
+    "seccomp_added_allowed_syscalls": [
+      "clone",
+      "unshare",
+      "mount",
+      "umount2",
+      "pivot_root"
+    ],
+    "original_seccomp_sha256": "f12496b00fdcda7faa4ebdf0beb4a959f0380650e59b06d936e68ae9a1b43f12",
+    "test_seccomp_sha256": "1e0cdfee3b66dcff2c0f9d5f7334428f821899dfeae07fa5607feeeede48ad370",
+    "apparmor_source": "moby/moby daa0cb7f23594cdbcce5002e370027d3fd36ffd7 vendor/github.com/moby/profiles/apparmor/template.go",
+    "apparmor_changes": "Unique temporary profile; replace deny mount with mount and pivot_root permissions; preserve remaining restrictions",
+    "apparmor_sha256": "bd340a57577c22e9e63967c8a6c4a106db0e72cd3bc2c5220baf146eb1bd9ef4",
+    "seccomp_disabled": false,
+    "apparmor_disabled": false,
+    "codex_sandbox_bypassed": false,
+    "test_containers_removed": true,
+    "temporary_apparmor_profile_unloaded": true,
+    "docker_default_profile_retained": true
+  },
+  "offline": {
+    "sha256": "1c903e46b78b9300cd87edacc811be83ee24dbb54cc9b827c9aeded9c6513e8e",
+    "report": {
+      "mode": "offline",
+      "model": "claude-haiku-4-5-20251001",
+      "functional_pass": true,
+      "sandbox_requested": "workspace-write",
+      "approval_policy": "never",
+      "sandbox_bypass": false,
+      "same_thread_followup": true,
+      "installed_client_modified": false,
+      "raw_observations_persisted": false,
+      "temporary_client_history_retained": true,
+      "gateway_internals_observed": false,
+      "request_limit": 4,
+      "request_max_retries": 0,
+      "stream_max_retries": 0,
+      "phases": {
+        "create": {
+          "terminal_status": "completed",
+          "requests": [
+            {
+              "http_status": 200,
+              "finished": true,
+              "completed_count": 1,
+              "failure_codes": [],
+              "reasoning_count": 1,
+              "reasoning_done_completed_exact": true,
+              "prior_reasoning_replay_exact": null,
+              "marker_present": false,
+              "usage": {
+                "native_input_tokens": null,
+                "native_output_tokens": null,
+                "cache_creation_input_tokens": null,
+                "cache_read_input_tokens": null,
+                "input_tokens": 100,
+                "output_tokens": 20,
+                "total_tokens": 120,
+                "cached_tokens": 0,
+                "cache_write_tokens": 0
+              }
+            },
+            {
+              "http_status": 200,
+              "finished": true,
+              "completed_count": 1,
+              "failure_codes": [],
+              "reasoning_count": 0,
+              "reasoning_done_completed_exact": null,
+              "prior_reasoning_replay_exact": true,
+              "marker_present": true,
+              "usage": {
+                "native_input_tokens": null,
+                "native_output_tokens": null,
+                "cache_creation_input_tokens": null,
+                "cache_read_input_tokens": null,
+                "input_tokens": 100,
+                "output_tokens": 20,
+                "total_tokens": 120,
+                "cached_tokens": 0,
+                "cache_write_tokens": 0
+              }
+            }
+          ],
+          "request_count": 2,
+          "expected_request_count": true,
+          "patch_call_count": 1,
+          "non_patch_tool_call_count": 0,
+          "patch_result_present": true,
+          "patch_result_error_flag": false,
+          "file_change_completed_count": 1,
+          "file_change_failed_count": 0,
+          "file_exact": true,
+          "workspace_file_count": 1,
+          "apply_patch_freeform_offered": true,
+          "shell_tool_offered": false,
+          "client_metadata_workspace_write": true,
+          "patch_input_matches_requested": true,
+          "marker_present": true,
+          "functional_pass": true
+        },
+        "update": {
+          "terminal_status": "completed",
+          "requests": [
+            {
+              "http_status": 200,
+              "finished": true,
+              "completed_count": 1,
+              "failure_codes": [],
+              "reasoning_count": 1,
+              "reasoning_done_completed_exact": true,
+              "prior_reasoning_replay_exact": true,
+              "marker_present": false,
+              "usage": {
+                "native_input_tokens": null,
+                "native_output_tokens": null,
+                "cache_creation_input_tokens": null,
+                "cache_read_input_tokens": null,
+                "input_tokens": 100,
+                "output_tokens": 20,
+                "total_tokens": 120,
+                "cached_tokens": 0,
+                "cache_write_tokens": 0
+              }
+            },
+            {
+              "http_status": 200,
+              "finished": true,
+              "completed_count": 1,
+              "failure_codes": [],
+              "reasoning_count": 0,
+              "reasoning_done_completed_exact": null,
+              "prior_reasoning_replay_exact": true,
+              "marker_present": true,
+              "usage": {
+                "native_input_tokens": null,
+                "native_output_tokens": null,
+                "cache_creation_input_tokens": null,
+                "cache_read_input_tokens": null,
+                "input_tokens": 100,
+                "output_tokens": 20,
+                "total_tokens": 120,
+                "cached_tokens": 0,
+                "cache_write_tokens": 0
+              }
+            }
+          ],
+          "request_count": 2,
+          "expected_request_count": true,
+          "patch_call_count": 1,
+          "non_patch_tool_call_count": 0,
+          "patch_result_present": true,
+          "patch_result_error_flag": false,
+          "file_change_completed_count": 1,
+          "file_change_failed_count": 0,
+          "file_exact": true,
+          "workspace_file_count": 1,
+          "apply_patch_freeform_offered": true,
+          "shell_tool_offered": false,
+          "client_metadata_workspace_write": true,
+          "patch_input_matches_requested": true,
+          "marker_present": true,
+          "functional_pass": true
+        }
+      },
+      "failure_code": null,
+      "failure_phase": null,
+      "codex_version_pinned": true,
+      "client_request_count": 4,
+      "gateway_request_attempts": 0,
+      "actual_dot7_gateway_tested": false,
+      "observer_failure_code": null,
+      "offline_fake_used": true,
+      "native_signature_validation_tested": false,
+      "observed_four_request_sequence": true,
+      "opaque_reasoning_check_count": 5,
+      "observed_opaque_reasoning_preserved": true,
+      "reasoning_source": "synthetic_offline"
+    }
+  },
+  "live": {
+    "sha256": "3ad2426fb27313cbc5131350fe3ce5bb86eb7d6e24d361664f814a3f6b187b0b",
+    "report": {
+      "mode": "live",
+      "model": "claude-haiku-4-5-20251001",
+      "functional_pass": true,
+      "sandbox_requested": "workspace-write",
+      "approval_policy": "never",
+      "sandbox_bypass": false,
+      "same_thread_followup": true,
+      "installed_client_modified": false,
+      "raw_observations_persisted": false,
+      "temporary_client_history_retained": true,
+      "gateway_internals_observed": false,
+      "request_limit": 4,
+      "request_max_retries": 0,
+      "stream_max_retries": 0,
+      "phases": {
+        "create": {
+          "terminal_status": "completed",
+          "requests": [
+            {
+              "http_status": 200,
+              "finished": true,
+              "completed_count": 1,
+              "failure_codes": [],
+              "reasoning_count": 1,
+              "reasoning_done_completed_exact": true,
+              "prior_reasoning_replay_exact": null,
+              "marker_present": false,
+              "usage": {
+                "native_input_tokens": 3142,
+                "native_output_tokens": 190,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 0,
+                "input_tokens": 3142,
+                "output_tokens": 190,
+                "total_tokens": 3332,
+                "cached_tokens": 0,
+                "cache_write_tokens": 0
+              }
+            },
+            {
+              "http_status": 200,
+              "finished": true,
+              "completed_count": 1,
+              "failure_codes": [],
+              "reasoning_count": 0,
+              "reasoning_done_completed_exact": null,
+              "prior_reasoning_replay_exact": true,
+              "marker_present": true,
+              "usage": {
+                "native_input_tokens": 3376,
+                "native_output_tokens": 16,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 0,
+                "input_tokens": 3376,
+                "output_tokens": 16,
+                "total_tokens": 3392,
+                "cached_tokens": 0,
+                "cache_write_tokens": 0
+              }
+            }
+          ],
+          "request_count": 2,
+          "expected_request_count": true,
+          "patch_call_count": 1,
+          "non_patch_tool_call_count": 0,
+          "patch_result_present": true,
+          "patch_result_error_flag": false,
+          "file_change_completed_count": 1,
+          "file_change_failed_count": 0,
+          "file_exact": true,
+          "workspace_file_count": 1,
+          "apply_patch_freeform_offered": true,
+          "shell_tool_offered": false,
+          "client_metadata_workspace_write": true,
+          "patch_input_matches_requested": false,
+          "marker_present": true,
+          "functional_pass": true
+        },
+        "update": {
+          "terminal_status": "completed",
+          "requests": [
+            {
+              "http_status": 200,
+              "finished": true,
+              "completed_count": 1,
+              "failure_codes": [],
+              "reasoning_count": 1,
+              "reasoning_done_completed_exact": true,
+              "prior_reasoning_replay_exact": true,
+              "marker_present": false,
+              "usage": {
+                "native_input_tokens": 3377,
+                "native_output_tokens": 155,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 0,
+                "input_tokens": 3377,
+                "output_tokens": 155,
+                "total_tokens": 3532,
+                "cached_tokens": 0,
+                "cache_write_tokens": 0
+              }
+            },
+            {
+              "http_status": 200,
+              "finished": true,
+              "completed_count": 1,
+              "failure_codes": [],
+              "reasoning_count": 0,
+              "reasoning_done_completed_exact": null,
+              "prior_reasoning_replay_exact": true,
+              "marker_present": true,
+              "usage": {
+                "native_input_tokens": 3574,
+                "native_output_tokens": 16,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 0,
+                "input_tokens": 3574,
+                "output_tokens": 16,
+                "total_tokens": 3590,
+                "cached_tokens": 0,
+                "cache_write_tokens": 0
+              }
+            }
+          ],
+          "request_count": 2,
+          "expected_request_count": true,
+          "patch_call_count": 1,
+          "non_patch_tool_call_count": 0,
+          "patch_result_present": true,
+          "patch_result_error_flag": false,
+          "file_change_completed_count": 1,
+          "file_change_failed_count": 0,
+          "file_exact": true,
+          "workspace_file_count": 1,
+          "apply_patch_freeform_offered": true,
+          "shell_tool_offered": false,
+          "client_metadata_workspace_write": true,
+          "patch_input_matches_requested": false,
+          "marker_present": true,
+          "functional_pass": true
+        }
+      },
+      "failure_code": null,
+      "failure_phase": null,
+      "codex_version_pinned": true,
+      "client_request_count": 4,
+      "gateway_request_attempts": 4,
+      "actual_dot7_gateway_tested": true,
+      "observer_failure_code": null,
+      "offline_fake_used": false,
+      "native_signature_validation_tested": false,
+      "observed_four_request_sequence": true,
+      "opaque_reasoning_check_count": 5,
+      "observed_opaque_reasoning_preserved": true,
+      "reasoning_source": "gateway_response"
+    }
+  },
+  "patch_format_difference": {
+    "both_calls_match_requested_patch_after_removing_one_terminal_newline": true,
+    "raw_upstream_patch_comparison_available": false
+  },
+  "relay_usage": {
+    "request_ids": [
+      43,
+      44,
+      45,
+      46
+    ],
+    "created_at_utc": [
+      "2026-10-06 14:22:46",
+      "2026-10-06 14:22:49",
+      "2026-10-06 14:22:50",
+      "2026-10-06 14:22:52"
+    ],
+    "statuses": [
+      "success",
+      "success",
+      "success",
+      "success"
+    ],
+    "input_tokens": [
+      3142,
+      3376,
+      3377,
+      3574
+    ],
+    "output_tokens": [
+      190,
+      16,
+      155,
+      16
+    ],
+    "cache_read_input_tokens": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "cache_creation_input_tokens": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "usage_complete": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "matches_observed_provider_usage": true
+  },
+  "gateway_accounting": {
+    "owner_snapshot_utc": "2026-10-06T14:26:08.529854+00:00",
+    "source_report_sha256": "bec8c933fbda9cceb2817067f22ab7cdc6ca8dc90f3e2acfa9afd9074fd4e411",
+    "latest_four_success_count": 4,
+    "latest_four_input_tokens": 0,
+    "latest_four_output_tokens": 0,
+    "latest_four_spend": 0,
+    "latest_four_cache_read_tokens": null,
+    "latest_four_cache_write_tokens": null,
+    "cumulative_requests": 24,
+    "cumulative_success": 23,
+    "cumulative_failure": 1,
+    "prior_20_request_evidence_preserved": true,
+    "interpretation": "Missing gateway accounting; not zero actual provider usage or free inference"
+  },
+  "limits": [
+    "Limited apply_patch-only catalog, not a general shell or all-tool coding profile",
+    "One fixture created then updated, not a long repository coding task",
+    "Opaque reasoning equality observed, no independent cryptographic signature verification",
+    "No signed-empty or redacted block emission claimed for this live sample",
+    "No cache hit in this short-input patch run; prior eligible-prefix live cache measurements remain separate"
+  ]
+}

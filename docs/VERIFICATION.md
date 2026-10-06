@@ -1051,8 +1051,9 @@ accounting equivalence. Evidence: [final persisted aggregate](evidence/gateway-a
   accounting in the measured deployment; zero gateway spend is not billing truth.
   Aliases, per-user budgets/isolation and broad coding profiles are not supplied
   by these two routes. No new paid-account configuration is authorized.
-- Actual Codex file editing remains unverified; the operator has now enabled
-  test-only `validated` mode for isolated Linux qualification. The earlier
+- Actual Codex fixture creation/update now passes in the isolated Linux
+  patch-only profile described below; general shell/repository work is not yet
+  qualified. The earlier
   native split-part concatenation expectation was withdrawn (see correction
   above); it is not evidence of a client defect.
 - Production/master are not replaced. The local admin UI build is separate
@@ -1098,3 +1099,66 @@ approved sandbox-compatible container configuration, not a Codex bypass.
 Local source qualification after the signature correction: TypeScript build and
 **153/153 backend tests**, plus **45/45 pure client-observer tests**, passed.
 These checks do not replace an actual provider-backed file-editing result.
+
+### Approved namespace support and actual file editing
+
+The operator then explicitly approved namespace support **only for the test
+container**. We copied the running Docker 29.4.0 daemon's effective default
+seccomp rules from a fresh non-root/cap-drop-ALL OCI bundle, retaining the
+deny-by-default profile and adding `clone`, `unshare`, `mount`, `umount2` and
+`pivot_root`. This resolved namespace creation and exposed Docker AppArmor's
+mount denial. A uniquely named temporary profile based on the exact engine's
+vendored default then allowed mount/pivot_root while retaining the other rules.
+No privileged container, host capability grant, unconfined profile, host-wide
+setting change or Codex sandbox bypass was used.
+
+With these scoped settings, the actual Linux Codex **offline** create/update
+preflight passed: four local fake requests, two completed fileChanges and exact
+file contents. The previous failed report was retained rather than overwritten.
+
+The subsequent **live** sequence used the existing approved gateway key and
+Haiku via `.7/claude-responses/v1/responses` and `.64 test-claudemock`. It passed
+in exactly four requests, with no retries or alternate model/account:
+
+| Request | Outcome | Fresh input | Output | Cache write/read |
+| --- | --- | ---: | ---: | --- |
+| 43 | apply_patch creates fixture | 3142 | 190 | 0 / 0 |
+| 44 | Actual tool result and final marker | 3376 | 16 | 0 / 0 |
+| 45 | Same-thread apply_patch updates fixture | 3377 | 155 | 0 / 0 |
+| 46 | Actual tool result and final marker | 3574 | 16 | 0 / 0 |
+
+All four provider counts equal the relay DB's complete usage records. The
+gateway owner's read-only persisted check at 14:26:08 UTC found exactly four
+new Responses successes (24 cumulative requests: 23 successes, one failure),
+but each new row still has zero input/output/spend and null cache counters.
+Thus provider/relay totals of 13,469 input and 377 output tokens are **not**
+accounted by the gateway. This is missing accounting, not free inference;
+the prior 20-request snapshot remains unchanged.
+
+The client produced one successful fileChange and matching tool result per turn;
+only `fixture.txt` existed in the workspace, with exact requested final bytes.
+Both returned patches differ from the literal prompt only by one terminal
+newline; the report retains `patch_input_matches_requested:false` rather than
+rewriting that raw comparison. File execution and its result, not a textual
+success claim, establish the functional pass.
+
+Five observed opaque-state comparisons passed between item completion, final
+response and later client replay. These are exact ciphertext/ID observations
+plus provider acceptance, not independent signature verification. No live
+signed-empty/redacted emission or cache hit is claimed for this short-input
+patch sequence. Earlier eligible-prefix cache hits remain separate evidence.
+See [sanitized reports and container profile identities](evidence/client-patch-live-20261006.json).
+
+The temporary client containers exited and were removed; their private fixture
+history remains in the dedicated test directory. The temporary AppArmor profile
+was unloaded after verifying no container used it. Docker's default profile,
+existing services, global host settings and the test proxy were left unchanged.
+The proxy remains `validated` on `f5031f3`; the newer signature-replacement
+source correction still awaits an image update.
+
+Independent corrected-oracle reruns at `ba227e2` also pass: stock LiteLLM
+26 baseline cases plus six issued multi-turn replays, actual Codex synthetic
+adapter round trips (four requests), and actual Codex synthetic hoist compaction
+plus two follow-ups (five requests). Known normal-route losses and pass-through
+metadata removal remain visible. See the
+[separate synthetic qualification summary](evidence/corrected-signature-qualification-20261006.json).

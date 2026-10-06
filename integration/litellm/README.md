@@ -25,8 +25,9 @@ before it. Chat/Responses conversion remains outside this native pass-through co
 Codex now has a separate [proxy-owned Responses adapter](../../docs/RESPONSES-ADAPTER.md),
 behind another stock authenticated pass-through route. It bypasses the normal
 LiteLLM Responses conversion without modifying LiteLLM. Actual Codex synthetic
-signed-state/tool replay passes on that path; the policy/accounting constraints
-below still apply. It is not installed on the shared gateway automatically.
+signed-state/tool replay passes on that path; separately approved shared-gateway
+deployment and actual-provider results are summarized below. The policy/accounting
+constraints still apply; the candidate configuration is not an automatic installer.
 
 Custom-host SSE can take a generic logging path instead of Anthropic's usage
 parser. Wire usage preservation does **not** prove spend logs, budgets or prices.
@@ -105,6 +106,33 @@ for the colliding route; its exit status is not compatibility acceptance.
 Credential isolation checks every upstream request, including retries and
 multi-turn seed/replay calls, for the local random gateway key.
 
+### Corrected-signature rerun (2026-10-06)
+
+The rerun at proxy source `ba227e2` uses one **complete** `signature_delta` value
+per signed block. Anthropic's pinned
+[TypeScript SDK](https://github.com/anthropics/anthropic-sdk-typescript/blob/d49bdab458000bcdffe77bd84b03293f31824fb3/src/lib/MessageStream.ts)
+and [Python SDK](https://github.com/anthropics/anthropic-sdk-python/blob/18f25547f20cf5f01da69ac611e700e3bc9ebf21/src/anthropic/lib/streaming/_messages.py)
+replace the signature value on each such event; they do not concatenate signature
+parts. The old split-part concatenation expectation was an unsupported oracle
+assumption, not a demonstrated client defect. Historical evidence is unchanged.
+Thinking/tool JSON remain fragmented, and seven-byte client reads exercise SSE
+and UTF-8 assembly without claiming control of TCP packet boundaries.
+
+| Corrected local run | Reviewed result |
+| --- | --- |
+| Stock gateway audit | 26 baseline cases and six multi-turn replays match expected observations; all 13 pinned source files remain unchanged |
+| Stock replay fidelity | Four built-in/custom pass-through replays preserve the tested state; two normal-route replays detect known signed-history loss and end in the expected 400, not fidelity success |
+| Actual Codex, fake-provider Responses adapter | Two scenarios and four requests at each hop pass ordered signed/empty/redacted/tool state and capsule replay |
+| Actual Codex, fake-provider hoist compaction | Five requests at each hop pass manual compaction and two follow-ups, exact restored state and no hidden retries |
+
+The stock report has zero validation errors and checks gateway-key isolation on
+all 32 upstream requests, but explicitly reports `full_native_fidelity: false`.
+The normal route has nine known-loss observations; each pass-through route has
+two (metadata removal and request JSON reserialization). All three corrected
+runs are local synthetic-provider tests, not new real-provider calls. Their
+counts and source-report hashes are retained in the
+[sanitized summary](../../docs/evidence/corrected-signature-qualification-20261006.json).
+
 ## Free authentication and configuration constraints
 
 Deployment update, 2026-10-06: the owner applied the two `.7` Messages/Responses
@@ -118,6 +146,15 @@ Claude Code and Codex tests pass their bounded profiles. The measured gateway
 logs still record **zero tokens/spend and no provider cache usage for all 20
 requests**, including a failed SSE stream recorded as success. This is missing
 accounting, not free usage. See [live results and accounting limitations](../../docs/VERIFICATION.md#actual-shared-gateway-clients-2026-10-06).
+
+The actual Codex profile completes a no-I/O tool round trip, manual local
+compaction and two follow-ups in each of two five-request Haiku runs. The
+cache-eligible run observes cache reads of 6,911 and 7,505 tokens; the short run
+does not. These provider-accepted results are distinct from the corrected
+synthetic runs, and do not qualify ordinary shell/apply-patch editing. Actual
+file editing remains unverified after a failed Linux container-namespace
+preflight; the separately approved new test-container preflight is pending.
+See [Codex qualification scope](../../docs/CODEX-QUALIFICATION.md).
 
 The deployed 1.103.1 UI disables its pass-through authentication toggle with a
 Premium label. The pinned backend intentionally supports `auth: true` without
