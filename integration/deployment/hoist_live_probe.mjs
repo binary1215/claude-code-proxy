@@ -19,7 +19,7 @@ const token = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
 const SAFE_CODES = new Set(['invalid_upstream_event', 'unsupported_upstream_event', 'unsupported_upstream_block',
   'unsupported_upstream_delta', 'malformed_tool_input', 'invalid_tool_grammar', 'unknown_upstream_tool',
   'invalid_upstream_usage', 'incomplete_upstream_stream', 'upstream_limit_exceeded', 'reasoning_state_error',
-  'upstream_timeout', 'cancelled', 'upstream_error']);
+  'upstream_timeout', 'cancelled', 'upstream_error', 'invalid_upstream_metadata', 'provider_refusal']);
 const eventKeys = {
   message_start: ['type', 'message'], content_block_start: ['type', 'index', 'content_block'],
   content_block_delta: ['type', 'index', 'delta'], content_block_stop: ['type', 'index'],
@@ -40,6 +40,7 @@ export function failureShape(event, code) {
     message_has_container: Object.hasOwn(message, 'container'),
     message_has_context_management: Object.hasOwn(message, 'context_management'),
     message_has_stop_details: Object.hasOwn(message, 'stop_details'),
+    message_has_diagnostics: Object.hasOwn(message, 'diagnostics'),
     usage_has_iterations: record(usage) && Object.hasOwn(usage, 'iterations'),
     usage_has_inference_geo: record(usage) && Object.hasOwn(usage, 'inference_geo'),
     usage_has_service_tier: record(usage) && Object.hasOwn(usage, 'service_tier'),
@@ -279,6 +280,10 @@ async function runLiveProbe() {
         if (index === 2) report.identical_replay_cache_read_observed = phase.usage.native.cache_read_input_tokens > 0;
         phase.no_further_tool_calls = !response.output.some(item => ['function_call', 'custom_tool_call'].includes(item.type));
         if (!phase.no_further_tool_calls) { report.outcome = 'inconclusive'; report.stage = 'unexpected_tool_request'; break; }
+        // Observe a narrow instruction-following marker without emitting content.
+        phase.expected_visible_marker = response.output.filter(item => item.type === 'message')
+          .flatMap(item => item.content || []).filter(part => part.type === 'output_text').map(part => part.text).join('').trim() === 'LIVE_HOIST_OK';
+        if (!phase.expected_visible_marker) { report.outcome = 'inconclusive'; report.stage = 'unexpected_visible_output'; break; }
       }
       if (index === 2) {
         report.stage = 'local_changed_instruction'; expectedCall = 0;

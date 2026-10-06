@@ -30,7 +30,8 @@ const usage = {input_tokens:3,output_tokens:9,cache_read_input_tokens:70,cache_c
 const issued = (blocks=content, stop='tool_use') => ({id:'msg_local_only',type:'message',role:'assistant',model,content:blocks,stop_reason:stop,stop_sequence:null,usage});
 const ev = (type,extra={}) => `event: ${type}\r\ndata: ${JSON.stringify({type,...extra})}\r\n\r\n`;
 function wire(message) {
-  let result = ev('message_start',{message:{...message,content:[],stop_reason:null,usage:{...usage,output_tokens:0}}});
+  let result = ev('message_start',{message:{...message,content:[],stop_reason:null,
+    ...(Object.hasOwn(message,'stop_details')?{stop_details:null}:{}),usage:{...usage,output_tokens:0}}});
   message.content.forEach((b,index) => {
     const start = b.type==='thinking'?{...b,thinking:'',signature:''}: b.type==='text'?{...b,text:''}: b.type==='tool_use'?{...b,input:{}}:b;
     result+=ev('content_block_start',{index,content_block:start});
@@ -46,7 +47,11 @@ function wire(message) {
     if(b.type==='text') result+=ev('content_block_delta',{index,delta:{type:'text_delta',text:b.text}});
     result+=ev('content_block_stop',{index});
   });
-  return result+ev('message_delta',{delta:{stop_reason:message.stop_reason,stop_sequence:null},usage})+ev('message_stop');
+  const finalUsage=Object.hasOwn(message,'diagnostics')?{...usage,input_tokens:null,cache_read_input_tokens:null,
+    cache_creation_input_tokens:null,server_tool_use:null,output_tokens_details:null}:usage;
+  return result+ev('message_delta',{delta:{stop_reason:message.stop_reason,stop_sequence:null,
+    ...(Object.hasOwn(message,'stop_details')?{stop_details:message.stop_details}:{}),
+    ...(Object.hasOwn(message,'container')?{container:message.container}:{})},usage:finalUsage})+ev('message_stop');
 }
 const calls=[];
 const closed=new Set();
@@ -68,6 +73,12 @@ const upstream=http.createServer(async(req,res)=>{
   if(scenario==='model-change') message={...message,model:'unexpected-model'};
   if(scenario==='max-tokens') message=issued([{type:'text',text:'partial'}],'max_tokens');
   if(scenario==='unsupported') message=issued([{type:'future_native_block',value:privateText}],'end_turn');
+  if(scenario==='metadata') message={...message,container:null,stop_details:null,
+    diagnostics:{cache_miss_reason:{type:'system_changed',cache_missed_input_tokens:19}},
+    content:message.content.map(block=>block.type==='tool_use'?{...block,caller:{type:'direct'},toolset_name:null}:
+      block.type==='text'?{...block,citations:null}:block)};
+  if(scenario==='metadata-refusal') message={...issued([{type:'text',text:privateText}],'refusal'),container:null,
+    diagnostics:null,stop_details:{type:'refusal',category:null,explanation:'Synthetic decline.'}};
   if(!body.stream) {
     res.writeHead(200,{'content-type':'application/json'});
     if(scenario==='invalid-utf8') {
@@ -121,6 +132,41 @@ function assertOneFinalization(row){assert.equal(db.prepare('SELECT COUNT(*) AS 
 after(async()=>{for(const s of [server,upstream]){s.closeAllConnections();await new Promise(resolve=>s.close(resolve));}db.close();});
 
 let seed;
+test('HTTP metadata survives both modes and signed tool replay without persistence or retry',async()=>{
+  for(const stream of [true,false]) {
+    const before=calls.length;
+    const first=await request(body('metadata',{stream})); await settled();
+    assert.equal(first.status,200);
+    const response=stream?completed(first):JSON.parse(first.body);
+    assert(response);
+    assert.deepEqual(response.anthropic_metadata,{container:null,diagnostics:{cache_miss_reason:{type:'system_changed',cache_missed_input_tokens:19}},
+      stop_details:null,stop_reason:'tool_use',stop_sequence:null});
+    const second=await request(body([{role:'user',content:'metadata'},...response.output,
+      {type:'function_call_output',call_id:'toolu_fixture_01',output:'synthetic result'}],{stream})); await settled();
+    assert.equal(second.status,200); assert.equal(calls.length,before+2);
+    assert.deepEqual(calls.at(-1).body.messages.find(message=>message.role==='assistant').content,content);
+    const row=lastLog(); assert.equal(row.status,'success'); assert.equal(row.cache_read_input_tokens,usage.cache_read_input_tokens);
+    assert.equal(row.full_response,null); assert.equal(row.full_prompt,null); assert.equal(row.prompt_preview,null);
+  }
+});
+
+test('HTTP provider refusal is a structured failed result in both modes, not a retryable 502',async()=>{
+  for(const stream of [true,false]) {
+    const before=calls.length;
+    const result=await request(body('metadata-refusal',{stream})); await settled();
+    assert.equal(result.status,200); assert.equal(calls.length,before+1);
+    const response=stream?events(result).at(-1).response:JSON.parse(result.body);
+    assert.equal(response.status,'failed'); assert.equal(response.error.code,'provider_refusal');
+    assert.equal(response.anthropic_metadata.stop_reason,'refusal');
+    assert.deepEqual(response.anthropic_metadata.stop_details,{type:'refusal',category:null,explanation:'Synthetic decline.'});
+    assert.equal(response.output[0].content[0].text,privateText);
+    if(stream) assert(!events(result).some(event=>event.type==='response.completed'||event.type==='response.incomplete'));
+    const row=lastLog(); assert.equal(row.status,'error'); assert.equal(row.output_tokens,usage.output_tokens);
+    assert.equal(row.full_response,null); assert.equal(row.full_prompt,null); assert.equal(row.prompt_preview,null);
+    assertOneFinalization(row);
+  }
+});
+
 test('actual HTTP streaming adapter preserves all reasoning blocks and seals identical done/completed items',async()=>{
   const response=await request(body(),key.key,'/v1/responses',{'anthropic-beta':'future-beta-local-test','x-api-key':'untrusted-caller-key'});
   assert.equal(response.status,200);assert.equal(response.ended,true);seed=completed(response);assert(seed);

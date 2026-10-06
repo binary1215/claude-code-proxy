@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { validPatchInput } from "./responsesPatchGrammar.js";
+import { MESSAGE_METADATA_KEYS, nativeMetadata } from "./responsesMetadata.js";
 import { JsonObject, ResponseTranslationOptions, ResponsesError, ToolBinding, MAX_TOOL_CALL_ID_LENGTH } from "./responsesTypes.js";
 
 const TOTAL_LIMIT = 8 * 1024 * 1024;
@@ -15,6 +17,8 @@ const SAFE_ERRORS: Record<string, string> = {
   invalid_tool_grammar: "The upstream tool input did not match its declared grammar.",
   unknown_upstream_tool: "The upstream tool was not declared in this request.",
   invalid_upstream_usage: "The upstream usage counters were invalid.",
+  invalid_upstream_metadata: "The upstream response metadata was invalid or unsupported.",
+  provider_refusal: "The upstream model declined this response.",
   incomplete_upstream_stream: "The upstream stream ended before a complete message.",
   upstream_limit_exceeded: "The upstream stream exceeded the adapter's bounded limits.",
   reasoning_state_error: "The upstream reasoning state could not be preserved.",
@@ -145,6 +149,7 @@ export class ResponsesStream {
   private stopReason: string | null = null;
   private nativeUsage: JsonObject | null = null;
   private callIDs = new Set<string>();
+  private refused = false;
 
   constructor(options: ResponseTranslationOptions) {
     this.options = { ...options, tools: new Map(options.tools) };
@@ -200,12 +205,13 @@ export class ResponsesStream {
       keys(event, ["type", "message"]);
       const message = event.message;
       if (this.started || !record(message)) problem("invalid_upstream_event");
-      keys(message, ["id", "type", "role", "model", "content", "stop_reason", "stop_sequence", "usage"]);
+      keys(message, ["id", "type", "role", "model", "content", "stop_reason", "stop_sequence", "usage", ...MESSAGE_METADATA_KEYS]);
       if (message.type !== "message" || message.role !== "assistant" || !Array.isArray(message.content)
         || message.content.length || message.stop_reason != null || message.stop_sequence != null
         || message.model !== this.options.model || typeof message.id !== "string"
         || !message.id.length || message.id.length > 256) problem("invalid_upstream_event");
       this.started = true;
+      this.updateMetadata(message, true);
       if (message.usage !== undefined) this.updateUsage(message.usage);
       return [this.emit("response.created", { response: this.value }), this.emit("response.in_progress", { response: this.value })];
     }
@@ -229,16 +235,18 @@ export class ResponsesStream {
     if (event.type === "message_delta") {
       keys(event, ["type", "delta", "usage"]);
       if (this.active || !record(event.delta)) problem("invalid_upstream_event");
-      keys(event.delta, ["stop_reason", "stop_sequence"]);
+      keys(event.delta, ["stop_reason", "stop_sequence", "container", "stop_details"]);
       if (event.delta.stop_sequence !== undefined && event.delta.stop_sequence !== null
         && typeof event.delta.stop_sequence !== "string") problem("invalid_upstream_event");
       const reason = event.delta.stop_reason;
       if (reason !== undefined && reason !== null) {
-        if (!["end_turn", "tool_use", "stop_sequence", "max_tokens"].includes(reason)) problem("unsupported_upstream_event");
+        if (!["end_turn", "tool_use", "stop_sequence", "max_tokens", "refusal"].includes(reason)) problem("unsupported_upstream_event");
         if (this.stopReason !== null && this.stopReason !== reason) problem("invalid_upstream_event");
         this.stopReason = reason;
+        if (reason === "refusal") this.refused = true;
       }
-      if (event.usage !== undefined) this.updateUsage(event.usage);
+      this.updateMetadata(event.delta, false);
+      if (event.usage !== undefined) this.updateUsage(event.usage, true);
       this.messageDeltaSeen = true;
       return [];
     }
@@ -246,6 +254,7 @@ export class ResponsesStream {
       keys(event, ["type"]);
       if (this.active || !this.messageDeltaSeen || !this.stopReason) problem("invalid_upstream_event");
       if (this.stopReason === "tool_use" && this.callIDs.size === 0) problem("invalid_upstream_event");
+      if (this.refused) return this.fail("provider_refusal", "");
       this.stopped = true;
       const incomplete = this.stopReason === "max_tokens";
       this.value.status = incomplete ? "incomplete" : "completed";
@@ -267,11 +276,21 @@ export class ResponsesStream {
       if (typeof native.data !== "string" || !native.data.length) problem("reasoning_state_error");
       item = { id: id("rs"), type: "reasoning", summary: [] };
     } else if (native.type === "text") {
-      keys(native, ["type", "text"]);
+      keys(native, ["type", "text", "citations"]);
       if (typeof native.text !== "string") problem("invalid_upstream_event");
+      // An absent/null/empty citation list all mean no annotations. Actual
+      // citations still require a translation contract and cannot be discarded.
+      if (Object.hasOwn(native, "citations") && native.citations !== null &&
+          (!Array.isArray(native.citations) || native.citations.length)) problem("unsupported_upstream_block");
       item = { id: id("msg"), type: "message", role: "assistant", status: "in_progress", content: [] };
     } else if (native.type === "tool_use") {
-      keys(native, ["type", "id", "name", "input"]);
+      keys(native, ["type", "id", "name", "input", "caller", "toolset_name"]);
+      // Responses function/custom calls here are direct client-executed calls.
+      // Explicit native defaults map to that same contract; server-tool callers
+      // and toolsets are not silently converted into ordinary client tools.
+      if (Object.hasOwn(native, "caller") && (!record(native.caller) ||
+          Object.keys(native.caller).length !== 1 || native.caller.type !== "direct")) problem("unsupported_upstream_block");
+      if (Object.hasOwn(native, "toolset_name") && native.toolset_name !== null) problem("unsupported_upstream_block");
       if (typeof native.id !== "string" || !native.id.length || native.id.length > MAX_TOOL_CALL_ID_LENGTH || this.callIDs.has(native.id)
         || typeof native.name !== "string" || !record(native.input)) problem("invalid_upstream_event");
       tool = this.options.tools.get(native.name);
@@ -398,14 +417,35 @@ export class ResponsesStream {
     return result;
   }
 
-  private updateUsage(usage: any): void {
+  private updateMetadata(source: JsonObject, initial: boolean): void {
+    const update = nativeMetadata(source, initial);
+    const previous = this.value.anthropic_metadata ?? {};
+    if (previous.stop_details != null && Object.hasOwn(update, "stop_details") &&
+        !isDeepStrictEqual(previous.stop_details, update.stop_details)) problem("invalid_upstream_metadata");
+    if (update.stop_details != null) this.refused = true;
+    // Anthropic's stream accumulator treats a null delta container as no update.
+    if (!initial && update.container === null && previous.container != null) delete update.container;
+    if (!initial) for (const key of ["stop_reason", "stop_sequence"]) {
+      if (Object.hasOwn(source, key) && !(source[key] == null && previous[key] != null)) update[key] = source[key];
+    }
+    if (Object.keys(update).length) this.value.anthropic_metadata = { ...previous, ...update };
+  }
+
+  private updateUsage(usage: any, delta = false): void {
     if (!record(usage)) problem("invalid_upstream_usage");
+    const update = clone(usage);
+    if (delta) for (const name of ["server_tool_use", "output_tokens_details"]) {
+      if (update[name] === null) delete update[name];
+    }
     for (const name of ["input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"]) {
+      // Nullable input/cache counters in message_delta mean no new measurement.
+      // Retain earlier reported cumulative values, as the native usage observer does.
+      if (delta && name !== "output_tokens" && usage[name] === null) { delete update[name]; continue; }
       if (Object.hasOwn(usage, name) && !token(usage[name])) problem("invalid_upstream_usage");
       if (Object.hasOwn(usage, name) && this.nativeUsage !== null && token(this.nativeUsage[name])
         && usage[name] < this.nativeUsage[name]) problem("invalid_upstream_usage");
     }
-    this.nativeUsage = { ...(this.nativeUsage ?? {}), ...clone(usage) };
+    this.nativeUsage = { ...(this.nativeUsage ?? {}), ...update };
     this.value.anthropic_usage = clone(this.nativeUsage);
     const { input_tokens: fresh, cache_read_input_tokens: cached, cache_creation_input_tokens: written, output_tokens: output } = this.nativeUsage;
     if ([fresh, cached, written, output].every(token)) {
@@ -423,16 +463,19 @@ export function convertNativeMessage(message: JsonObject, options: ResponseTrans
   const stream = new ResponsesStream(options);
   const deliver = (event: JsonObject) => {
     stream.push(event);
-    if (stream.response.status === "failed") problem(stream.response.error.code);
+    if (stream.response.status === "failed" && stream.response.error.code !== "provider_refusal") problem(stream.response.error.code);
   };
-  deliver({ type: "message_start", message: { ...message, content: [], stop_reason: null, stop_sequence: null } });
+  deliver({ type: "message_start", message: { ...message, content: [], stop_reason: null, stop_sequence: null,
+    ...(Object.hasOwn(message, "stop_details") ? { stop_details: null } : {}) } });
   for (let index = 0; index < message.content.length; index++) {
     deliver({ type: "content_block_start", index, content_block: message.content[index] });
     deliver({ type: "content_block_stop", index });
   }
-  deliver({ type: "message_delta", delta: { stop_reason: message.stop_reason, stop_sequence: message.stop_sequence ?? null },
+  deliver({ type: "message_delta", delta: { stop_reason: message.stop_reason, stop_sequence: message.stop_sequence ?? null,
+    ...(Object.hasOwn(message, "stop_details") ? { stop_details: message.stop_details } : {}) },
     ...(message.usage === undefined ? {} : { usage: message.usage }) });
   deliver({ type: "message_stop" });
+  if (stream.response.status === "failed") return stream.response;
   stream.finish();
   return stream.response;
 }

@@ -299,6 +299,54 @@ combination; an API-key billing decision or gateway rollout remains separate.
 
 ## Verification
 
+### Native response metadata contract
+
+The adapter explicitly accepts the documented `container`, `diagnostics` and
+`stop_details` message fields after bounded shape validation. Present values,
+including nulls, are retained under the response-only `anthropic_metadata`
+extension. Native terminal `stop_reason`/`stop_sequence` are also retained.
+Container/stop details update from `message_delta`; a null delta container does
+not erase a previously reported container. Unknown fields and invalid metadata
+still fail explicitly. The extension is not logged, replayed as prompt content,
+included in reasoning capsules, or a promise that clients preserve extensions.
+It does not enable server-side tools or container reuse.
+
+Native `refusal` or non-null refusal details result in `response.failed` with the
+fixed `provider_refusal` code, original partial output and native metadata. They
+never produce `response.completed` or trigger relay retries/model fallback.
+Nonstream returns HTTP 200 with the same structured failed result, not a
+transient HTTP 502. This is an explicit adapter failure contract, **not** an
+OpenAI-native `refusal` content-item translation or a normal successful answer.
+Reported usage counters remain available; an error history row is not marked
+complete. Changing or clearing observed refusal details is rejected.
+As with other late stream failures, already emitted tool items cannot be
+retracted. A client that executes a tool before the response terminal may already
+have acted when a later refusal arrives. This adapter neither executes those
+tools nor guarantees client-side rollback; client tool authorization remains
+necessary. No claim of refusal-safe speculative execution is made.
+
+Nullable input/cache counters in native usage deltas mean no new measurement,
+not zero; earlier reported cumulative values remain. Present counters replace,
+never add. Null server-tool/output-token breakdown updates likewise leave earlier
+breakdowns intact. Malformed, negative or decreasing input/output/cache counters
+still fail; other native usage breakdowns remain opaque in `anthropic_usage`.
+
+Absent/null/empty text citations normalize to no annotations. Omitted or explicit
+`caller: {type: "direct"}` (and null `toolset_name`) normalize to the existing
+direct, client-executed tool-call contract. These default field-presence differences
+are not byte-preserved. Actual citations, server-tool callers and non-null toolsets
+remain unsupported and cannot be silently discarded or run as client tools.
+Thinking/signature blocks, tool arguments, identifiers and ordering are not
+rewritten by this normalization.
+
+Sources: [Anthropic Messages schema](https://platform.claude.com/docs/en/api/messages/create),
+[official SDK types](https://github.com/anthropics/anthropic-sdk-typescript/blob/main/src/resources/messages/messages.ts),
+[official cumulative stream handling](https://github.com/anthropics/anthropic-sdk-typescript/blob/main/src/lib/MessageStream.ts).
+This schema correction still requires a new real-provider qualification; the
+earlier failed capture did not record its third extra message key or values.
+
+### Regression and client checks
+
 The HTTP/unit tests cover capsule mutation/scope/expiry, signed-empty/redacted
 replay, fragmented UTF-8/signatures/tool JSON, block order, namespace/custom tool
 mapping, cache controls, accounting uncertainty, exact-once upstream rejection,

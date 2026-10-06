@@ -35,14 +35,14 @@ function assertFailure(events, code) {
   if (code) assert.equal(failure.response.error.code, code);
 }
 
-test('live metadata compatibility gap: container or stop_details currently rejects before reasoning', () => {
-  // Failure reproduction, not the desired future API contract. The live probe
-  // observed presence only; null here is synthetic, not a captured provider value.
-  for (const extra of [{ container: null }, { stop_details: null }, { container: null, stop_details: null }]) {
+test('documented nullable metadata passes message_start without changing reasoning', () => {
+  // The original live probe observed presence only; null here is synthetic,
+  // not a captured provider value. Values are retained in a response extension.
+  for (const extra of [{ container: null }, { stop_details: null }, { container: null, stop_details: null, diagnostics: null }]) {
     const { stream, sealed } = fixture();
     const events = stream.push(start(fullUsage, extra));
-    assertFailure(events, 'unsupported_upstream_event');
-    assert.equal(events.length, 1);
+    assert.deepEqual(events.map(event => event.type), ['response.created', 'response.in_progress']);
+    assert.deepEqual(events[0].response.anthropic_metadata, extra);
     assert.deepEqual(events[0].response.output, []);
     assert.deepEqual(sealed, []);
   }
@@ -184,7 +184,7 @@ test('malformed SSE/UTF8/mismatched names/truncated frames fail closed with safe
 test('unknown blocks/deltas/annotations and undeclared tool fail instead of dropping semantics', () => {
   const cases = [
     [block(0, { type: 'future_block', data: 'sentinel' })],
-    [block(0, { type: 'text', text: '', citations: [] })],
+    [block(0, { type: 'text', text: '', citations: [{ type: 'char_location', cited_text: 'sentinel' }] })],
     [block(0, { type: 'text', text: '' }), delta(0, { type: 'citations_delta', citation: {} })],
     [block(0, { type: 'redacted_thinking', data: 'redacted' }), delta(0, { type: 'signature_delta', signature: 'sig' })],
     [block(0, { type: 'tool_use', id: 't', name: 'undeclared', input: {} })],
@@ -211,7 +211,7 @@ test('ordering, duplicate indices/call IDs/model fallback and missing signatures
     [start(), block(0, { type: 'thinking', thinking: '' }), stop(0)],
     [start(), block(0, { type: 'thinking', thinking: '' }), delta(0, { type: 'signature_delta', signature: 'sig' }), delta(0, { type: 'thinking_delta', thinking: 'late' })],
     [start(), block(0, { type: 'tool_use', id: 'same', name: 'native_fn', input: {} }), stop(0), block(1, { type: 'tool_use', id: 'same', name: 'native_fn', input: {} })],
-    [start(), messageStop], [start(), messageDelta('refusal')], [start(), messageDelta('tool_use'), messageStop],
+    [start(), messageStop], [start(), messageDelta('refusal'), messageStop], [start(), messageDelta('tool_use'), messageStop],
   ];
   for (const native of cases) { const { stream } = fixture(); assertFailure(run(stream, native)); }
 });

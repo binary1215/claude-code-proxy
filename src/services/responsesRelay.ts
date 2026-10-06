@@ -207,7 +207,10 @@ export function relayResponses(req: Request, res: Response): void {
       const response = convertNativeMessage(JSON.parse(decoded), options);
       if (response.status === "failed") { finalStatus = "error"; finalReason = "provider_error"; }
       responseEnded = true;
-      res.status(response.status === "failed" ? 502 : 200).json(response);
+      // A deliberate model refusal is an application result, not a transient
+      // gateway fault. Keep the structured failed response without inviting a
+      // generic HTTP-5xx retry; this relay never retries either kind of failure.
+      res.status(response.status === "failed" && response.error?.code !== "provider_refusal" ? 502 : 200).json(response);
       return;
     }
     responseEnded = true;
