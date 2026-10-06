@@ -1,4 +1,4 @@
-# Native relay verification — 2026-10-05
+# Native relay verification — updated 2026-10-06
 
 ## Scope and corrections
 
@@ -13,7 +13,7 @@
 - Token counts are observed counters, not invoices, proven USD savings or
   measured model-quality improvements.
 
-## Current diagnostics revision and deployment
+## Existing diagnostics deployment
 
 Implementation commit: `0ca75751d407b0bce2f9c15675b1e0d8fd8075c4`.
 
@@ -602,6 +602,8 @@ Docker qualification applies to `98d26fe`, not this new mode.
 
 ### Hoist Docker build and real-provider gate (2026-10-06)
 
+Historical failed stage; the corrected successful stage is recorded below.
+
 Exact archived source `f75d75c8030871fa3c39f29c0d11bbd4129c8426` (hoist code
 `1d9bbf7`) was built using the repository Dockerfile on `.64`, producing
 `sha256:1a54131ea9569e3c60c533adb729f95b40d3e13f5b4c9abbd9b7d0811b95974f`.
@@ -675,6 +677,76 @@ invocation, not a durable cross-run allowance; failed/uncertain runs must not be
 automatically repeated. The gateway owner independently rechecked `.7`: no custom
 route is applied; original Stack configuration access in authenticated Portainer
 is still needed. No gateway reload, credential change or deployment occurred.
+
+### Metadata compatibility fix and live Responses replay (2026-10-06)
+
+**Result: PASS for the bounded direct-provider sequence.** Implementation
+`c8e1dcbae1fda83368f6602bc0cff00c51b9b197` handles native response metadata,
+nullable cumulative usage updates, empty/null citations and default direct-tool
+fields. Explicit provider refusal becomes a structured failed response, not a
+retryable parser error. Metadata is response-only; signed reasoning blocks,
+tool arguments/IDs and order survive replay. See the
+[adapter contract](RESPONSES-ADAPTER.md#native-response-metadata-contract).
+
+Source `f27c51ebea29a37cd85bb1ba808f2c5bbec38d6e` additionally updates the
+`proxy-addr` lockfile entry to 2.0.8. Built on `.64` from source archive SHA-256
+`63e23b20404f9ad71accf1231c57943d52ae2750245c26f2d7be94538194cd36`:
+
+- Tag: `local/test-claudemock:f27c51e`.
+- Exact image: `sha256:bc6d2ef8c42f8209d741ac6c7b93855073b12cf052144bb1aafb81170be00718`.
+- All **149/149 backend regressions pass in this exact image**, network disabled,
+  with synthetic credentials; the same source suite passes locally.
+- Real probe: `claude-haiku-4-5-20251001`, existing selected OAuth credential,
+  three provider calls and four local requests, with no retry/fallback.
+
+| Phase | Fresh input | Cache creation | Cache read | Output | Responses input | Responses total |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Seed signed reasoning and one tool call | 10 | 5503 | 0 | 122 | 5513 | 5635 |
+| Same developer text moved after user, signed-state/tool-result replay | 5 | 148 | 5503 | 11 | 5656 | 5667 |
+| Identical native request replay | 5 | 0 | 5651 | 11 | 5656 | 5667 |
+
+All cache creations are reported as 5-minute writes; 1-hour writes are zero.
+Each phase has upstream/downstream HTTP 200, exactly one provider request, a
+completed SSE response, complete usage and matching persisted history counters.
+The effective top-level system is unchanged by the developer position move.
+Both replay responses contain the expected visible test marker and no further
+tool call. Native bodies of the second and third requests match exactly.
+
+A fourth local request changes the developer instruction while retaining old
+reasoning state. It returns `409 invalid_reasoning_state` before provider contact
+or a fourth history row. The proxy executes no tools: the driver supplies a
+synthetic lookup result. Provider signatures are preserved and accepted by the
+real upstream on replay, **not cryptographically verified locally**. This does
+not test real Codex compaction, actual filesystem tools, answer quality, exact
+billed savings, another model, or the deployed `.7` gateway/client chain.
+
+This successful invocation made three provider calls. Together with the two
+failed seed/diagnostic calls above, these stages total **five real calls**.
+No conversation/signature content is retained in the report or history. The
+candidate container was removed; existing `test-claudemock` remained image
+`12d35112176d...`, container ID `e818d18871ae...`, started
+`2026-10-04T18:34:12.359589146Z`. No `.7` route or service was changed.
+
+Evidence:
+
+- [Sanitized measured report](evidence/haiku-hoist-20261006.json), copied from the
+  successful command's JSON section, without the two preceding file-hash lines.
+- Original local capture:
+  `C:/Users/binary/AppData/Local/Temp/claude-metadata-20261006/metadata-live-result.txt`,
+  SHA-256 `68a5c5845f7d9fd79e2dce1457660c65ef956f0b7e1d7e12bb67e754902fa0b0`.
+- Executed helper SHA-256:
+  `392bb347e11516fcee57a50a609d1a8aaa36282680ecd659aa3d2624c11b5155`;
+  executed runner SHA-256:
+  `b8708de7ff66216778b2c5f3e91b10aafe6d842539d2d3db037ba7350cf534f9`.
+  The runner's candidate pin was updated to the exact image above after build.
+- Exact-image regression capture:
+  `C:/Users/binary/AppData/Local/Temp/claude-metadata-20261006/final-image-regression.txt`,
+  SHA-256 `1f74eef23d867f5f807f89a5ca3087c9e838c3de41460d65991b7fdc0cc96c60`.
+
+The next functional step is actual-client integration through `.7`, not another
+security-audit gate. Gateway configuration remains owned by `LiteLLM 관리`;
+original Portainer Stack access is pending, and the existing test service still
+runs the native-only baseline.
 
 ### Remaining end-to-end constraints
 

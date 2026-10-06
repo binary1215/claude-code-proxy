@@ -134,7 +134,7 @@ separates that rehearsal from an authorized service cutover.
 
 ## Development and evidence
 
-The [whole-outcome acceptance gates](docs/ACCEPTANCE.md) distinguish implemented
+The [functional verification status](docs/ACCEPTANCE.md) distinguishes implemented
 protocol support from actual gateway/client qualification and production readiness.
 
 ```sh
@@ -149,10 +149,13 @@ Backend tests use real loopback HTTP, in-memory SQLite and synthetic credentials
 
 Passing offline tests demonstrates transport mechanics, not provider eligibility, billing savings or universal coding-client compatibility. Separate live evidence was obtained on an isolated `test-claudemock` Docker deployment; existing production services were not replaced. See [recorded verification results](docs/VERIFICATION.md) for the distinction between offline, live relay and gateway checks.
 
-The 2026-10-06 hoist candidate passes its Docker regressions, but its direct Haiku
-Responses probe fails on unhandled native `message_start` metadata before reasoning
-replay. HTTP 200 alone did not mean success. Real Responses cache/replay and the
-deployed gateway chain remain unqualified; see [the exact failure and limits](docs/VERIFICATION.md#hoist-docker-build-and-real-provider-gate-2026-10-06).
+The corrected 2026-10-06 candidate passes **149/149 Docker regressions** and a
+three-call real Haiku Responses sequence: signed reasoning/tool output, replay
+after developer hoisting, and identical replay. Cache reads were 0 → 5503 → 5651
+tokens; fresh input was 10 → 5 → 5. This fixes the earlier native metadata
+compatibility failure. The existing service was not replaced. Actual `.7`
+gateway/client sessions remain the next integration step, not part of this direct
+probe; see [the measured result and limits](docs/VERIFICATION.md#metadata-compatibility-fix-and-live-responses-replay-2026-10-06).
 
 The required acceptance clients are **Claude Code and Codex**, with OpenCode as an additional comparison. [Actual client tests](integration/clients/README.md) show that Codex 0.160.0 loses signed reasoning through stock LiteLLM 1.103.1's normal Responses conversion. The new pass-through → proxy Responses route passes both synthetic actual-Codex tool round trips, including split signatures, signed-empty and redacted blocks. This is protocol evidence, not real upstream authorization, production rollout or full coding-workflow certification. Free pass-through authentication is supported by the pinned backend despite the UI's Premium label, but complete header forwarding requires owner-applied configuration; [policy constraints](integration/litellm/README.md#free-authentication-and-configuration-constraints) remain rollout requirements.
 

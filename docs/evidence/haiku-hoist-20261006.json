@@ -1,0 +1,128 @@
+{
+  "pass": true,
+  "kind": "hoist-haiku-live-v1",
+  "candidate_image": "sha256:bc6d2ef8c42f8209d741ac6c7b93855073b12cf052144bb1aafb81170be00718",
+  "existing_service_changed": false,
+  "cleanup_complete": true,
+  "live_provider_calls_possible": true,
+  "production_gateway_tested": false,
+  "helper_sha256": "392bb347e11516fcee57a50a609d1a8aaa36282680ecd659aa3d2624c11b5155",
+  "credential_source": "environment",
+  "isolation_verified": true,
+  "probe_exit_code": 0,
+  "probe": {
+    "model": "claude-haiku-4-5-20251001",
+    "outcome": "pass",
+    "stage": "completed",
+    "provider_calls": 3,
+    "local_requests": 4,
+    "phases": [
+      {
+        "phase": "seed",
+        "http_status": 200,
+        "upstream_status": 200,
+        "one_provider_call": true,
+        "history_rows": 1,
+        "history_success": true,
+        "history_usage_complete": true,
+        "done_completed_exact": true,
+        "usage": {
+          "native": {
+            "input_tokens": 10,
+            "output_tokens": 122,
+            "cache_creation_input_tokens": 5503,
+            "cache_read_input_tokens": 0,
+            "ephemeral_5m_input_tokens": 5503,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "standard": {
+            "input_tokens": 5513,
+            "output_tokens": 122,
+            "total_tokens": 5635,
+            "cached_tokens": 0,
+            "cache_write_tokens": 5503
+          }
+        },
+        "history_usage_exact": true,
+        "usage_complete": true,
+        "standard_usage_exact": true,
+        "signed_capsule_and_one_lookup": true
+      },
+      {
+        "phase": "hoisted_replay",
+        "http_status": 200,
+        "upstream_status": 200,
+        "one_provider_call": true,
+        "history_rows": 2,
+        "history_success": true,
+        "history_usage_complete": true,
+        "done_completed_exact": true,
+        "usage": {
+          "native": {
+            "input_tokens": 5,
+            "output_tokens": 11,
+            "cache_creation_input_tokens": 148,
+            "cache_read_input_tokens": 5503,
+            "ephemeral_5m_input_tokens": 148,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "standard": {
+            "input_tokens": 5656,
+            "output_tokens": 11,
+            "total_tokens": 5667,
+            "cached_tokens": 5503,
+            "cache_write_tokens": 148
+          }
+        },
+        "history_usage_exact": true,
+        "usage_complete": true,
+        "standard_usage_exact": true,
+        "no_further_tool_calls": true,
+        "expected_visible_marker": true
+      },
+      {
+        "phase": "identical_replay",
+        "http_status": 200,
+        "upstream_status": 200,
+        "one_provider_call": true,
+        "history_rows": 3,
+        "history_success": true,
+        "history_usage_complete": true,
+        "done_completed_exact": true,
+        "usage": {
+          "native": {
+            "input_tokens": 5,
+            "output_tokens": 11,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 5651,
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "standard": {
+            "input_tokens": 5656,
+            "output_tokens": 11,
+            "total_tokens": 5667,
+            "cached_tokens": 5651,
+            "cache_write_tokens": 0
+          }
+        },
+        "history_usage_exact": true,
+        "usage_complete": true,
+        "standard_usage_exact": true,
+        "no_further_tool_calls": true,
+        "expected_visible_marker": true
+      }
+    ],
+    "no_stored_content": true,
+    "local_changed_instruction_rejected": true,
+    "effective_system_equal": true,
+    "repeated_native_request_exact": true,
+    "no_hidden_retries": true,
+    "real_provider": true,
+    "locally_verified_provider_signatures": false,
+    "replay_cache_read_observed": true,
+    "identical_replay_cache_read_observed": true,
+    "provider_call_limit": 3,
+    "history_rows": 3
+  }
+}

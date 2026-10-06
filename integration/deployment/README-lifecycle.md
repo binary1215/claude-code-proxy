@@ -45,7 +45,7 @@ The 2026-10-05 `.64` host execution passed all eight phases and cleanup; seven g
 
 `run_hoist_live_probe.py` and `hoist_live_probe.mjs` are **not** the synthetic
 lifecycle fixture above. They are a host-specific manual qualification of the
-exact `f75d75c` image recorded in [verification](../../docs/VERIFICATION.md#hoist-docker-build-and-real-provider-gate-2026-10-06).
+exact `f27c51e` image recorded in [verification](../../docs/VERIFICATION.md#metadata-compatibility-fix-and-live-responses-replay-2026-10-06).
 They deliberately contact the real Anthropic endpoint with the existing test
 container's selected OAuth credential. Review the code and obtain bounded live
 call authorization before use; these are not CI commands or auto-retry helpers.
@@ -71,10 +71,14 @@ budget, and inspect an uncertain outcome before doing anything else.
 
 The diagnostic observer leaves original converter events unchanged and reports
 only fixed error enums, known-field presence and numeric counts. `outcome: pass`
-would certify this bounded direct sequence only, not actual Codex compaction,
+certifies this bounded direct sequence only, not actual Codex compaction,
 gateway policy/accounting, semantic equivalence, cache savings or entitlement.
-Cache evidence requires real numeric usage. Currently the live gate **fails at
-message_start metadata validation**, before any replay; see the retained evidence.
+Cache evidence requires real numeric usage. The corrected candidate **passed all
+three real-provider phases**, with cache reads 0 → 5503 → 5651 and fresh input
+10 → 5 → 5. The fourth, local changed-instruction request returned 409 without
+another provider call. The two earlier failing seed calls remain historical
+evidence, making five provider calls across the failed and corrected stages.
+No actual client or deployed gateway participated in this probe.
 
 Offline checks (no provider calls):
 
