@@ -10,7 +10,28 @@ Codex / Responses     -> stock LiteLLM pass-through -> opt-in /v1/responses
 
 No automatic SDK fallback, tool execution, invented thinking, conversation storage, or provider/account failover is included. The caller owns conversation history and executes its client tools. Upstream-native server-tool definitions are forwarded on the native route; they are not executed on the proxy host. The new [Responses adapter](docs/RESPONSES-ADAPTER.md) is disabled by default and supports a deliberately bounded client-tool subset.
 
-## Latest tested improvement — 2026-10-23
+## Latest local improvements — 2026-10-24
+
+- Usage statistics now aggregate fresh input, cache writes, cache reads and
+  output by period/model. Complete totals, known subtotals and missing usage
+  remain distinct; the dashboard shows cache-inclusive totals and coverage.
+  This does not repair LiteLLM spend/budget accounting or estimate an invoice.
+- An [opt-in profile generator](integration/clients/profiles/README.md#generate-an-isolated-ordinary-coding-profile)
+  supplies a native-model catalog and isolated launch configuration without
+  modifying either client. Unknown context limits remain explicitly unverified.
+- Actual Claude Code completes a seven-request **Read → failing shell test →
+  edit two files → passing test** loop against a local scripted provider, with
+  exact thinking/signature replay. The Codex shell+patch+follow-up chain preserves
+  state over seven requests, but actual execution is denied by this Windows
+  client's read-only policy: it is **not** a successful coding-task result.
+
+These are local source/test changes, **not a new remote deployment**. No real
+provider calls, client/LiteLLM patches, or permission changes were made in this
+update. Automatic compaction and ordinary live-provider coding remain open.
+See [acceptance and remaining work](docs/ACCEPTANCE.md) and
+[measured workflow evidence](docs/evidence/20261024-coding-workflows.json).
+
+## Latest deployed improvement — 2026-10-23
 
 The test backend now runs core commit `4969a63` with self-contained **`ccpr2`**
 reasoning state. OpenCode may omit public reasoning IDs without losing the

@@ -5,7 +5,25 @@ not a substitute for either required client. Only free, supported stock LiteLLM
 features are in scope. No LiteLLM source patch, SDK/CLI proxy backend, identity
 spoofing, paid-key fallback, or production replacement is implied by these tests.
 
-## Current evidence
+## Latest ordinary coding workflow evidence — 2026-10-24
+
+- [Claude Code multi-file workflow](README-claude-coding-workflow.md): actual
+  Read, failing Bash test, two Edit operations, successful test and independent
+  rerun pass in seven local scripted-provider requests. Thinking/signatures
+  remain exact; the observed Edit default addition is separately reported.
+- [Codex shell + freeform patch workflow](README-coding-workflow.md): ordinary
+  tool catalog and seven-request state transport pass, but Windows read-only
+  enforcement denies real tool execution. The task correctly fails qualification.
+- [Generated connection profiles](profiles/README.md) keep the stock prompt and
+  native model ID without modifying client or global configuration. Unknown
+  context limits and untested capabilities are labeled, not inferred.
+
+No remote service or host permission changed. No real provider was called.
+See [evidence](../../docs/evidence/20261024-coding-workflows.json); automatic
+compaction and ordinary live-provider coding remain unqualified. The rows below
+are earlier evidence and retain their original narrower scopes.
+
+## Earlier client evidence
 
 | Client / route | Evidence | Remaining gap |
 | --- | --- | --- |

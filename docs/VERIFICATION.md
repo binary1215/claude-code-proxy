@@ -1,4 +1,45 @@
-# Native relay verification — updated 2026-10-23
+# Native relay verification — updated 2026-10-24
+
+## Ordinary coding profiles and cache aggregation (2026-10-24 KST)
+
+Source-only work on `codex/coding-workflow-usage`; no shared service, account,
+credential, client source or host permission was changed. Existing runtime
+deployed-image facts in the following section remain unchanged by this work.
+
+- Usage aggregation adds period/model counters and observation coverage, with
+  additive API fields and no migration. Seven new backend tests and one new
+  admin-formatting test bring the backend suite to **175/175**. The final pure
+  client/harness suite passes **112/112**. TypeScript and
+  the local Next production build pass. UI browser rendering and remote UI
+  deployment were not exercised.
+- The opt-in generator pins Codex 0.160.0's original fallback instructions and
+  native-model metadata; actual `model/list` accepts its catalog without
+  inference. Seven ordinary-profile requests contain `summary:auto` without
+  `effort:none`; the adapter retains its enabled 1024-token thinking budget.
+  Context remains unverified in the example, not borrowed from a GPT model.
+- Actual Claude Code 2.1.289 completes Read/Read/Bash-failure/Edit/Edit/Bash-pass
+  through stock LiteLLM and the built native relay to a scripted local provider.
+  Both repaired files and unchanged tests match exact bytes; independent Node
+  tests pass. All six signed/empty/redacted reasoning replays match. Claude adds
+  Edit's omitted `replace_all:false`, so raw tool-input equality is not claimed;
+  the native message arrays sent by the client and received upstream are equal.
+- Actual Codex 0.160.0 offers shell and freeform patch together and completes
+  seven protocol turns with exact opaque/native replay and no metadata fallback.
+  However, its Windows policy resolves the requested workspace-write sandbox to
+  **read-only**, denies shell/patch execution, and leaves the files unrepaired.
+  The harness correctly returns a failed functional result even though the
+  scripted model returns final markers. No denied action was retried by changing
+  permissions, clients, tools or execution policy.
+
+Both workflow chains use pristine LiteLLM 1.103.1 and synthetic credentials;
+thirteen guarded gateway source hashes stay unchanged. These are not live-provider
+quality, billing/cache reuse, automatic compaction, Linux execution, or deployed
+service proofs. Reports and the initial fixture-only failures remain in temporary
+evidence directories; the sanitized summary is committed in
+[20261024-coding-workflows.json](evidence/20261024-coding-workflows.json).
+Reproduction: [Claude Code](../integration/clients/README-claude-coding-workflow.md),
+[Codex](../integration/clients/README-coding-workflow.md), and
+[profile generator](../integration/clients/profiles/README.md).
 
 ## ccpr2 deployment and actual-client qualification (2026-10-23 KST)
 

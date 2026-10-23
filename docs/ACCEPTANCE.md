@@ -10,7 +10,26 @@ support-scope decisions. Do not silently replace the agreed model/account, resto
 the SDK/CLI proxy backend, spoof an official client, remove rejected thinking,
 or modify LiteLLM source/license flags.
 
-## Current functional status — 2026-10-23
+## Local improvement status — 2026-10-24
+
+The current work adds cache-inclusive aggregation and reusable ordinary coding
+profiles, plus real-client multi-tool regression harnesses. These changes have
+**not** been redeployed, and this update made no real-provider requests.
+
+| Area | Local result | Remaining boundary |
+| --- | --- | --- |
+| Claude Code coding loop | Stock 2.1.289: Read two files, real Bash test failure, two real Edit operations, test success and independent Node rerun; seven requests, six exact reasoning replays | Scripted provider, not model planning/quality or live-provider coding; client adds Edit default `replace_all:false` |
+| Codex coding loop | Stock 0.160.0 with both shell and freeform patch: seven requests preserve opaque state, signed/empty/redacted thinking and tool identities; catalog accepted without metadata fallback | Actual Windows policy reports read-only and denies tools; transport pass is not functional coding success. No permission change or retry around that denial |
+| Reusable profiles | Native ID, pinned stock prompt, shell+patch catalog; actual Codex model/list parsing; no effort-to-thinking guessing | Unknown context is null, not a fabricated limit; no automatic-compaction qualification. User-managed/project settings and permission controls still apply |
+| Usage aggregation | Period/model fresh, cache-write, cache-read, output, cache-inclusive totals; complete/partial/unknown coverage; local dashboard build passes | API supports existing from/to filters; dashboard shows today UTC. No remote UI deployment or LiteLLM cost/budget repair |
+
+Next functional work is the combined Codex workflow in an already authorized,
+working writable client environment, followed by automatic compaction and resume
+under the ordinary profile. Do not weaken host permissions or discard reasoning
+to turn a failed qualification into a pass. Real-provider acceptance remains a
+separate bounded test. See [workflow evidence](evidence/20261024-coding-workflows.json).
+
+## Latest deployed functional status — 2026-10-23
 
 Core `4969a63` is deployed to **test-claudemock only**, image
 `sha256:6c26b0c39b672a0e56e502331a947d1a59f17f6e3f67b6d0b9356bf93dcd8104`.
