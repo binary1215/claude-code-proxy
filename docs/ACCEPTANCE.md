@@ -10,14 +10,40 @@ support-scope decisions. Do not silently replace the agreed model/account, resto
 the SDK/CLI proxy backend, spoof an official client, remove rejected thinking,
 or modify LiteLLM source/license flags.
 
-## Functional verification status
+## Current functional status — 2026-10-23
+
+Core `4969a63` is deployed to **test-claudemock only**, image
+`sha256:6c26b0c39b672a0e56e502331a947d1a59f17f6e3f67b6d0b9356bf93dcd8104`.
+The separate gateway and coding clients remain unmodified. The following is
+bounded functional evidence, not a new approval checklist or whole-client claim.
+
+| Area | Latest result | Remaining boundary |
+| --- | --- | --- |
+| Reasoning replay | Self-contained `ccpr2` restores authenticated ID and original blocks even when OpenCode omits external IDs; actual offline Read/follow-up passes | Old ID-less `ccpr1` cannot be recovered; whole omitted items cannot be reconstructed |
+| Mandatory clients through `.7` | Real Haiku: Claude Code Read/resume 3 requests; Codex tool/local compaction/two follow-ups 5 requests pass; signed/opaque replay observed | Codex uses a limited test catalog; normal shell/repository coding and current-image file editing are not requalified |
+| Cache | Claude reads 0/4626/4858; Codex reads 0/6941/0/0/7423. Relay rows match observed provider counters | Compaction changes the prefix and can miss cache; no invoice or quality experiment |
+| OpenCode real-provider path | One first-request probe reaches upstream; HTTP400 classified `third_party_plan_usage_restriction` | Provider eligibility remains unresolved; no retry, impersonation or paid fallback |
+| Gateway access/cancellation | Fresh 24h key permits only two dedicated routes; no-inference Responses validation reaches adapter. Stock local Messages/Responses cancellation passes | Local cancellation is not deployed-Linux generation/billing cancellation proof; key expires 2026-10-24 22:41:47.947 KST |
+| Gateway accounting | Fresh owner audit matches all nine requests and 8 success/1 failure; gateway input/output/spend are all 0, cache counters null | These are not provider usage or free use; proxy counters do not repair gateway spend/budget enforcement |
+| Regression/deployment | 167 local backend, 163 exact-image backend, 79 client pure and 18 deployment pure tests pass; 47 old rows/config/state key/volume preserved | Admin UI built locally only; old-image rollback cannot read new ccpr2 state; rollback not rerun this update |
+
+The primary replay-compatibility defect is fixed. The complete goal is still
+broader: OpenCode's current subscription path is refused, ordinary full coding
+profiles need broader execution evidence, and the stock pass-through accounting
+limitation is not repaired by proxy counters. These are explicit remaining
+capability/account decisions, not reasons to add new hard gates or patch LiteLLM.
+See [live and offline evidence](VERIFICATION.md) and
+[ordinary connection profiles](../integration/clients/profiles/README.md).
+
+## Historical qualification baseline — through 2026-10-07
 
 Operator priority, 2026-10-06: focus on working client features and integration;
 do not add vulnerability audits or additional hard gates. The table tracks what
 works and what remains unmeasured, not a new approval workflow. Existing service
 preservation and explicit account/cost choices remain in scope. Gateway access
-and the bounded real-client runs are now complete; remaining feature scope is
-listed separately below.
+and the bounded real-client runs at that date were complete. The table below is
+retained as historical evidence; the 2026-10-23 status above supersedes its
+deployment, missing-ID defect and source-not-yet-deployed statements.
 
 | Area | Evidence to collect | Current boundary |
 | --- | --- | --- |

@@ -1,0 +1,688 @@
+{
+  "schema_version": 1,
+  "date_kst": "2026-10-23",
+  "scope": "Actual unchanged clients through existing .7 gateway to updated .64 test-claudemock and real Haiku; bounded acceptance, not universal compatibility",
+  "source_reports": [
+    {
+      "path": "claude-proxy-ccpr2-live-opencode-aa8fdda13e8f4952a1fb212caaa626e0/opencode-responses-live-smoke.json",
+      "sha256": "9da3169bde4c315ddc7d1b35213bb475283555704382a22ddd3e175f0cd20daa"
+    },
+    {
+      "path": "claude-proxy-ccpr2-live-opencode-aa8fdda13e8f4952a1fb212caaa626e0/operator-evidence.json",
+      "sha256": "b585520ad6c774741b05686701e7528b5be2facce65e1101223437e82f66897a"
+    },
+    {
+      "path": "claude-proxy-ccpr2-live-claude-25deaad59dbc4229a146e25ba6302b48/claude-code-live-smoke.json",
+      "sha256": "3ae8293aad18b8440fc9a87b7f09a15128107c6079beebd5f7c0738729548fa0"
+    },
+    {
+      "path": "claude-proxy-ccpr2-live-codex-a107d7a199e64f8f9d20d0de840cfccb/codex-live-smoke.json",
+      "sha256": "c41fbad5604e23bd930b84e87a93cd5b0dcd05031550355cab965e5c274efff7"
+    }
+  ],
+  "deployed": {
+    "source_commit": "4969a633f9408b16e6b36610a1bfca2ee1d920e3",
+    "image": "sha256:6c26b0c39b672a0e56e502331a947d1a59f17f6e3f67b6d0b9356bf93dcd8104",
+    "container": "a3a9cec06255dd065078a4a82b916396d1796ebe086ec1c7017c333a39117653",
+    "compose_path": "/opt/test-claudemock/ccpr2-update-TSl1XPpd/candidate.compose.json",
+    "rollback_compose_path": "/opt/test-claudemock/ccpr2-update-TSl1XPpd/rollback.compose.json",
+    "old_image_source": "f5031f3",
+    "rollback_executed": false,
+    "rollback_limitation": "Old image cannot replay newly issued ccpr2 history",
+    "backend_deployed": true,
+    "admin_ui_deployed": false,
+    "admin_ui_locally_built": true
+  },
+  "operator_verification": {
+    "basis": "Deployment operator's build/test checks and read-only database inspection; live harness source reports hashed above",
+    "local_node_tests": {
+      "passed": 167,
+      "total": 167
+    },
+    "docker_backend_tests": {
+      "passed": 163,
+      "total": 163,
+      "admin_tests_excluded": 4
+    },
+    "client_tests": {
+      "passed": 79,
+      "total": 79
+    },
+    "deployment_tests": {
+      "passed": 18,
+      "total": 18
+    },
+    "history_rows_preserved_at_deployment": 47,
+    "history_rows_after_live": 56,
+    "volume_preserved": true,
+    "config_preserved": true,
+    "state_key_preserved": true,
+    "proxy_api_key_preserved": true,
+    "sqlite_backup_integrity_ok": true,
+    "sibling_containers_unchanged": true,
+    "post_live_health_http_status": 200,
+    "post_live_active_tasks": 0,
+    "post_live_state_key_unchanged": true,
+    "post_live_other_container_id_image_start_state_unchanged": true
+  },
+  "gateway_changes": {
+    "owner_issued_temporary_key_only": true,
+    "temporary_key_expires_at_kst": "2026-10-24T22:41:47.947+09:00",
+    "allowed_routes": [
+      "/claude-native/v1/messages",
+      "/claude-responses/v1/responses"
+    ],
+    "existing_models_preserved": 31,
+    "existing_keys_preserved": 6,
+    "gateway_usage_cost_accounting_verification": "completed_read_only_by_gateway_owner",
+    "gateway_usage_cost_accounting_exact": false,
+    "gateway_accounting_evidence": "20261023-ccpr2-gateway-accounting.json"
+  },
+  "request_accounting": {
+    "total_client_gateway_attempts": 9,
+    "opencode_attempts": 1,
+    "claude_code_attempts": 3,
+    "codex_attempts": 5,
+    "proxy_history_ids": [
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      56
+    ],
+    "operator_rerun_after_stdout_parsing_error": false,
+    "operator_recovery": "Wrapper stdout JSON parsing failed after successful Claude/Codex harness completion. Existing saved reports and read-only DB inspection recovered results; neither harness was rerun."
+  },
+  "opencode": {
+    "opencode_version": "1.18.34",
+    "opencode_sha256": "184f196ec97c843a64b2e1a2b49165f25e73a5d6993e2f842c9958c2b1f7a5b2",
+    "model": "claude-haiku-4-5-20251001",
+    "provider": "bundled @ai-sdk/openai Responses",
+    "gateway_endpoint": "http://192.168.0.7:4000/claude-responses/v1/responses",
+    "first_request_only": true,
+    "first_request_probe_complete": true,
+    "first_request_accepted": false,
+    "functional_pass": false,
+    "multi_turn_tested": false,
+    "outgoing_gateway_attempts": 1,
+    "client_edge_requests": 1,
+    "client_source_modified": false,
+    "client_system_prompt_replaced": false,
+    "client_user_agent_replaced": false,
+    "paid_fallback": false,
+    "observer_body_repair": false,
+    "harness_error": "gateway_http_failure",
+    "response": {
+      "phase": "read",
+      "http_status": 400,
+      "complete": false,
+      "usage": {
+        "input_tokens_details": {},
+        "output_tokens_details": {},
+        "anthropic_usage": {}
+      },
+      "error_diagnostics": {
+        "error_type": "invalid_request_error",
+        "reason": "third_party_plan_usage_restriction",
+        "adapter_error_code": null
+      },
+      "sse_failure_codes": [],
+      "request_fields": [
+        "include",
+        "input",
+        "max_output_tokens",
+        "model",
+        "prompt_cache_key",
+        "store",
+        "stream",
+        "tool_choice",
+        "tools"
+      ],
+      "unknown_inventory_fields": [],
+      "input_item_types": [
+        "message",
+        "message"
+      ],
+      "input_message_roles": [
+        "developer",
+        "user"
+      ],
+      "store_false": true,
+      "previous_response_id_present": false,
+      "encrypted_content_requested": true,
+      "instructions_present": false,
+      "system_message_present": false,
+      "opencode_user_agent_present": true,
+      "beta_header_present": false,
+      "observer_request_bytes_unchanged": true,
+      "observer_response_bytes_unchanged": true,
+      "reasoning_count": 0,
+      "opaque_done_completed_exact": null,
+      "encrypted_content_present": null,
+      "function_call_count": 0
+    },
+    "proxy_history": {
+      "id": 48,
+      "requested_model": "claude-haiku-4-5-20251001",
+      "resolved_model": "claude-haiku-4-5-20251001",
+      "status": "error",
+      "input_tokens": null,
+      "output_tokens": null,
+      "cache_creation_input_tokens": null,
+      "cache_read_input_tokens": null,
+      "usage_complete": 0,
+      "upstream_http_status": 400,
+      "upstream_error_type": "invalid_request_error",
+      "upstream_error_code": null,
+      "upstream_diagnostic": "third_party_plan_usage_restriction"
+    },
+    "not_established": "Missing-ID compatibility is fixed offline; this first-request rejection neither exercises replay nor proves the exact provider classification trigger."
+  },
+  "claude_code": {
+    "claude_version": "2.1.289",
+    "claude_sha256": "bcc6d9117aec30ad9414490302a25414359c871f5647e32e49b055c92bf84e0b",
+    "model": "claude-haiku-4-5-20251001",
+    "functional_pass": true,
+    "pass": true,
+    "turns": [
+      {
+        "exit_code": 0,
+        "event_count": 57,
+        "result_count": 1,
+        "marker_retrieved": true,
+        "successful_final": true,
+        "usage": {
+          "input_tokens": 18,
+          "output_tokens": 262,
+          "cache_read_input_tokens": 4626,
+          "cache_creation_input_tokens": 4858
+        },
+        "turn": "Read"
+      },
+      {
+        "exit_code": 0,
+        "event_count": 22,
+        "result_count": 1,
+        "marker_retrieved": true,
+        "successful_final": true,
+        "usage": {
+          "input_tokens": 10,
+          "output_tokens": 113,
+          "cache_read_input_tokens": 4858,
+          "cache_creation_input_tokens": 182
+        },
+        "turn": "resumed_user_followup"
+      }
+    ],
+    "http_statuses": [
+      200,
+      200,
+      200
+    ],
+    "outgoing_gateway_requests": 3,
+    "client_requests": 3,
+    "workspace_fixture_unchanged": true,
+    "workspace_only_fixture": true,
+    "native_usage": [
+      {
+        "input_tokens": 10,
+        "output_tokens": 158,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 4626
+      },
+      {
+        "input_tokens": 8,
+        "output_tokens": 104,
+        "cache_read_input_tokens": 4626,
+        "cache_creation_input_tokens": 232
+      },
+      {
+        "input_tokens": 10,
+        "output_tokens": 113,
+        "cache_read_input_tokens": 4858,
+        "cache_creation_input_tokens": 182
+      }
+    ],
+    "signed_thinking_blocks_before_Read_result": 1,
+    "signed_thinking_blocks_before_followup": 2,
+    "redacted_thinking_blocks_before_followup": 0,
+    "replays": [
+      {
+        "after": "Read",
+        "one_tool_result_replayed": true,
+        "fixture_marker_in_tool_result": true,
+        "ordered_content_exact": false,
+        "content_exact_without_cache_control": false,
+        "shape_diagnostics": {
+          "returned_block_count": 2,
+          "replayed_block_count": 2,
+          "returned_types": [
+            "thinking",
+            "tool_use"
+          ],
+          "replayed_types": [
+            "thinking",
+            "tool_use"
+          ],
+          "diagnostic_truncated": false,
+          "block_differences": [
+            {
+              "index": 1,
+              "returned_type": "tool_use",
+              "replayed_type": "tool_use",
+              "known_fields_removed": [
+                "caller"
+              ],
+              "known_fields_added": [],
+              "known_fields_changed": [],
+              "unknown_field_differences": 0
+            }
+          ],
+          "concatenated_text_exact": true,
+          "tool_id_name_input_exact": true
+        },
+        "returned_thinking_or_redacted_count": 1,
+        "signed_blocks_preserved": true
+      },
+      {
+        "after": "user_followup",
+        "one_tool_result_replayed": true,
+        "fixture_marker_in_tool_result": true,
+        "ordered_content_exact": false,
+        "content_exact_without_cache_control": false,
+        "shape_diagnostics": {
+          "returned_block_count": 4,
+          "replayed_block_count": 4,
+          "returned_types": [
+            "thinking",
+            "tool_use",
+            "thinking",
+            "text"
+          ],
+          "replayed_types": [
+            "thinking",
+            "tool_use",
+            "thinking",
+            "text"
+          ],
+          "diagnostic_truncated": false,
+          "block_differences": [
+            {
+              "index": 1,
+              "returned_type": "tool_use",
+              "replayed_type": "tool_use",
+              "known_fields_removed": [
+                "caller"
+              ],
+              "known_fields_added": [],
+              "known_fields_changed": [],
+              "unknown_field_differences": 0
+            }
+          ],
+          "concatenated_text_exact": true,
+          "tool_id_name_input_exact": true
+        },
+        "returned_thinking_or_redacted_count": 2,
+        "signed_blocks_preserved": true
+      }
+    ],
+    "replay_coverage_complete": true,
+    "observed_replay_content_exact": false,
+    "observed_signed_state_pass": true,
+    "whole_body_semantic_exact": null,
+    "native_ingress_observed": false,
+    "scope_limit": "Read and resumed follow-up only. Client removes tool caller metadata; text and tool ID/name/input and observed signed state are preserved. No live signed-empty/redacted emission or ordinary editing/long-session claim."
+  },
+  "codex": {
+    "codex_version_pinned": true,
+    "model": "claude-haiku-4-5-20251001",
+    "functional_pass": true,
+    "pass": true,
+    "phases": {
+      "initial": {
+        "client_requests": 2,
+        "remote_requests": null,
+        "requests": [
+          {
+            "http_status": 200,
+            "finished": true,
+            "auth_exact": true,
+            "caller_cache_header_exact": true,
+            "sse_parsed": true,
+            "sse_failure_codes": [],
+            "response_completed_count": 1,
+            "reasoning_count": 1,
+            "reasoning_present": true,
+            "reasoning_done_completed_exact": true,
+            "encrypted_content_present": true,
+            "marker_present": false,
+            "usage": {
+              "native_input_tokens": 10,
+              "native_output_tokens": 141,
+              "cache_creation_input_tokens": 6941,
+              "cache_read_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 6941,
+              "ephemeral_1h_input_tokens": 0,
+              "input_tokens": 6951,
+              "output_tokens": 141,
+              "total_tokens": 7092,
+              "cached_tokens": 0,
+              "cache_write_tokens": 6941
+            }
+          },
+          {
+            "http_status": 200,
+            "finished": true,
+            "auth_exact": true,
+            "caller_cache_header_exact": true,
+            "sse_parsed": true,
+            "sse_failure_codes": [],
+            "response_completed_count": 1,
+            "reasoning_count": 0,
+            "reasoning_present": false,
+            "reasoning_done_completed_exact": null,
+            "encrypted_content_present": false,
+            "marker_present": true,
+            "usage": {
+              "native_input_tokens": 5,
+              "native_output_tokens": 14,
+              "cache_creation_input_tokens": 178,
+              "cache_read_input_tokens": 6941,
+              "ephemeral_5m_input_tokens": 178,
+              "ephemeral_1h_input_tokens": 0,
+              "input_tokens": 7124,
+              "output_tokens": 14,
+              "total_tokens": 7138,
+              "cached_tokens": 6941,
+              "cache_write_tokens": 178
+            }
+          }
+        ],
+        "relay_ingress_observed": false,
+        "gateway_internals_observed": false,
+        "expected_request_count": true,
+        "request_bytes_exact": null,
+        "request_json_exact": null,
+        "request_json_exact_except_metadata": null,
+        "request_metadata_removed": null,
+        "request_input_exact": null,
+        "sse_bytes_exact": null,
+        "transport_pass": true,
+        "responses_with_reasoning": 1,
+        "responses_without_reasoning": 1,
+        "reasoning_done_completed_exact": true,
+        "marker_present": true,
+        "terminal_status": "completed",
+        "get_goal_call_count": 1,
+        "get_goal_tool_result_present": true,
+        "get_goal_tool_result_success": true,
+        "initial_reasoning_replay_exact": true,
+        "functional_pass": true,
+        "pass": true
+      },
+      "compact": {
+        "client_requests": 1,
+        "remote_requests": null,
+        "requests": [
+          {
+            "http_status": 200,
+            "finished": true,
+            "auth_exact": true,
+            "caller_cache_header_exact": true,
+            "sse_parsed": true,
+            "sse_failure_codes": [],
+            "response_completed_count": 1,
+            "reasoning_count": 1,
+            "reasoning_present": true,
+            "reasoning_done_completed_exact": true,
+            "encrypted_content_present": true,
+            "marker_present": false,
+            "usage": {
+              "native_input_tokens": 9,
+              "native_output_tokens": 736,
+              "cache_creation_input_tokens": 5451,
+              "cache_read_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 5451,
+              "ephemeral_1h_input_tokens": 0,
+              "input_tokens": 5460,
+              "output_tokens": 736,
+              "total_tokens": 6196,
+              "cached_tokens": 0,
+              "cache_write_tokens": 5451
+            }
+          }
+        ],
+        "relay_ingress_observed": false,
+        "gateway_internals_observed": false,
+        "expected_request_count": true,
+        "request_bytes_exact": null,
+        "request_json_exact": null,
+        "request_json_exact_except_metadata": null,
+        "request_metadata_removed": null,
+        "request_input_exact": null,
+        "sse_bytes_exact": null,
+        "transport_pass": true,
+        "responses_with_reasoning": 1,
+        "responses_without_reasoning": 0,
+        "reasoning_done_completed_exact": true,
+        "marker_present": null,
+        "terminal_status": "completed",
+        "initial_reasoning_compaction_replay_exact": true,
+        "compact_current_tools_empty": true,
+        "context_compaction_started": true,
+        "context_compaction_completed": true,
+        "functional_pass": true,
+        "pass": true
+      },
+      "followup": {
+        "client_requests": 1,
+        "remote_requests": null,
+        "requests": [
+          {
+            "http_status": 200,
+            "finished": true,
+            "auth_exact": true,
+            "caller_cache_header_exact": true,
+            "sse_parsed": true,
+            "sse_failure_codes": [],
+            "response_completed_count": 1,
+            "reasoning_count": 1,
+            "reasoning_present": true,
+            "reasoning_done_completed_exact": true,
+            "encrypted_content_present": true,
+            "marker_present": true,
+            "usage": {
+              "native_input_tokens": 10,
+              "native_output_tokens": 153,
+              "cache_creation_input_tokens": 7423,
+              "cache_read_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 7423,
+              "ephemeral_1h_input_tokens": 0,
+              "input_tokens": 7433,
+              "output_tokens": 153,
+              "total_tokens": 7586,
+              "cached_tokens": 0,
+              "cache_write_tokens": 7423
+            }
+          }
+        ],
+        "relay_ingress_observed": false,
+        "gateway_internals_observed": false,
+        "expected_request_count": true,
+        "request_bytes_exact": null,
+        "request_json_exact": null,
+        "request_json_exact_except_metadata": null,
+        "request_metadata_removed": null,
+        "request_input_exact": null,
+        "sse_bytes_exact": null,
+        "transport_pass": true,
+        "responses_with_reasoning": 1,
+        "responses_without_reasoning": 0,
+        "reasoning_done_completed_exact": true,
+        "marker_present": true,
+        "terminal_status": "completed",
+        "post_compaction_input_has_no_old_reasoning": true,
+        "functional_pass": true,
+        "pass": true
+      },
+      "followup_second": {
+        "client_requests": 1,
+        "remote_requests": null,
+        "requests": [
+          {
+            "http_status": 200,
+            "finished": true,
+            "auth_exact": true,
+            "caller_cache_header_exact": true,
+            "sse_parsed": true,
+            "sse_failure_codes": [],
+            "response_completed_count": 1,
+            "reasoning_count": 1,
+            "reasoning_present": true,
+            "reasoning_done_completed_exact": true,
+            "encrypted_content_present": true,
+            "marker_present": true,
+            "usage": {
+              "native_input_tokens": 10,
+              "native_output_tokens": 136,
+              "cache_creation_input_tokens": 58,
+              "cache_read_input_tokens": 7423,
+              "ephemeral_5m_input_tokens": 58,
+              "ephemeral_1h_input_tokens": 0,
+              "input_tokens": 7491,
+              "output_tokens": 136,
+              "total_tokens": 7627,
+              "cached_tokens": 7423,
+              "cache_write_tokens": 58
+            }
+          }
+        ],
+        "relay_ingress_observed": false,
+        "gateway_internals_observed": false,
+        "expected_request_count": true,
+        "request_bytes_exact": null,
+        "request_json_exact": null,
+        "request_json_exact_except_metadata": null,
+        "request_metadata_removed": null,
+        "request_input_exact": null,
+        "sse_bytes_exact": null,
+        "transport_pass": true,
+        "responses_with_reasoning": 1,
+        "responses_without_reasoning": 0,
+        "reasoning_done_completed_exact": true,
+        "marker_present": true,
+        "terminal_status": "completed",
+        "post_compaction_reasoning_replay_exact": true,
+        "functional_pass": true,
+        "pass": true
+      }
+    },
+    "gateway_request_attempts": 5,
+    "client_request_count": 5,
+    "cache_fixture_requested": true,
+    "cache_fixture_utf8_bytes": 18846,
+    "cache_fixture_words": 3107,
+    "cache_fixture_reference_rows": 128,
+    "workspace_file_count": 0,
+    "local_compaction_pass": true,
+    "post_compaction_followups_pass": true,
+    "reasoning_check_count": 7,
+    "observed_reasoning_preserved": true,
+    "post_compaction_reasoning_replay_observed": true,
+    "cache_write_observed": true,
+    "cache_hit_observed": true,
+    "observed_no_retries": true,
+    "no_hidden_retries": null,
+    "gateway_internals_observed": false,
+    "relay_ingress_observed": false,
+    "version": "0.160.0",
+    "scope_limit": "Explicit limited test catalog; shell/apply_patch disabled, read-only workspace, no-I/O get_goal and manual local compaction plus two follow-ups. Not ordinary coding-profile certification."
+  },
+  "relay_usage_correlation": {
+    "operator_compared_each_row_to_harness": true,
+    "compared_fields": [
+      "input_tokens",
+      "output_tokens",
+      "cache_creation_input_tokens",
+      "cache_read_input_tokens"
+    ],
+    "successful_request_rows": [
+      {
+        "history_id": 49,
+        "client": "claude_code",
+        "input_tokens": 10,
+        "output_tokens": 158,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 4626
+      },
+      {
+        "history_id": 50,
+        "client": "claude_code",
+        "input_tokens": 8,
+        "output_tokens": 104,
+        "cache_read_input_tokens": 4626,
+        "cache_creation_input_tokens": 232
+      },
+      {
+        "history_id": 51,
+        "client": "claude_code",
+        "input_tokens": 10,
+        "output_tokens": 113,
+        "cache_read_input_tokens": 4858,
+        "cache_creation_input_tokens": 182
+      },
+      {
+        "history_id": 52,
+        "client": "codex",
+        "input_tokens": 10,
+        "output_tokens": 141,
+        "cache_creation_input_tokens": 6941,
+        "cache_read_input_tokens": 0
+      },
+      {
+        "history_id": 53,
+        "client": "codex",
+        "input_tokens": 5,
+        "output_tokens": 14,
+        "cache_creation_input_tokens": 178,
+        "cache_read_input_tokens": 6941
+      },
+      {
+        "history_id": 54,
+        "client": "codex",
+        "input_tokens": 9,
+        "output_tokens": 736,
+        "cache_creation_input_tokens": 5451,
+        "cache_read_input_tokens": 0
+      },
+      {
+        "history_id": 55,
+        "client": "codex",
+        "input_tokens": 10,
+        "output_tokens": 153,
+        "cache_creation_input_tokens": 7423,
+        "cache_read_input_tokens": 0
+      },
+      {
+        "history_id": 56,
+        "client": "codex",
+        "input_tokens": 10,
+        "output_tokens": 136,
+        "cache_creation_input_tokens": 58,
+        "cache_read_input_tokens": 7423
+      }
+    ],
+    "rejected_request_usage_unknown": true,
+    "invoice_or_financial_savings_verified": false
+  },
+  "limitations": [
+    "OpenCode upstream subscription-restriction 400 remains; no impersonation, authentication fallback or paid fallback was attempted.",
+    "Gateway-to-relay whole-body/header/SSE equality and internal retries were not observed by these live harnesses.",
+    "Relay usage matches client-visible provider counters; the fresh gateway audit finds nine records with zero token/spend values and null cache counters, not exact provider accounting or free usage.",
+    "No claim of real-provider billing cessation, improved model quality, universal tool/client support or unrestricted subscription entitlement."
+  ]
+}

@@ -1,4 +1,123 @@
-# Native relay verification — updated 2026-10-06
+# Native relay verification — updated 2026-10-23
+
+## ccpr2 deployment and actual-client qualification (2026-10-23 KST)
+
+The proxy-only compatibility update is deployed to **test-claudemock**, not a
+replacement production service. Core source commit:
+`4969a633f9408b16e6b36610a1bfca2ee1d920e3`. The built image is
+`sha256:6c26b0c39b672a0e56e502331a947d1a59f17f6e3f67b6d0b9356bf93dcd8104`;
+container ID:
+`a3a9cec06255dd065078a4a82b916396d1796ebe086ec1c7017c333a39117653`.
+LiteLLM and client sources were not modified. The admin UI changes were built
+locally; only the backend image was deployed remotely.
+
+### Implemented and verified locally
+
+- `ccpr2` authenticates its own reasoning ID, allowing an unchanged client to
+  omit the external ID without dropping or inventing thinking/signature data.
+  Existing `ccpr1` plus its original ID still replays; ID-less `ccpr1` cannot be
+  recovered. Supplied conflicting IDs are rejected explicitly.
+- Actual OpenCode 1.18.34 now completes offline Read, tool-result and resumed
+  follow-up through the built proxy in three requests. It still omits IDs but
+  retains all three ciphertexts. Both restored native histories preserve exact
+  signed thinking, signed-empty, redacted-thinking and tool blocks. Final
+  qualification requires real tool completion, restored state and no observer
+  failure, not ciphertext or ID equality alone.
+- Actual Codex 0.160.0 passes two synthetic adapter scenarios/four requests and
+  a five-request manual-compaction/hoist continuation. Claude Code 2.1.289
+  preserves the synthetic native state subset in two scenarios/four requests;
+  stock LiteLLM's top-level metadata removal remains a known whole-body loss.
+- Local Node tests: **167/167**; actual Docker backend tests: **163/163** (four
+  admin-source tests excluded from that backend image); client pure tests:
+  **79/79**; deployment pure tests: **18/18**. Local admin build also succeeded.
+- A separate Windows-loopback cancellation check passes direct controls and
+  both stock-LiteLLM Messages/Responses chains. The chain upstream sockets
+  close in 1.58 / 1.00 ms and history finalizes as `cancelled` in 27.46 / 26.59 ms
+  in the retained q3 run, within the 2-second bound and before the 8-second
+  deadline. This is observed local cancellation, not a real-provider billing
+  cessation or deployed-Linux timing guarantee.
+
+The restored test environment uses pristine LiteLLM 1.103.1 and prisma 0.11.0.
+Thirteen guarded stock source hashes match before/after; other dependency
+versions were resolved for this run, not recreated from a full historical lock.
+See [offline client evidence](evidence/20261023-ccpr2-offline-clients.json) and
+[cancellation evidence](evidence/20261023-ccpr2-chain-cancellation.json).
+
+### Actual `.7` gateway → `.64` proxy → Haiku results
+
+The authorized live sequence made exactly **nine client-to-gateway attempts**,
+with nine new proxy history rows. No client/provider impersonation, paid-key
+fallback or retry after a failed client scenario was introduced.
+
+| Client / rows | Observed outcome | Provider cache-read counters, per request |
+| --- | --- | --- |
+| OpenCode Responses, row 48 | One first-request probe returns upstream 400 `invalid_request_error`; new diagnostic records `third_party_plan_usage_restriction` | Unavailable, not zero cost |
+| Claude Code native, rows 49–51 | Three HTTP 200 requests; actual Read and resumed follow-up pass; observed signed state preserved | 0 / 4626 / 4858 |
+| Codex Responses, rows 52–56 | Five HTTP 200 requests; get_goal, manual local compaction and two follow-ups pass; seven observed reasoning checks pass | 0 / 6941 / 0 / 0 / 7423 |
+
+OpenCode's first request fails before any reasoning replay, so the live refusal
+does not invalidate the separate fixed missing-ID contract. Conversely, fixing
+that contract did **not** solve the subscription restriction. The precise
+provider classification trigger remains unknown; no live OpenCode multi-turn
+success is claimed.
+
+Claude Code preserves the observed signed blocks, text, tool ID/name/input and
+matching result. It removes the returned tool `caller` metadata on replay, so
+whole replay-content equality is **false**, not a lossless-body claim. This live
+sample emits no redacted block and does not qualify signed-empty preservation.
+
+Codex used the explicit limited catalog with shell/apply_patch disabled and a
+read-only workspace. The cache fixture adds inert stable reference text; it
+does not change the underlying provider identity. Initial opaque replay,
+compaction replay and post-compaction continuation pass. No files were written.
+This is not a rerun of ordinary shell/file editing or full default-profile
+qualification. The [connection profiles](../integration/clients/profiles/README.md)
+are separate opt-in connection settings without a synthetic catalog or client
+permission/prompt changes.
+
+Read-only proxy DB inspection matched **each successful row's fresh input,
+output, cache-write and cache-read counters** to the corresponding client
+report. The proxy has 56 history rows after testing. That establishes relay
+counter consistency, not an invoice or a measured quality improvement. The
+gateway owner independently found all nine requests: three Messages successes,
+five Responses successes, and one failure with error-code metadata `400`.
+All nine have input/output/spend **0**, with cache-read/write counters **null**.
+The gateway's `cache_hit=False` describes its own cache, not Anthropic's cache.
+Thus the pass-through accounting limitation remains; these zeros do not mean
+free use. The failure's client/path is not stored, so its OpenCode correlation
+uses the test time and count, not an invented gateway client identity. See
+[the fresh gateway audit](evidence/20261023-ccpr2-gateway-accounting.json).
+The live client observers did not inspect every `.7`→`.64` body/header/SSE byte
+or gateway-internal retry attempt.
+
+The operator wrapper encountered stdout JSON parsing errors **after** both
+successful Claude Code/Codex harnesses had saved their reports. Read-only
+inspection of those reports and proxy rows recovered the outcomes. Neither
+scenario was rerun, and this wrapper error is not a harness/model failure.
+Source report hashes and the selected safe observations are in
+[live evidence](evidence/20261023-ccpr2-live.json); raw conversations, signatures,
+capsules, credentials and client-session files are not published.
+
+### Deployment preservation and rollback limits
+
+Deployment preserved the original 47 history rows, database volume, settings,
+state key and proxy API key. Backup integrity passed and sibling containers
+were unchanged. After all nine live calls, proxy health remained HTTP 200 with
+zero active tasks; the state key and other containers' IDs/images/start state
+were again verified unchanged. Active compose:
+`/opt/test-claudemock/ccpr2-update-TSl1XPpd/candidate.compose.json`.
+The adjacent `rollback.compose.json` retains the old `f5031f3` image; rollback
+was **not** executed. That old image cannot replay newly issued `ccpr2` history,
+so rollback is not transparent conversation continuation.
+
+The gateway owner issued only a fresh temporary key for the two existing
+Messages/Responses routes, expiring **2026-10-24 22:41:47.947 KST**. Existing
+31 models and six keys were retained. No key value is stored in these docs;
+route grants do not establish provider entitlement or model-level isolation.
+The post-test read-only gateway audit confirmed those models/key settings,
+both routes, its container and LiteLLM 1.103.1 unchanged and healthy. It made no
+additional inference calls or configuration changes.
+Historical records below are retained with their original scopes and dates.
 
 ## Scope and corrections
 

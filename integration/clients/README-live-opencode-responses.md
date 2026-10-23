@@ -137,8 +137,8 @@ zero billing**. Safe evidence is collected in
 This establishes that **switching OpenCode to this Responses route alone did
 not resolve the observed provider refusal**. It does not isolate which client
 prompt/header/request feature caused the different result from earlier Codex
-tests. The separate offline missing-ID compatibility defect remains relevant
-to future multi-turn testing; fixing that defect would not itself change the
+tests. The separate offline missing-ID compatibility defect was subsequently
+fixed by `ccpr2`, as measured below; that fix does not itself change the
 provider's first-request usage decision.
 
 ## ccpr2 offline qualification

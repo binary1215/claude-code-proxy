@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "source": "LiteLLM management owner read-only audit: usage-audit-details.json",
+  "source_sha256": "27a85775c00c8d2d7155f5a346d8c710b4812aa50a55a3bb6a38d667dcae5b9c",
+  "snapshot_utc": "2026-10-23T14:03:29.135917+00:00",
+  "window_start_utc": "2026-10-23T13:58:27Z",
+  "window_end_utc": "2026-10-23T14:01:30Z",
+  "inference_performed_by_audit": false,
+  "configuration_changed_by_audit": false,
+  "preservation": {
+    "container_unchanged": true,
+    "image": "ghcr.io/berriai/litellm:v1.103.1",
+    "models_count": 31,
+    "models_equal_before_key_issue": true,
+    "existing_six_key_configuration_unchanged": true,
+    "total_key_count_including_new_test_key": 7,
+    "routes_unchanged": true,
+    "health": "healthy",
+    "database": "connected"
+  },
+  "window": {
+    "requests": 9,
+    "messages_success": 3,
+    "responses_success": 5,
+    "unattributed_failure": 1,
+    "failure_time_utc": "2026-10-23T13:58:31.004",
+    "failure_metadata_error_code": "400",
+    "failure_client_and_path_stored": false,
+    "opencode_failure_correlation": "time/count correlation with client report and proxy row48, not gateway client identity",
+    "all_models": "claude-haiku-4-5-20251001",
+    "sum_input_tokens": 0,
+    "sum_output_tokens": 0,
+    "sum_total_tokens": 0,
+    "sum_spend": 0,
+    "rows_with_provider_cache_read": 0,
+    "rows_with_provider_cache_write": 0,
+    "provider_cache_read_tokens": null,
+    "provider_cache_write_tokens": null,
+    "gateway_cache_hit_field": "False",
+    "gateway_cache_hit_is_provider_cache_measurement": false
+  },
+  "test_key_cumulative": {
+    "requests": 12,
+    "success": 8,
+    "failure": 4,
+    "outside_window_failures": 3,
+    "spend": 0
+  },
+  "conclusion": "Request count/status correlate, but stock custom pass-through accounting omits actual provider token/cache/spend measurement. Zero recorded spend is not free usage or a verified invoice.",
+  "credentials_or_error_prose_published": false
+}

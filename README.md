@@ -10,6 +10,34 @@ Codex / Responses     -> stock LiteLLM pass-through -> opt-in /v1/responses
 
 No automatic SDK fallback, tool execution, invented thinking, conversation storage, or provider/account failover is included. The caller owns conversation history and executes its client tools. Upstream-native server-tool definitions are forwarded on the native route; they are not executed on the proxy host. The new [Responses adapter](docs/RESPONSES-ADAPTER.md) is disabled by default and supports a deliberately bounded client-tool subset.
 
+## Latest tested improvement — 2026-10-23
+
+The test backend now runs core commit `4969a63` with self-contained **`ccpr2`**
+reasoning state. OpenCode may omit public reasoning IDs without losing the
+authenticated native thinking/signature blocks. Existing `ccpr1` history remains
+readable with its original IDs. See [migration/rollback limits](docs/RESPONSES-ADAPTER.md).
+
+- Actual OpenCode Read + same-session follow-up passes against the local fake
+  provider. Its one new real `.7` request still receives Anthropic's third-party
+  plan-usage **400**; that is not fixed by the replay-format improvement.
+- Actual Claude Code through `.7`: Read, resumed conversation and signed-state
+  replay pass (3 Haiku requests); cache reads **4,626 / 4,858** tokens observed.
+- Actual Codex through `.7`: tool, local compaction and two subsequent turns pass
+  (5 Haiku requests); cache reads **6,941 / 7,423** tokens observed. This uses a
+  limited test catalog, not certification of all ordinary coding tools.
+- Stock LiteLLM cancellation passes on both local protocol chains. Error-hop and
+  cache/usage diagnostics distinguish unreported values from zero or free usage.
+
+Only `test-claudemock` was replaced; LiteLLM and client sources were not changed.
+The dashboard source was built locally, **not deployed** with the backend-only
+image. Use the [client connection profiles](integration/clients/profiles/README.md)
+and [no-inference connection diagnostic](integration/clients/check_gateway_connection.py).
+See [current acceptance](docs/ACCEPTANCE.md) and [measured evidence](docs/VERIFICATION.md).
+Cache hits establish observed reuse, not invoice savings or measured quality.
+The fresh gateway audit still records zero tokens/spend and no cache counters
+on these pass-through routes; use the proxy/provider observations, not those
+zeros, when assessing consumption.
+
 ## Native Messages preservation contract
 
 - JSON request bytes and upstream response/SSE bytes are forwarded unchanged, including unknown fields, thinking/signatures, redacted thinking, tool results, `is_error`, cache markers and TTLs. The proxy does not rename models or inject a system prompt.
