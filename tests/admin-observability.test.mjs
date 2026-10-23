@@ -61,3 +61,20 @@ test('upstream authentication status is never relabeled as a gateway expired key
   assert.equal(diagnostics.upstreamDiagnosticExplanation('http_error', 400), null);
   assert.equal(diagnostics.upstreamDiagnosticExplanation(null, null), null);
 });
+
+test('dashboard formatting distinguishes complete, partial, unobserved and zero counters', () => {
+  const metric = (total, known, reported, unknown) => ({ total_tokens: total, known_tokens: known,
+    reported_requests: reported, unknown_requests: unknown });
+  assert.deepEqual(usage.formatAggregateTokens(metric(173, 173, 2, 0)), { value: '173', detail: null });
+  assert.deepEqual(usage.formatAggregateTokens(metric(0, 0, 1, 0)), { value: '0', detail: null });
+  const partial = usage.formatAggregateTokens(metric(null, 100, 1, 1));
+  assert.equal(partial.value, 'Unknown');
+  assert.match(partial.detail, /Known subtotal: 100/);
+  assert.match(partial.detail, /1\/2 requests reported/);
+  assert.match(partial.detail, /non-final usage/);
+  assert.deepEqual(usage.formatAggregateTokens(metric(null, null, 0, 1)), {
+    value: 'Unknown', detail: '0/1 requests reported',
+  });
+  assert.match(usage.USAGE_AGGREGATION_NOTICE, /not complete totals/);
+  assert.match(usage.USAGE_AGGREGATION_NOTICE, /does not repair LiteLLM accounting/);
+});

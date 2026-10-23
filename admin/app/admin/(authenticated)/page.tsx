@@ -1,6 +1,5 @@
-import { fetchStats } from "@/lib/api";
-import { fetchTasks } from "@/lib/api";
-import { formatCost, formatTotalTokens } from "@/lib/usage";
+import { fetchStats, fetchTasks, type TokenAggregate } from "@/lib/api";
+import { formatAggregateTokens, formatCost, USAGE_AGGREGATION_NOTICE } from "@/lib/usage";
 
 export const dynamic = "force-dynamic";
 
@@ -9,10 +8,12 @@ export default async function DashboardPage() {
     fetchStats({ from: new Date().toISOString().slice(0, 10) }),
     fetchTasks(),
   ]);
+  const totalTokens = formatAggregateTokens(stats.usage.total_tokens);
 
   return (
     <div>
       <h2 className="text-2xl font-bold mb-6">Dashboard</h2>
+      <p className="text-sm text-gray-500 mb-4">Today, from 00:00 UTC. Counts include successful, failed, cancelled and pending requests.</p>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <StatCard
@@ -26,8 +27,9 @@ export default async function DashboardPage() {
           color="gray"
         />
         <StatCard
-          label="Tokens Today (excl. cache)"
-          value={formatTotalTokens(stats.total_input_tokens, stats.total_output_tokens)}
+          label="Tokens Today (incl. cache)"
+          value={totalTokens.value}
+          detail={totalTokens.detail}
           color="purple"
         />
         <StatCard
@@ -37,14 +39,43 @@ export default async function DashboardPage() {
         />
       </div>
 
+      <div className="bg-white rounded-xl shadow p-6 mb-6">
+        <h3 className="text-lg font-semibold mb-4">Provider Token Usage</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+          {([
+            ["Fresh input", stats.usage.fresh_input],
+            ["Cache write", stats.usage.cache_write],
+            ["Cache read", stats.usage.cache_read],
+            ["Total input (incl. cache)", stats.usage.total_input],
+            ["Output", stats.usage.output],
+          ] as const).map(([label, metric]) => (
+            <div key={label}>
+              <p className="text-sm text-gray-500 mb-1">{label}</p>
+              <AggregateValue metric={metric} />
+            </div>
+          ))}
+        </div>
+        <p className="text-sm font-medium mb-2">
+          Coverage: {stats.usage.complete_requests} complete / {stats.usage.partial_requests} partial / {stats.usage.unknown_requests} unknown requests
+        </p>
+        <p className="text-xs text-gray-500">{USAGE_AGGREGATION_NOTICE}</p>
+      </div>
+
       {stats.by_model.length > 0 && (
         <div className="bg-white rounded-xl shadow p-6 mb-6">
           <h3 className="text-lg font-semibold mb-4">Usage by Model</h3>
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[1000px]">
             <thead>
               <tr className="border-b text-left text-gray-500">
                 <th className="pb-2">Model</th>
                 <th className="pb-2">Requests</th>
+                <th className="pb-2">Fresh input</th>
+                <th className="pb-2">Cache write</th>
+                <th className="pb-2">Cache read</th>
+                <th className="pb-2">Output</th>
+                <th className="pb-2">Total input</th>
+                <th className="pb-2">Coverage<br /><span className="font-normal text-xs">complete / partial / unknown</span></th>
                 <th className="pb-2">Cost</th>
               </tr>
             </thead>
@@ -53,11 +84,18 @@ export default async function DashboardPage() {
                 <tr key={m.model} className="border-b last:border-0">
                   <td className="py-2 font-mono text-xs">{m.model}</td>
                   <td className="py-2">{m.count}</td>
+                  <td className="py-2 pr-3"><AggregateValue metric={m.usage.fresh_input} /></td>
+                  <td className="py-2 pr-3"><AggregateValue metric={m.usage.cache_write} /></td>
+                  <td className="py-2 pr-3"><AggregateValue metric={m.usage.cache_read} /></td>
+                  <td className="py-2 pr-3"><AggregateValue metric={m.usage.output} /></td>
+                  <td className="py-2 pr-3"><AggregateValue metric={m.usage.total_input} /></td>
+                  <td className="py-2 pr-3">{m.usage.complete_requests} / {m.usage.partial_requests} / {m.usage.unknown_requests}</td>
                   <td className="py-2">{formatCost(m.cost_usd)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -86,10 +124,12 @@ function StatCard({
   label,
   value,
   color,
+  detail,
 }: {
   label: string;
   value: string | number;
   color: string;
+  detail?: string | null;
 }) {
   const colorMap: Record<string, string> = {
     blue: "border-blue-500",
@@ -104,6 +144,17 @@ function StatCard({
     >
       <p className="text-sm text-gray-500">{label}</p>
       <p className="text-2xl font-bold mt-1">{value}</p>
+      {detail && <p className="text-xs text-gray-500 mt-2">{detail}</p>}
+    </div>
+  );
+}
+
+function AggregateValue({ metric }: { metric: TokenAggregate }) {
+  const formatted = formatAggregateTokens(metric);
+  return (
+    <div>
+      <span className="font-medium">{formatted.value}</span>
+      {formatted.detail && <p className="text-xs text-gray-500 mt-1 max-w-56">{formatted.detail}</p>}
     </div>
   );
 }

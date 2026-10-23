@@ -1,5 +1,5 @@
 import { db } from "../db/connection.js";
-import type { RequestLog, HistoryQuery, HistoryStats } from "../types/index.js";
+import type { RequestLog, HistoryQuery, HistoryStats, TokenAggregate, UsageAggregate } from "../types/index.js";
 import { sanitizeDiagnostics, type UpstreamDiagnostics } from "./upstreamDiagnostics.js";
 
 export function insertPendingRequest(params: {
@@ -141,6 +141,63 @@ export function queryHistory(params: HistoryQuery): { rows: RequestLog[]; total:
   return { rows, total: countRow.total };
 }
 
+// Native input excludes cache writes/reads. TTL-specific write counters are
+// subsets, so they must not be added again. Validate legacy values as well.
+const observedCounter = (column: string) =>
+  `(CASE WHEN typeof(${column}) = 'integer' AND ${column} BETWEEN 0 AND ${Number.MAX_SAFE_INTEGER} THEN ${column} END)`;
+const freshInput = observedCounter("input_tokens");
+const cacheWrite = observedCounter("cache_creation_input_tokens");
+const cacheRead = observedCounter("cache_read_input_tokens");
+const output = observedCounter("output_tokens");
+const usageMetrics = {
+  fresh_input: freshInput,
+  cache_write: cacheWrite,
+  cache_read: cacheRead,
+  output,
+  total_input: `(${freshInput} + ${cacheWrite} + ${cacheRead})`,
+  total_tokens: `(${freshInput} + ${cacheWrite} + ${cacheRead} + ${output})`,
+} as const;
+const allCounters = [freshInput, cacheWrite, cacheRead, output];
+const usageProjection = `
+  COUNT(*) AS usage_requests,
+  COUNT(CASE WHEN usage_complete = 1 THEN 1 END) AS terminal_usage_requests,
+  COUNT(CASE WHEN usage_complete = 1 AND ${allCounters.map(value => `${value} IS NOT NULL`).join(" AND ")} THEN 1 END) AS complete_requests,
+  COUNT(CASE WHEN ${allCounters.map(value => `${value} IS NULL`).join(" AND ")} THEN 1 END) AS unknown_requests,
+  ${Object.entries(usageMetrics).map(([name, expression]) => `
+    COUNT(${expression}) AS ${name}_reported,
+    SUM(CAST(${expression} AS REAL)) AS ${name}_known
+  `).join(",")}
+`;
+
+type UsageRow = Record<string, number | null>;
+
+function aggregateUsage(row: UsageRow): UsageAggregate {
+  const requests = row.usage_requests!;
+  const terminal = row.terminal_usage_requests!;
+  const complete = row.complete_requests!;
+  const unknown = row.unknown_requests!;
+  const metrics = Object.fromEntries(Object.keys(usageMetrics).map(name => {
+    const reported = row[`${name}_reported`]!;
+    const sum = row[`${name}_known`];
+    // A very large period must not silently expose a rounded token count.
+    const known = sum != null && Number.isSafeInteger(sum) && sum >= 0 ? sum : null;
+    const metric: TokenAggregate = {
+      total_tokens: reported === requests && terminal === requests ? known : null,
+      known_tokens: known,
+      reported_requests: reported,
+      unknown_requests: requests - reported,
+    };
+    return [name, metric];
+  })) as Pick<UsageAggregate, keyof typeof usageMetrics>;
+  return {
+    complete_requests: complete,
+    partial_requests: requests - complete - unknown,
+    unknown_requests: unknown,
+    terminal_usage_requests: terminal,
+    ...metrics,
+  };
+}
+
 export function getStats(from?: string, to?: string): HistoryStats {
   const conditions: string[] = [];
   const values: any[] = [];
@@ -161,9 +218,10 @@ export function getStats(from?: string, to?: string): HistoryStats {
       COUNT(*) as total_requests,
       CASE WHEN COUNT(total_cost_usd) = COUNT(*) THEN SUM(total_cost_usd) END as total_cost_usd,
       CASE WHEN COUNT(input_tokens) = COUNT(*) THEN SUM(input_tokens) END as total_input_tokens,
-      CASE WHEN COUNT(output_tokens) = COUNT(*) THEN SUM(output_tokens) END as total_output_tokens
+      CASE WHEN COUNT(output_tokens) = COUNT(*) THEN SUM(output_tokens) END as total_output_tokens,
+      ${usageProjection}
     FROM request_log ${where}
-  `).get(...values) as {
+  `).get(...values) as UsageRow & {
     total_requests: number;
     total_cost_usd: number | null;
     total_input_tokens: number | null;
@@ -172,10 +230,11 @@ export function getStats(from?: string, to?: string): HistoryStats {
 
   const byModel = db.prepare(`
     SELECT resolved_model as model, COUNT(*) as count,
-      CASE WHEN COUNT(total_cost_usd) = COUNT(*) THEN SUM(total_cost_usd) END as cost_usd
+      CASE WHEN COUNT(total_cost_usd) = COUNT(*) THEN SUM(total_cost_usd) END as cost_usd,
+      ${usageProjection}
     FROM request_log ${where}
     GROUP BY resolved_model ORDER BY count DESC
-  `).all(...values) as Array<{ model: string; count: number; cost_usd: number | null }>;
+  `).all(...values) as Array<UsageRow & { model: string; count: number; cost_usd: number | null }>;
 
   const byStatus = db.prepare(`
     SELECT status, COUNT(*) as count
@@ -183,5 +242,16 @@ export function getStats(from?: string, to?: string): HistoryStats {
     GROUP BY status ORDER BY count DESC
   `).all(...values) as Array<{ status: string; count: number }>;
 
-  return { ...totals, by_model: byModel, by_status: byStatus };
+  return {
+    total_requests: totals.total_requests,
+    total_cost_usd: totals.total_cost_usd,
+    // Preserve the original fields' meaning for existing API consumers.
+    total_input_tokens: totals.total_input_tokens,
+    total_output_tokens: totals.total_output_tokens,
+    usage: aggregateUsage(totals),
+    by_model: byModel.map(row => ({
+      model: row.model, count: row.count, cost_usd: row.cost_usd, usage: aggregateUsage(row),
+    })),
+    by_status: byStatus,
+  };
 }
