@@ -32,6 +32,12 @@ the new endpoint requires explicit enablement and a dedicated state key.
   summary text. Bind it to the validated relay-key fingerprint, exact native
   model ID, upstream URL/credential digest and reasoning item ID. Changed,
   foreign or expired capsules fail before provider contact.
+- New `ccpr2` capsules carry their authenticated item ID inside the encrypted
+  payload. A client may omit the external reasoning `id` (as OpenCode 1.18.34
+  does); the proxy recovers it without modifying or discarding the native block.
+  If an external ID is supplied it must match. Duplicate recovered IDs are
+  rejected, including mixed-format history. This is still opaque-state replay,
+  not reconstruction from visible thinking summaries.
 - The client owns conversation history. There is no conversation database or
   `previous_response_id` store. Changing an item's summary does not change its
   authenticated native content. This authenticates individual opaque blocks,
@@ -83,6 +89,14 @@ old capsules. There is no silent migration/fallback or old-key ring. Plan rotati
 around active conversations. Capsule expiry is unrelated to provider prompt-cache
 TTL. The maximum request is 10 MiB; native response total is 8 MiB, each SSE event
 and content block is bounded to 1 MiB, and at most 512 output blocks are supported.
+
+Format migration requires no database change or new state key. Existing `ccpr1`
+capsules remain readable with their original external IDs; an old capsule whose
+ID was already lost cannot be recovered and requires the original history or a
+new conversation. New responses emit `ccpr2` only. An older proxy image cannot
+read new `ccpr2` history: an image rollback preserves data/configuration but not
+continuation of those new sessions. Re-upgrade or start a new conversation after
+such a rollback. The format change does not extend expiry or provider cache TTL.
 
 The default native thinking policy is a 1024-token enabled budget with an
 8192-token output limit; `0` disables the default budget. Model capability must

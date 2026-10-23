@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { fetchHistory, fetchRequestDetail, getExportUrl } from "@/lib/client-api";
-import { formatCost, formatTokenCount } from "@/lib/usage";
+import { formatCost, formatTokenCount, formatTotalInputTokens, USAGE_ACCOUNTING_NOTICE } from "@/lib/usage";
+import { GATEWAY_DIAGNOSTIC_NOTICE, upstreamDiagnosticLabel, upstreamDiagnosticExplanation } from "@/lib/diagnostics";
 
 interface RequestLog {
   id: number;
@@ -37,7 +38,7 @@ interface RequestDetail extends RequestLog {
   upstream_quota_headers?: string | null;
   upstream_auth_kind?: "oauth" | "api_key" | null;
   upstream_diagnostic?: "success" | "provider_error" | "unknown_429" | "http_error" |
-    "network_error" | "timeout" | "cancelled" | "truncated_stream" | null;
+    "network_error" | "timeout" | "cancelled" | "truncated_stream" | "third_party_plan_usage_restriction" | null;
   upstream_body_observation?: "not_received" | "observed" | "empty" | "invalid_json" |
     "compressed" | "unsupported_content_type" | "too_large" | "incomplete" | null;
 }
@@ -96,6 +97,7 @@ export default function HistoryPage() {
   return (
     <div>
       <h2 className="text-2xl font-bold mb-6">Request History</h2>
+      <p className="text-xs text-gray-600 mb-4">{GATEWAY_DIAGNOSTIC_NOTICE}</p>
 
       {/* Filters */}
       <div className="bg-white rounded-xl shadow p-4 mb-4 flex gap-4 items-end">
@@ -177,7 +179,7 @@ export default function HistoryPage() {
               <th className="px-4 py-3 font-medium">Model</th>
               <th className="px-4 py-3 font-medium">Prompt</th>
               <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 font-medium text-right">In Tokens</th>
+              <th className="px-4 py-3 font-medium text-right">Fresh In Tokens</th>
               <th className="px-4 py-3 font-medium text-right">Out Tokens</th>
               <th className="px-4 py-3 font-medium text-right">Cost</th>
               <th className="px-4 py-3 font-medium text-right">Duration</th>
@@ -331,6 +333,18 @@ function DetailPanel({
           {formatCost(detail.total_cost_usd)}
         </div>
         <div>
+          <span className="font-medium text-gray-700">Fresh Input Tokens: </span>
+          {formatTokenCount(detail.input_tokens)}
+        </div>
+        <div>
+          <span className="font-medium text-gray-700">Output Tokens: </span>
+          {formatTokenCount(detail.output_tokens)}
+        </div>
+        <div>
+          <span className="font-medium text-gray-700">Total Input Tokens (including cache): </span>
+          {formatTotalInputTokens(detail.input_tokens, detail.cache_creation_input_tokens, detail.cache_read_input_tokens)}
+        </div>
+        <div>
           <span className="font-medium text-gray-700">Cache Read Tokens: </span>
           {formatTokenCount(detail.cache_read_input_tokens)}
         </div>
@@ -347,6 +361,7 @@ function DetailPanel({
           {formatTokenCount(detail.cache_creation_1h_tokens)}
         </div>
       </div>
+      <p className="text-xs text-gray-600">{USAGE_ACCOUNTING_NOTICE}</p>
 
       <UpstreamDiagnostics detail={detail} />
 
@@ -388,11 +403,12 @@ function DetailPanel({
 
 function UpstreamDiagnostics({ detail }: { detail: RequestDetail }) {
   const quotaHeaders = quotaHeaderEntries(detail.upstream_quota_headers);
+  const explanation = upstreamDiagnosticExplanation(detail.upstream_diagnostic, detail.upstream_http_status);
   const fields = [
-    ["HTTP Status", detail.upstream_http_status],
-    ["Diagnostic", detail.upstream_diagnostic === "unknown_429" ? "Unknown 429 (cause unconfirmed)" : detail.upstream_diagnostic],
+    ["Upstream HTTP Status", detail.upstream_http_status],
+    ["Proxy Diagnostic", upstreamDiagnosticLabel(detail.upstream_diagnostic)],
     ["Error Type", detail.upstream_error_type],
-    ["Error Code", detail.upstream_error_code],
+    ["Provider Error Code (allowlisted)", detail.upstream_error_code],
     ["Request ID", detail.upstream_request_id],
     ["Retry-After", detail.upstream_retry_after],
     ["Authentication Kind", detail.upstream_auth_kind],
@@ -410,9 +426,9 @@ function UpstreamDiagnostics({ detail }: { detail: RequestDetail }) {
           </div>
         ))}
       </div>
-      {(detail.upstream_http_status === 429 || detail.upstream_diagnostic === "unknown_429") && (
+      {explanation && (
         <p className="text-xs text-amber-800">
-          HTTP 429 alone does not establish quota exhaustion or missing entitlement. If the diagnostic is unknown, the cause is unconfirmed.
+          {explanation}
         </p>
       )}
       <div className="text-xs text-gray-500">

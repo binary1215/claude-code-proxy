@@ -2,7 +2,7 @@ import type { IncomingHttpHeaders } from "node:http";
 import { StringDecoder } from "node:string_decoder";
 
 export type DiagnosticReason = "success" | "provider_error" | "unknown_429" | "http_error" |
-  "network_error" | "timeout" | "cancelled" | "truncated_stream";
+  "network_error" | "timeout" | "cancelled" | "truncated_stream" | "third_party_plan_usage_restriction";
 export type BodyObservation = "not_received" | "observed" | "empty" | "invalid_json" |
   "compressed" | "unsupported_content_type" | "too_large" | "incomplete";
 export interface UpstreamDiagnostics {
@@ -25,7 +25,7 @@ const ERROR_CODES = new Set(["claude_code_version_too_old", "rate_limit_exceeded
   "usage_limit_exceeded", "insufficient_quota", "invalid_api_key", "permission_denied",
   "billing_hard_limit_reached", "token_limit_exceeded", "overloaded"]);
 const REASONS = new Set<DiagnosticReason>(["success", "provider_error", "unknown_429", "http_error",
-  "network_error", "timeout", "cancelled", "truncated_stream"]);
+  "network_error", "timeout", "cancelled", "truncated_stream", "third_party_plan_usage_restriction"]);
 const OBSERVATIONS = new Set<BodyObservation>(["not_received", "observed", "empty", "invalid_json",
   "compressed", "unsupported_content_type", "too_large", "incomplete"]);
 const STATUSES = new Set(["allowed", "allowed_warning", "rejected"]);
@@ -41,6 +41,15 @@ const singleHeader = (value: unknown): string | null => typeof value === "string
 const requestId = (value: unknown): string | null => typeof value === "string" &&
   (/^req_01[A-Za-z0-9]{20,64}$/.test(value) ||
    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) ? value : null;
+
+// A local classification of the observed refusal, not a provider error code or
+// proof of the provider's detection mechanism. Inspect prose only in memory.
+function isThirdPartyPlanRefusal(status: number | null, error: Record<string, unknown>): boolean {
+  const message = error.message;
+  return status === 400 && error.type === "invalid_request_error" && typeof message === "string" &&
+    /third[ -]party/i.test(message) && /\bclaude\b/i.test(message) && /\bplan\b/i.test(message) &&
+    /extra usage/i.test(message) && /\b(billed|charged|draw\w*)\b/i.test(message);
+}
 
 function retryAfter(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -104,6 +113,7 @@ export class UpstreamDiagnosticsObserver {
   private observable = false;
   private terminal = false;
   private sawError = false;
+  private thirdPartyPlanRefusal = false;
   private fields: UpstreamDiagnostics;
   private static readonly LIMIT = 64 * 1024;
 
@@ -163,8 +173,11 @@ export class UpstreamDiagnosticsObserver {
       status !== null && status >= 200 && status < 300 ? "success" :
       status !== null ? "http_error" : "network_error";
     // A generic error-event fact cannot explain the cause of a 429 either.
-    const finalReason = reason === "provider_error" && status === 429 && !this.fields.upstream_error_code ?
+    let finalReason = reason === "provider_error" && status === 429 && !this.fields.upstream_error_code ?
       "unknown_429" : reason ?? inferred;
+    if (this.thirdPartyPlanRefusal && (reason === undefined || reason === "provider_error" || reason === "http_error")) {
+      finalReason = "third_party_plan_usage_restriction";
+    }
     return sanitizeDiagnostics({ ...this.fields, upstream_diagnostic: finalReason });
   }
   private stop(state: BodyObservation): void {
@@ -191,6 +204,7 @@ export class UpstreamDiagnosticsObserver {
     if (parsed.type === "error") this.sawError = true;
     const error = parsed.error;
     if (error && typeof error === "object" && !Array.isArray(error)) {
+      if (isThirdPartyPlanRefusal(this.fields.upstream_http_status, error)) this.thirdPartyPlanRefusal = true;
       this.fields.upstream_error_type = member(ERROR_TYPES, error.type) ?? this.fields.upstream_error_type;
       this.fields.upstream_error_code = member(ERROR_CODES, error.code) ??
         member(ERROR_CODES, error.details?.error_code) ?? this.fields.upstream_error_code;

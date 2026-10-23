@@ -174,7 +174,7 @@ test('actual HTTP streaming adapter preserves all reasoning blocks and seals ide
   const done=parsed.filter(e=>e.type==='response.output_item.done').map(e=>e.item);
   assert.deepEqual(done,seed.output);
   assert.deepEqual(seed.output.map(i=>i.type),['reasoning','reasoning','reasoning','function_call']);
-  for(const item of seed.output.filter(i=>i.type==='reasoning')) assert(item.encrypted_content.startsWith('ccpr1.'));
+  for(const item of seed.output.filter(i=>i.type==='reasoning')) assert(item.encrypted_content.startsWith('ccpr2.'));
   assert(!JSON.stringify(seed.output).includes('fragmented-signature'));
   assert.equal(seed.output[3].call_id,content[3].id);
   assert.equal(calls.at(-1).headers.authorization,undefined);
@@ -230,7 +230,7 @@ test('nonstream output uses the same sealed-state replay contract and never clai
 test('nonstream malformed UTF-8 fails instead of replacing bytes inside signed content',async()=>{
   const n=calls.length;const response=await request(body('invalid-utf8',{stream:false}));
   assert.equal(response.status,502);assert.equal(calls.length,n+1);
-  assert(!response.body.includes('ccpr1.'));assert(!response.body.includes(privateText));
+  assert(!response.body.includes('ccpr1.'));assert(!response.body.includes('ccpr2.'));assert(!response.body.includes(privateText));
   await settled();assert.equal(lastLog().status,'error');assert.equal(lastLog().usage_complete,0);assertOneFinalization(lastLog());
 });
 test('tampered, missing, foreign principal/model/credential state is rejected before upstream contact',async()=>{
@@ -320,7 +320,7 @@ test('authenticated admin cancellation closes Responses upstream and finalizes o
 test('history never persists plaintext, tool arguments, signatures or encrypted capsules',async()=>{
   await settled();const rows=db.prepare('SELECT * FROM request_log').all();
   for(const row of rows){assert.equal(row.full_prompt,null);assert.equal(row.full_response,null);assert.equal(row.prompt_preview,null);assert.notEqual(row.status,'pending');}
-  const serialized=JSON.stringify(rows);for(const value of [privateText,'signed-empty','ccpr1.',key.key])assert(!serialized.includes(value));
+  const serialized=JSON.stringify(rows);for(const value of [privateText,'signed-empty','ccpr1.','ccpr2.',key.key])assert(!serialized.includes(value));
 });
 
 test('validated apply_patch HTTP stream/nonstream and signed replay succeed; invalid patch never becomes executable',async()=>{
@@ -350,5 +350,5 @@ test('validated apply_patch HTTP stream/nonstream and signed replay succeed; inv
   assert.equal((await request(body('patch-valid',{tools:[{...patchTool,format:{...patchTool.format,definition:CODEX_APPLY_PATCH_GRAMMAR+' '}}]}))).status,400);
   assert.equal(calls.length,n);
   const rows=db.prepare('SELECT * FROM request_log').all();
-  for(const value of [patchText,'PRIVATE_INVALID_PATCH','ccpr1.']) assert(!JSON.stringify(rows).includes(value));
+  for(const value of [patchText,'PRIVATE_INVALID_PATCH','ccpr1.','ccpr2.']) assert(!JSON.stringify(rows).includes(value));
 });

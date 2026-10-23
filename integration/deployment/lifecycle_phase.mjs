@@ -198,7 +198,7 @@ try {
     } else if(phase==='candidate_mint') {
       providerMode='mint';const response=responseEvents(await request('POST','/v1/responses',responseRequest('synthetic seed',true),state.key));
       assert.equal(providerCalls,1);assert.deepEqual(response.output.map(i=>i.type),['reasoning','reasoning','reasoning','message']);
-      for(const item of response.output.slice(0,3)) assert(item.encrypted_content.startsWith('ccpr1.'));
+      for(const item of response.output.slice(0,3)) assert(item.encrypted_content.startsWith('ccpr2.'));
       state.output=response.output;state.historyCount++;await history();
     } else if(phase==='candidate_wrong_key') {
       const before=providerCalls;

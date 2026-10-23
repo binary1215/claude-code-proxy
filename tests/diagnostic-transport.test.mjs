@@ -87,3 +87,21 @@ test('target and credential validation never returns input values', () => {
     assert.throws(() => createObservationServer({ ...base, ...override }), error => !JSON.stringify(error).includes('secret-invalid-url') && !error.message.includes('password'));
   }
 });
+
+test('plan-refusal classification keeps the original 400 response and makes exactly one upstream request', async t => {
+  const response = JSON.stringify({ type: 'error', error: { type: 'invalid_request_error',
+    message: 'Synthetic third-party use draws from extra usage, not the Claude plan. response-secret-canary' } });
+  const { base, seen, records } = await setup(t, (_req, res) => {
+    res.writeHead(400, { 'content-type': 'application/json' }); res.end(response);
+  });
+  const result = await fetch(base + '/relay/v1/messages', { method: 'POST', headers: auth,
+    body: '{"model":"claude-haiku-4-5","messages":[],"max_tokens":8}' });
+  assert.equal(result.status, 400);
+  assert.equal(await result.text(), response);
+  assert.equal(seen.length, 1);
+  assert.equal(records.length, 1);
+  assert.equal(records[0].diagnostics.upstream_http_status, 400);
+  assert.equal(records[0].diagnostics.upstream_diagnostic, 'third_party_plan_usage_restriction');
+  assert.equal(records[0].diagnostics.upstream_error_code, null);
+  for (const secret of [oauthToken, proxyKey, 'response-secret-canary']) assert.ok(!JSON.stringify(records).includes(secret));
+});

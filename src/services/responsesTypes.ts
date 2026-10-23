@@ -28,7 +28,8 @@ export interface StateContext {
 
 export interface ReasoningCodec {
   seal(block: JsonObject, context: StateContext, itemId: string): string;
-  open(value: string, context: StateContext, itemId: string): JsonObject;
+  /** Identity is authenticated state, even when the client omits its public ID. */
+  open(value: string, context: StateContext, itemId?: string): { itemId: string; block: JsonObject };
 }
 
 export interface PreparedResponsesRequest {

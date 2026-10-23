@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { UpstreamDiagnosticsObserver, sanitizeDiagnostics } from '../dist/services/upstreamDiagnostics.js';
 
 const secret = 'PRIVATE_CREDENTIAL_BODY_AND_ERROR_MESSAGE_SENTINEL';
+const planRefusal = 'Synthetic third-party use draws from extra usage; a Claude plan is not the selected allowance.';
 const requestId = 'req_011abcdefghijklmnopqrstuv';
 const jsonObserver = (status = 429, headers = {}) => {
   const observer = new UpstreamDiagnosticsObserver('oauth');
@@ -143,4 +144,62 @@ test('an SSE error event remains provider_error even with unrecognized enums; 42
     assert.equal(diagnostic.upstream_body_observation, 'observed');
     assert.ok(!JSON.stringify(diagnostic).includes(secret));
   }
+});
+
+test('known plan refusal is a local diagnostic, not an invented provider code or retained message', () => {
+  for (const code of [undefined, 'permission_denied', 'future_provider_code']) {
+    const observer = jsonObserver(400);
+    observer.write(Buffer.from(JSON.stringify({ type: 'error', error: {
+      type: 'invalid_request_error', code, message: `${planRefusal} ${secret}`,
+    } })));
+    observer.end();
+    for (const reason of [undefined, 'provider_error', 'http_error']) {
+      const fields = observer.snapshot(reason);
+      assert.equal(fields.upstream_http_status, 400);
+      assert.equal(fields.upstream_diagnostic, 'third_party_plan_usage_restriction');
+      assert.equal(fields.upstream_error_type, 'invalid_request_error');
+      assert.equal(fields.upstream_error_code, code === 'permission_denied' ? code : null);
+      assert.equal(fields.upstream_body_observation, 'observed');
+      assert.ok(!JSON.stringify(fields).includes(secret));
+      assert.ok(!JSON.stringify(fields).includes(planRefusal));
+      assert.deepEqual(sanitizeDiagnostics(fields), fields);
+    }
+    assert.equal(observer.snapshot('cancelled').upstream_diagnostic, 'cancelled');
+    assert.equal(observer.snapshot('timeout').upstream_diagnostic, 'timeout');
+  }
+});
+
+test('status, shape, type or partial prose alone never establish a plan refusal', () => {
+  const cases = [
+    [401, { error: { type: 'invalid_request_error', message: planRefusal } }],
+    [403, { error: { type: 'invalid_request_error', message: planRefusal } }],
+    [429, { error: { type: 'invalid_request_error', message: planRefusal } }],
+    [200, { type: 'message', content: [{ type: 'text', text: planRefusal }] }],
+    [400, { error: { type: 'permission_error', message: planRefusal } }],
+    [400, { error: { type: 'invalid_request_error', message: { text: planRefusal } } }],
+    [400, { error: { type: 'invalid_request_error', message: 'Your Claude plan is exhausted.' } }],
+    [400, { error: { type: 'invalid_request_error', message: 'Extra usage is charged.' } }],
+    [400, { error: { type: 'invalid_request_error', message: 'Third-party Claude plan settings mention extra usage.' } }],
+  ];
+  for (const [status, body] of cases) {
+    const observer = jsonObserver(status);
+    observer.write(Buffer.from(JSON.stringify(body))); observer.end();
+    assert.notEqual(observer.snapshot().upstream_diagnostic, 'third_party_plan_usage_restriction');
+  }
+});
+
+test('chunked SSE refusal classification preserves status and never uses incomplete/compressed prose', () => {
+  const body = JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', message: planRefusal } });
+  const observer = new UpstreamDiagnosticsObserver('oauth');
+  observer.receive(400, { 'content-type': 'text/event-stream' });
+  for (const byte of Buffer.from(`event: error\r\ndata: ${body}\r\n\r\n`)) observer.write(Buffer.from([byte]));
+  observer.end();
+  assert.equal(observer.snapshot().upstream_diagnostic, 'third_party_plan_usage_restriction');
+  assert.equal(observer.snapshot().upstream_http_status, 400);
+  const compressed = jsonObserver(400, { 'content-encoding': 'gzip' });
+  compressed.write(Buffer.from(body)); compressed.end();
+  assert.equal(compressed.snapshot().upstream_diagnostic, 'http_error');
+  const incomplete = jsonObserver(400);
+  incomplete.write(Buffer.from(body.slice(0, -1))); incomplete.end();
+  assert.equal(incomplete.snapshot().upstream_diagnostic, 'http_error');
 });

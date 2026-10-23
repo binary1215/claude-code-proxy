@@ -69,7 +69,7 @@ export function seedEligible(response) {
   const reasoning = response.output.filter(item => item.type === 'reasoning');
   const calls = response.output.filter(item => ['function_call', 'custom_tool_call'].includes(item.type));
   if (!reasoning.length || reasoning.some(item => typeof item.id !== 'string' || !item.id ||
-      typeof item.encrypted_content !== 'string' || !item.encrypted_content.startsWith('ccpr1.')) ||
+      typeof item.encrypted_content !== 'string' || !/^ccpr[12]\./.test(item.encrypted_content)) ||
       calls.length !== 1 || calls[0].type !== 'function_call' || calls[0].name !== 'fixture_lookup' ||
       calls[0].namespace !== undefined || typeof calls[0].call_id !== 'string' || !calls[0].call_id) return false;
   try { return isDeepStrictEqual(JSON.parse(calls[0].arguments), { key: 'probe' }); }

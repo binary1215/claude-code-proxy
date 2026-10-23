@@ -337,10 +337,10 @@ export function prepareResponsesRequest(input: unknown, options: RequestTranslat
       } else fail();
     } else if (type === "reasoning") {
       keys(item, ["type", "id", "encrypted_content", "summary", "status", "content"]);
-      if (typeof item.id !== "string" || !item.id.length || typeof item.encrypted_content !== "string" || !item.encrypted_content.length) fail("invalid_reasoning_state", "Reasoning replay requires an item ID and encrypted state.");
-      const id = string(item.id, true);
+      if ((own(item, "id") && (typeof item.id !== "string" || !item.id.length)) || typeof item.encrypted_content !== "string" || !item.encrypted_content.length) fail("invalid_reasoning_state", "Reasoning replay requires encrypted state and a valid item ID when supplied.");
+      const id = own(item, "id") ? string(item.id, true) : undefined;
       const sealed = string(item.encrypted_content, true);
-      if (reasoningIds.has(id)) fail("invalid_reasoning_state", "A reasoning item is duplicated.");
+      if (id === undefined && sealed.startsWith("ccpr1.")) fail("invalid_reasoning_state", "Legacy reasoning state requires its original item ID; an ID-less history must be restarted to receive the current state format.", 409);
       if (own(item, "content") && item.content !== null && (!Array.isArray(item.content) || item.content.length)) fail("unsupported_parameter", "Public reasoning content is not an authoritative replay state.");
       if (own(item, "status") && item.status !== "completed") fail("invalid_reasoning_state");
       if (own(item, "summary")) {
@@ -353,15 +353,22 @@ export function prepareResponsesRequest(input: unknown, options: RequestTranslat
         }
       }
       let opened: JsonObject;
-      try { opened = object(options.codec.open(sealed, stateContext, id)); }
+      let restoredId: string;
+      try {
+        const restored = options.codec.open(sealed, stateContext, id);
+        restoredId = string(restored.itemId, true, 256);
+        if (id !== undefined && id !== restoredId) fail("invalid_reasoning_state");
+        opened = object(restored.block);
+      }
       catch { fail("invalid_reasoning_state", "The encrypted reasoning state is invalid or bound to another request context.", 409); }
+      if (reasoningIds.has(restoredId)) fail("invalid_reasoning_state", "A reasoning item is duplicated.");
       if (opened.type === "thinking") {
         if (typeof opened.thinking !== "string" || typeof opened.signature !== "string" || !opened.signature.length) fail("invalid_reasoning_state");
       } else if (opened.type === "redacted_thinking") {
         if (typeof opened.data !== "string" || !opened.data.length) fail("invalid_reasoning_state");
       } else fail("invalid_reasoning_state");
       if (pending.size && nativeBody.messages.at(-1)?.role !== "assistant") fail("invalid_tool_history");
-      reasoningIds.add(id);
+      reasoningIds.add(restoredId);
       append("assistant", [json(opened) as JsonObject]);
     } else if (["function_call", "custom_tool_call"].includes(type)) {
       keys(item, ["type", "id", "call_id", "name", "namespace", "arguments", "input", "status", "cache_control"]);

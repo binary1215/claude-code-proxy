@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import { createCipheriv, randomBytes } from 'node:crypto';
 import { test } from 'node:test';
 import { prepareResponsesRequest } from '../dist/services/responsesRequest.js';
 import { ResponsesError } from '../dist/services/responsesTypes.js';
 import { convertNativeMessage } from '../dist/services/responsesStream.js';
+import { ResponsesStateCodec } from '../dist/services/responsesState.js';
 
 const model = 'native-model-no-alias';
 const context = { model, principal: 'synthetic-principal', upstream: 'synthetic-upstream' };
@@ -16,8 +18,8 @@ const codec = {
   },
   open(token, bound, itemId) {
     const state = states.get(token);
-    if (!state || state.context !== JSON.stringify(bound) || state.itemId !== itemId) throw new Error('Synthetic state authentication failed');
-    return structuredClone(state.block);
+    if (!state || state.context !== JSON.stringify(bound) || (itemId !== undefined && state.itemId !== itemId)) throw new Error('Synthetic state authentication failed');
+    return { itemId: state.itemId, block: structuredClone(state.block) };
   },
 };
 const options = { codec, context, defaultMaxTokens: 8192, defaultThinkingBudget: 1024 };
@@ -64,6 +66,54 @@ test('signed-empty, nonempty, redacted and assistant text preserve exact ordered
   assert.deepEqual(prepared.nativeBody.messages[1], { role: 'assistant', content: [...blocks, { type: 'text', text: 'Visible' }] });
   assert.equal(JSON.stringify(prepared.nativeBody).includes('Not authoritative prompt content'), false);
   assert.equal(JSON.stringify(prepared.nativeBody).includes('rs_0'), false);
+});
+
+test('ID-less v2 reasoning replays exact native blocks and tools using authenticated IDs', () => {
+  const realCodec = new ResponsesStateCodec(randomBytes(32).toString('base64'), 600);
+  const realPrepare = value => prepareResponsesRequest(value, { ...options, codec: realCodec });
+  const blocks = [
+    { type: 'thinking', thinking: 'Exact thought🙂', signature: 'original-signature', cache_control: { type: 'ephemeral', ttl: '1h' }, native_extension: 'unchanged' },
+    { type: 'thinking', thinking: '', signature: 'original-empty-signature' },
+    { type: 'redacted_thinking', data: 'original-redacted-data' },
+  ];
+  const items = blocks.map((block, i) => ({ type: 'reasoning', encrypted_content: realCodec.seal(block, context, `rs_idless_${i}`), summary: [] }));
+  const input = [message('user', 'Go'), ...items, call(), output(), message('user', 'Continue')];
+  const snapshot = structuredClone(input);
+  const prepared = realPrepare(request({ tools: [fn()], input }));
+  assert.deepEqual(prepared.nativeBody.messages[1].content.slice(0, 3), blocks);
+  assert.equal(prepared.nativeBody.messages[1].content[3].id, 'call_one');
+  assert.equal(prepared.nativeBody.messages[2].content[0].tool_use_id, 'call_one');
+  assert.deepEqual(input, snapshot);
+  assert(!JSON.stringify(prepared.nativeBody).includes('rs_idless_'));
+  const sameIdNewCiphertext = { ...items[0], encrypted_content: realCodec.seal(blocks[0], context, 'rs_idless_0') };
+  for (const pair of [
+    [items[0], items[0]],
+    [items[0], { ...items[0], id: 'rs_idless_0' }],
+    [{ ...items[0], id: 'rs_idless_0' }, items[0]],
+    [items[0], sameIdNewCiphertext],
+  ]) assert.throws(() => realPrepare(request({ input: [message('user', 'Go'), ...pair] })), error => error.code === 'invalid_reasoning_state' && error.message.includes('duplicated'));
+  assert.throws(() => realPrepare(request({ input: [message('user', 'Go'), { ...items[0], id: 'rs_changed' }] })), error => error.code === 'invalid_reasoning_state' && error.status === 409);
+});
+
+test('request translation retains v1 history with ID and explains an unrecoverable ID-less legacy item', () => {
+  const key = randomBytes(32);
+  const realCodec = new ResponsesStateCodec(key.toString('base64'), 600);
+  const block = { type: 'thinking', thinking: '', signature: 'legacy-signature' };
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', key, iv);
+  cipher.setAAD(Buffer.from(JSON.stringify(['claude-proxy-responses-v1', context.model, context.principal, context.upstream, 'rs_legacy'])));
+  const encrypted = Buffer.concat([cipher.update(JSON.stringify({ v: 1, issued: Math.floor(Date.now() / 1000), block })), cipher.final()]);
+  const encrypted_content = 'ccpr1.' + Buffer.concat([iv, cipher.getAuthTag(), encrypted]).toString('base64url');
+  const item = { type: 'reasoning', id: 'rs_legacy', encrypted_content, summary: [] };
+  const realPrepare = value => prepareResponsesRequest(value, { ...options, codec: realCodec });
+  const prepared = realPrepare(request({ input: [message('user', 'Go'), item, message('user', 'Continue')] }));
+  assert.deepEqual(prepared.nativeBody.messages[1].content, [block]);
+  const current = { type: 'reasoning', encrypted_content: realCodec.seal({ type: 'redacted_thinking', data: 'new-state' }, context, 'rs_current'), summary: [] };
+  assert.deepEqual(realPrepare(request({ input: [message('user', 'Go'), item, current, message('user', 'Continue')] })).nativeBody.messages[1].content, [block, { type: 'redacted_thinking', data: 'new-state' }]);
+  const reusedId = { ...current, encrypted_content: realCodec.seal(block, context, 'rs_legacy') };
+  assert.throws(() => realPrepare(request({ input: [message('user', 'Go'), item, reusedId] })), error => error.code === 'invalid_reasoning_state' && error.message.includes('duplicated'));
+  delete item.id;
+  assert.throws(() => realPrepare(request({ input: [message('user', 'Go'), item] })), error => error.code === 'invalid_reasoning_state' && error.status === 409 && error.message.includes('original item ID') && !error.message.includes('legacy-signature'));
 });
 
 test('reasoning codec failures never substitute summary and errors never echo private content', () => {
