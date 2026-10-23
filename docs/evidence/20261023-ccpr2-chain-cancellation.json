@@ -1,0 +1,266 @@
+{
+  "schema_version": 1,
+  "scope": "loopback synthetic inference through stock LiteLLM and built proxy",
+  "observed_at_utc": "2026-10-23T22:48:18.009607+09:00",
+  "litellm_version": "1.103.1",
+  "before": {
+    "litellm/proxy/anthropic_endpoints/endpoints.py": {
+      "actual": "644778bcb9ff55dda04d80c00bc9a8d7e743520a",
+      "expected": "644778bcb9ff55dda04d80c00bc9a8d7e743520a",
+      "matches_tag": true
+    },
+    "litellm/proxy/pass_through_endpoints/llm_passthrough_endpoints.py": {
+      "actual": "44d9f11360dc1db3d9f2394148cda9b45b0fe4bf",
+      "expected": "44d9f11360dc1db3d9f2394148cda9b45b0fe4bf",
+      "matches_tag": true
+    },
+    "litellm/proxy/pass_through_endpoints/pass_through_endpoints.py": {
+      "actual": "79a328f5199dbff0a49da654c41753371d94669b",
+      "expected": "79a328f5199dbff0a49da654c41753371d94669b",
+      "matches_tag": true
+    },
+    "litellm/proxy/pass_through_endpoints/streaming_handler.py": {
+      "actual": "fe9e104789baa2b61eb9ce58d5d977cfd4bc5ec5",
+      "expected": "fe9e104789baa2b61eb9ce58d5d977cfd4bc5ec5",
+      "matches_tag": true
+    },
+    "litellm/proxy/pass_through_endpoints/passthrough_endpoint_router.py": {
+      "actual": "7fd607fc4d06a436ab92f3700e499dff16e4f821",
+      "expected": "7fd607fc4d06a436ab92f3700e499dff16e4f821",
+      "matches_tag": true
+    },
+    "litellm/passthrough/utils.py": {
+      "actual": "452c9c7de9d91ced0ffbba2b8aafb98f641504d0",
+      "expected": "452c9c7de9d91ced0ffbba2b8aafb98f641504d0",
+      "matches_tag": true
+    },
+    "litellm/proxy/_types.py": {
+      "actual": "3e6e297f6b68134b79ac6fd7b95d106de8b74ac2",
+      "expected": "3e6e297f6b68134b79ac6fd7b95d106de8b74ac2",
+      "matches_tag": true
+    },
+    "litellm/llms/anthropic/chat/handler.py": {
+      "actual": "359b8bb08c90db5c2933f436895a2f2dc59678d0",
+      "expected": "359b8bb08c90db5c2933f436895a2f2dc59678d0",
+      "matches_tag": true
+    },
+    "litellm/litellm_core_utils/streaming_chunk_builder_utils.py": {
+      "actual": "0ca93fe08b3b617fbd92875322b565ff121e9d4d",
+      "expected": "0ca93fe08b3b617fbd92875322b565ff121e9d4d",
+      "matches_tag": true
+    },
+    "litellm/llms/anthropic/common_utils.py": {
+      "actual": "98e2f6d5bde852d49de45487fc961cb5d2ff3788",
+      "expected": "98e2f6d5bde852d49de45487fc961cb5d2ff3788",
+      "matches_tag": true
+    },
+    "litellm/llms/anthropic/experimental_pass_through/messages/handler.py": {
+      "actual": "87a4801f987cf22e0795f5b1962b70da143c58a2",
+      "expected": "87a4801f987cf22e0795f5b1962b70da143c58a2",
+      "matches_tag": true
+    },
+    "litellm/llms/anthropic/experimental_pass_through/messages/transformation.py": {
+      "actual": "5fa686b7560a2350a9a722509b19b0e6f1bab8c2",
+      "expected": "5fa686b7560a2350a9a722509b19b0e6f1bab8c2",
+      "matches_tag": true
+    },
+    "litellm/responses/litellm_completion_transformation/streaming_iterator.py": {
+      "actual": "5173cd04a89baf6b0a17b37eb210de91fda380d1",
+      "expected": "5173cd04a89baf6b0a17b37eb210de91fda380d1",
+      "matches_tag": true
+    }
+  },
+  "cases": [
+    {
+      "label": "direct-proxy-control",
+      "protocol": "messages",
+      "http_status": 200,
+      "received_sse_bytes": 512,
+      "client_socket_shutdown": true,
+      "fake_request_count": 1,
+      "upstream_path": "/v1/messages",
+      "upstream_model_matches": true,
+      "upstream_stream_requested": true,
+      "history_status_before_disconnect": "pending",
+      "upstream_socket_close_after_disconnect_ms": 0.69,
+      "history_finalized_after_disconnect_ms": 2.33,
+      "observation_at_prompt_bound": null,
+      "final_history": {
+        "id": 1,
+        "status": "cancelled",
+        "duration_ms": 5,
+        "upstream_diagnostic": "cancelled"
+      },
+      "prompt_cancellation_pass": true
+    },
+    {
+      "label": "stock-litellm-chain",
+      "protocol": "messages",
+      "http_status": 200,
+      "received_sse_bytes": 512,
+      "client_socket_shutdown": true,
+      "fake_request_count": 1,
+      "upstream_path": "/v1/messages",
+      "upstream_model_matches": true,
+      "upstream_stream_requested": true,
+      "history_status_before_disconnect": "pending",
+      "upstream_socket_close_after_disconnect_ms": 1.58,
+      "history_finalized_after_disconnect_ms": 27.46,
+      "observation_at_prompt_bound": null,
+      "final_history": {
+        "id": 2,
+        "status": "cancelled",
+        "duration_ms": 21,
+        "upstream_diagnostic": "cancelled"
+      },
+      "prompt_cancellation_pass": true
+    },
+    {
+      "label": "direct-proxy-control",
+      "protocol": "responses",
+      "http_status": 200,
+      "received_sse_bytes": 362,
+      "client_socket_shutdown": true,
+      "fake_request_count": 1,
+      "upstream_path": "/v1/messages",
+      "upstream_model_matches": true,
+      "upstream_stream_requested": true,
+      "history_status_before_disconnect": "pending",
+      "upstream_socket_close_after_disconnect_ms": 0.76,
+      "history_finalized_after_disconnect_ms": 1.37,
+      "observation_at_prompt_bound": null,
+      "final_history": {
+        "id": 3,
+        "status": "cancelled",
+        "duration_ms": 5,
+        "upstream_diagnostic": "cancelled"
+      },
+      "prompt_cancellation_pass": true
+    },
+    {
+      "label": "stock-litellm-chain",
+      "protocol": "responses",
+      "http_status": 200,
+      "received_sse_bytes": 512,
+      "client_socket_shutdown": true,
+      "fake_request_count": 1,
+      "upstream_path": "/v1/messages",
+      "upstream_model_matches": true,
+      "upstream_stream_requested": true,
+      "history_status_before_disconnect": "pending",
+      "upstream_socket_close_after_disconnect_ms": 1,
+      "history_finalized_after_disconnect_ms": 26.59,
+      "observation_at_prompt_bound": null,
+      "final_history": {
+        "id": 4,
+        "status": "cancelled",
+        "duration_ms": 4,
+        "upstream_diagnostic": "cancelled"
+      },
+      "prompt_cancellation_pass": true
+    }
+  ],
+  "proxy_deadline_ms": 8000,
+  "prompt_cancellation_bound_ms": 2000,
+  "runtime": {
+    "fastapi": "0.161.1",
+    "starlette": "1.9.0",
+    "uvicorn": "0.54.0",
+    "httpx": "0.28.1",
+    "prisma": "0.11.0"
+  },
+  "real_provider_calls": 0,
+  "gateway_source_patched": false,
+  "proxy_source_patched_by_harness": false,
+  "harness_sha256": {
+    "test_chain_cancellation.py": "04992417d94c6531d4215e2b0ca47e32ba8cdb363579ba3951bbbd674e599511",
+    "boot_cancellation_relay.mjs": "ad16deb2d8d20b856c618b0f985a447a235beeec4b5cda0eaf0ebb41503164e6",
+    "boot_gateway.py": "ce63082b491caeb88d4b70921e8f2436a1822918f683b36a8cd6ffe7b815ff40"
+  },
+  "built_proxy_sha256": {
+    "dist/app.js": "10aa9ef2ecce7335c10a5f99970a8942ff82c14028f753bec9760b0ce43e8c6d",
+    "dist/services/nativeRelay.js": "5b032a4c4d5ec367b2e06166774fc216f02bd855d0b2d2dbd291c050408a2234",
+    "dist/services/responsesRelay.js": "ebe6fee2b82390a82f64ba2a1917412d655c34715190cba86871650a3815dc2d",
+    "dist/services/responsesState.js": "bef927c81255655a1859be390999899a64c04513b664d3e80617d977fc417bff",
+    "dist/services/responsesRequest.js": "d444610e25786d5a6bc30484ff02720d7dc1081553ef210499297eb29843824d"
+  },
+  "limitations": [
+    "Synthetic server is not Anthropic generation or billing.",
+    "Windows loopback runtime and current dependency versions; not deployed Linux container.",
+    "A pass establishes observed socket closure and local cancellation, not provider billing cessation."
+  ],
+  "direct_controls_pass": true,
+  "chain_cancellation_pass": true,
+  "after": {
+    "litellm/proxy/anthropic_endpoints/endpoints.py": {
+      "actual": "644778bcb9ff55dda04d80c00bc9a8d7e743520a",
+      "expected": "644778bcb9ff55dda04d80c00bc9a8d7e743520a",
+      "matches_tag": true
+    },
+    "litellm/proxy/pass_through_endpoints/llm_passthrough_endpoints.py": {
+      "actual": "44d9f11360dc1db3d9f2394148cda9b45b0fe4bf",
+      "expected": "44d9f11360dc1db3d9f2394148cda9b45b0fe4bf",
+      "matches_tag": true
+    },
+    "litellm/proxy/pass_through_endpoints/pass_through_endpoints.py": {
+      "actual": "79a328f5199dbff0a49da654c41753371d94669b",
+      "expected": "79a328f5199dbff0a49da654c41753371d94669b",
+      "matches_tag": true
+    },
+    "litellm/proxy/pass_through_endpoints/streaming_handler.py": {
+      "actual": "fe9e104789baa2b61eb9ce58d5d977cfd4bc5ec5",
+      "expected": "fe9e104789baa2b61eb9ce58d5d977cfd4bc5ec5",
+      "matches_tag": true
+    },
+    "litellm/proxy/pass_through_endpoints/passthrough_endpoint_router.py": {
+      "actual": "7fd607fc4d06a436ab92f3700e499dff16e4f821",
+      "expected": "7fd607fc4d06a436ab92f3700e499dff16e4f821",
+      "matches_tag": true
+    },
+    "litellm/passthrough/utils.py": {
+      "actual": "452c9c7de9d91ced0ffbba2b8aafb98f641504d0",
+      "expected": "452c9c7de9d91ced0ffbba2b8aafb98f641504d0",
+      "matches_tag": true
+    },
+    "litellm/proxy/_types.py": {
+      "actual": "3e6e297f6b68134b79ac6fd7b95d106de8b74ac2",
+      "expected": "3e6e297f6b68134b79ac6fd7b95d106de8b74ac2",
+      "matches_tag": true
+    },
+    "litellm/llms/anthropic/chat/handler.py": {
+      "actual": "359b8bb08c90db5c2933f436895a2f2dc59678d0",
+      "expected": "359b8bb08c90db5c2933f436895a2f2dc59678d0",
+      "matches_tag": true
+    },
+    "litellm/litellm_core_utils/streaming_chunk_builder_utils.py": {
+      "actual": "0ca93fe08b3b617fbd92875322b565ff121e9d4d",
+      "expected": "0ca93fe08b3b617fbd92875322b565ff121e9d4d",
+      "matches_tag": true
+    },
+    "litellm/llms/anthropic/common_utils.py": {
+      "actual": "98e2f6d5bde852d49de45487fc961cb5d2ff3788",
+      "expected": "98e2f6d5bde852d49de45487fc961cb5d2ff3788",
+      "matches_tag": true
+    },
+    "litellm/llms/anthropic/experimental_pass_through/messages/handler.py": {
+      "actual": "87a4801f987cf22e0795f5b1962b70da143c58a2",
+      "expected": "87a4801f987cf22e0795f5b1962b70da143c58a2",
+      "matches_tag": true
+    },
+    "litellm/llms/anthropic/experimental_pass_through/messages/transformation.py": {
+      "actual": "5fa686b7560a2350a9a722509b19b0e6f1bab8c2",
+      "expected": "5fa686b7560a2350a9a722509b19b0e6f1bab8c2",
+      "matches_tag": true
+    },
+    "litellm/responses/litellm_completion_transformation/streaming_iterator.py": {
+      "actual": "5173cd04a89baf6b0a17b37eb210de91fda380d1",
+      "expected": "5173cd04a89baf6b0a17b37eb210de91fda380d1",
+      "matches_tag": true
+    }
+  },
+  "source_unchanged": true,
+  "fake_request_count": 4,
+  "status": "pass",
+  "source_report": "claude-proxy-chain-cancellation-20261023-q3/chain-cancellation.json",
+  "source_report_sha256": "db00771d601005c8ad304bc0af042c7e0a5f634af22719c0fe6deb042963f552"
+}

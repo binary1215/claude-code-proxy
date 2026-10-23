@@ -1,0 +1,17 @@
+# Merge these named tables into a private Codex config; do not replace the file.
+# Select explicitly with: codex --profile claude_proxy
+# This does not change the default model, permissions, sandbox or instructions.
+[profiles.claude_proxy]
+model = "claude-haiku-4-5-20251001"
+model_provider = "claude_proxy"
+web_search = "disabled"
+
+[model_providers.claude_proxy]
+name = "Claude through LiteLLM and claude-code-proxy"
+base_url = "http://192.168.0.7:4000/claude-responses/v1"
+wire_api = "responses"
+env_key = "CLAUDE_PROXY_GATEWAY_KEY"
+requires_openai_auth = false
+supports_websockets = false
+request_max_retries = 0
+stream_max_retries = 0

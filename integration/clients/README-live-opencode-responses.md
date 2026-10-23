@@ -141,6 +141,44 @@ tests. The separate offline missing-ID compatibility defect remains relevant
 to future multi-turn testing; fixing that defect would not itself change the
 provider's first-request usage decision.
 
+## ccpr2 offline qualification
+
+The new self-contained state format was exercised with the same unmodified
+OpenCode 1.18.34 binary and the real built proxy. The normal three-request
+scenario now completes: actual fixture Read, successful tool result, and a
+same-session no-tool follow-up. All three requests receive complete HTTP 200
+Responses streams. There are zero real gateway/provider requests.
+
+On both replays, OpenCode still omits all three external reasoning IDs. It
+preserves all three ciphertexts exactly. The real proxy authenticates and
+restores the exact ordered native thinking/signature, signed-empty,
+redacted-thinking and tool blocks, using the ID carried inside `ccpr2`.
+Tool arguments are JSON-semantically equal despite whitespace changes, and
+the actual tool result retains its issued call ID. No observer request repair
+or client patch is involved.
+
+Schema version 2 separates these facts:
+
+- `reasoning_ids_exact` and legacy `opaque_reasoning_exact` remain **false**
+  when the client omits IDs. These are diagnostic, not mandatory identity
+  preservation requirements for a self-contained capsule.
+- `observed_opaque_state_pass` now measures exact encrypted-content replay.
+- `offline_authenticated_state_restored` requires every observed client request
+  to reach the actual proxy's fake upstream, with exact ordered restored state
+  on every follow-up. Ciphertext equality alone is not sufficient.
+- `offline_qualification_pass` additionally requires actual Read/follow-up
+  completion, complete streams, exact done/completed capsules, matching tool
+  identities/results, an unchanged fixture and no observer failure. Offline
+  exit zero requires this stronger gate, not `functional_pass` alone.
+
+The fake server closes each completed SSE connection normally. A preliminary
+run proved the replay but exposed an idle pooled-socket reset during teardown;
+that report remains retained and is not the clean qualification. The final
+rerun requires no observer failure. Historical `ccpr1` failures and deployed
+subscription-restriction results above are unchanged, not rewritten as passes.
+This fix does not prove live entitlement, real signatures, cache savings or
+gateway billing. See also the opt-in [client connection profiles](profiles/README.md).
+
 ## Evidence, confidentiality and interpretation
 
 `opencode-responses-live-smoke.json` is sanitized. It includes public

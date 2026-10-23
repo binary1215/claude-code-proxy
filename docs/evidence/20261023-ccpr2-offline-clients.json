@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "date_kst": "2026-10-23",
+  "source_summary_sha256": "e837b933776d7e6d57c1ca99d742cce3c6cd020f263e277b703a7bb5a88551d2",
+  "scope": "Actual pinned clients, built proxy, local fake upstream only; no real gateway/provider requests",
+  "code_basis": "Shared working tree with ccpr2 implementation; uncommitted at execution",
+  "clients_modified": false,
+  "gateway_source_modified": false,
+  "real_inference_requests": 0,
+  "dependency_restoration": {
+    "reason": "Historical temporary runtimes were removed",
+    "python_version": "3.12.14",
+    "litellm_version": "1.103.1",
+    "prisma_version": "0.11.0",
+    "selected_stock_source_files": 13,
+    "selected_stock_source_identity_pass": true,
+    "full_historical_dependency_lock_reproduced": false,
+    "global_installation_changed": false
+  },
+  "opencode_responses": {
+    "version": "1.18.34",
+    "binary_sha256": "184f196ec97c843a64b2e1a2b49165f25e73a5d6993e2f842c9958c2b1f7a5b2",
+    "source_report": "opencode-responses-ccpr2-20261023-c/opencode-responses-live-smoke.json",
+    "source_report_sha256": "2bbb49cd971020ec3a04561151d54618fc3f42c209b9834994b822edc47085bd",
+    "schema_version": 2,
+    "functional_pass": true,
+    "offline_qualification_pass": true,
+    "requests_at_client_and_native_hops": 3,
+    "actual_fixture_read_completed": true,
+    "same_session_followup_completed": true,
+    "ciphertexts_exact_on_both_replays": true,
+    "external_ids_omitted_on_both_replays": true,
+    "authenticated_native_signed_empty_redacted_tool_state_exact": true,
+    "tool_arguments_json_equal": true,
+    "observer_failure": null,
+    "fixture_unchanged": true,
+    "client_system_prompt_replaced": false,
+    "client_user_agent_replaced": false,
+    "observer_body_repair": false,
+    "historical_failed_reports_rewritten": false
+  },
+  "codex_adapter": {
+    "version": "0.160.0",
+    "binary_sha256": "fdda5fa3cf3fb3d000b876720742857676293e4315e4b045fae6f8bd7e866d1d",
+    "source_report": "codex-adapter-ccpr2-20261023-a/codex-smoke.json",
+    "source_report_sha256": "c8a21054b54d18d15efb59a9183b9788bcc67d40f8cf9e8b362b8da199a43f2f",
+    "cases": 2,
+    "requests_per_hop": 4,
+    "full_tested_fidelity": true,
+    "actual_get_goal_roundtrips_completed": true,
+    "ordered_native_state_and_capsules_exact": true,
+    "model_metadata_fallback_warning": true
+  },
+  "codex_hoist_compaction": {
+    "source_report": "codex-compaction-ccpr2-20261023-a/codex-compaction-smoke.json",
+    "source_report_sha256": "bfc575cb4d865788cc369f26f8de77260679617f5ca48a4193acd35a8b4904d8",
+    "responses_and_upstream_requests": 5,
+    "local_compaction_subset_pass": true,
+    "two_post_compaction_followups_pass": true,
+    "exact_system_projection_and_opaque_replay": true,
+    "uses_explicit_limited_synthetic_catalog": true,
+    "whole_normal_coding_profile_qualified": false
+  },
+  "claude_native": {
+    "version": "2.1.289",
+    "binary_sha256": "bcc6d9117aec30ad9414490302a25414359c871f5647e32e49b055c92bf84e0b",
+    "source_report": "claude-native-ccpr2-20261023-a/claude-code-smoke.json",
+    "source_report_sha256": "55b09938c062c81852a20f0b3dd508e99b13a1162f12bb199187413f0ec6e3c2",
+    "cases": 2,
+    "requests_per_hop": 4,
+    "actual_fixture_reads_completed": true,
+    "state_subset_pass": true,
+    "whole_body_semantic_exact": false,
+    "known_loss": "Stock LiteLLM removes top-level metadata; native signed/empty/redacted/tool state and SSE remain exact"
+  },
+  "not_established": [
+    "Real provider entitlement or resolution of the prior OpenCode subscription-restriction 400",
+    "Real-provider signature validation, cache savings, quality improvement or billing accuracy",
+    "All normal coding features for all client versions",
+    "OS-enforced network/filesystem sandbox for synthetic harnesses"
+  ]
+}

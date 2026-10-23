@@ -1,0 +1,23 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "openai/claude-haiku-4-5-20251001",
+  "small_model": "openai/claude-haiku-4-5-20251001",
+  "enabled_providers": ["openai"],
+  "provider": {
+    "openai": {
+      "options": {
+        "baseURL": "http://192.168.0.7:4000/claude-responses/v1",
+        "apiKey": "{env:CLAUDE_PROXY_GATEWAY_KEY}"
+      },
+      "models": {
+        "claude-haiku-4-5-20251001": {
+          "name": "Claude Haiku via proxy Responses",
+          "reasoning": true,
+          "tool_call": true,
+          "limit": {"context": 200000, "output": 8192},
+          "options": {"store": false, "include": ["reasoning.encrypted_content"]}
+        }
+      }
+    }
+  }
+}

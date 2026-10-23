@@ -310,7 +310,11 @@ class FakeNative(native.Observer):
                 wire, blocks = fake_native_events(state, ordinal)
                 state.native_records.append({'body': body, 'blocks': blocks})
             self.send_response(200); self.send_header('Content-Type', 'text/event-stream')
-            self.send_header('Content-Length', str(len(wire))); self.end_headers()
+            # The fixture has no keep-alive contract. Close normally after the
+            # complete SSE instead of reporting a pooled idle socket reset at
+            # proxy shutdown as a model-handler failure.
+            self.send_header('Content-Length', str(len(wire)))
+            self.send_header('Connection', 'close'); self.end_headers(); self.close_connection = True
             self.wfile.write(wire); self.wfile.flush()
         except Exception:
             state.fail('offline_native_fixture_failed'); self.reject()
@@ -423,15 +427,35 @@ def observations(state):
                 'thinking_blocks': sum(b.get('type') == 'thinking' for b in wanted),
                 'signed_empty_blocks': sum(b.get('type') == 'thinking' and b.get('thinking') == '' for b in wanted),
                 'redacted_blocks': sum(b.get('type') == 'redacted_thinking' for b in wanted)})
-    checks = [r['opaque_reasoning_exact'] for r in replays if r['opaque_reasoning_exact'] is not None]
+    # External IDs are optional on ccpr2 replay. Do not confuse an SDK omitting
+    # IDs with losing authenticated encrypted state; retain both observations.
+    checks = [r['reasoning_ciphertexts_exact'] for r in replays if r['reasoning_ciphertexts_exact'] is not None]
+    id_checks = [r['reasoning_ids_exact'] for r in replays if r['reasoning_ids_exact'] is not None]
+    native_complete = (state.offline and len(state.records) > 1
+        and len(state.native_records) == len(state.records)
+        and len(native_checks) == len(state.records) - 1)
     return {'client_edge_requests': len(state.records), 'outgoing_gateway_attempts': state.outgoing,
         'blocked_model_attempts': state.blocked_model_attempts, 'blocked_incidental_requests': state.blocked_incidental,
         'responses': responses, 'replays': replays, 'observed_opaque_state_pass': all(checks) if checks else None,
+        'observed_reasoning_ids_pass': all(id_checks) if id_checks else None,
         'offline_native_requests': len(state.native_records) if state.offline else None,
         'offline_native_replay': native_checks if state.offline else None,
         'offline_native_replay_pass': all(r['ordered_native_state_exact'] for r in native_checks) if native_checks else None,
+        'offline_authenticated_state_restored': native_complete and all(r['ordered_native_state_exact'] for r in native_checks) if state.offline else None,
         'deployed_gateway_to_relay_body_fidelity': None, 'downstream_provider_call_count': None,
         'downstream_retry_count': None, 'gateway_usage_cost_accounting_exact': None}
+
+
+def offline_fidelity_pass(evidence):
+    """Exact real-proxy restoration, not IDs or HTTP success alone, is proof."""
+    return (evidence['observed_opaque_state_pass'] is True
+        and evidence['offline_authenticated_state_restored'] is True
+        and all(r['complete'] and r['http_status'] == 200
+            and (r['opaque_done_completed_exact'] is not False) for r in evidence['responses'])
+        and bool(evidence['replays'])
+        and all(r['function_calls_json_equal'] is True
+            and r['tool_result_ids_match_issued_order'] is True
+            and r['fixture_read_result_present'] for r in evidence['replays']))
 
 
 def first_request_evidence(state, first):
@@ -466,7 +490,7 @@ def main(argv=None):
     if args.first_request_only and not args.live:
         parser.error('--first-request-only is available only with --live')
     state = None; child = None; servers = []; output = args.output.resolve()
-    report = {'functional_pass': False, 'phases': [], 'harness_error': None}
+    report = {'schema_version': 2, 'functional_pass': False, 'phases': [], 'harness_error': None}
     try:
         require(not output.exists() and Path(tempfile.gettempdir()).resolve() in output.parents
                 and ROOT not in output.parents, 'output_must_be_new_system_temp_child')
@@ -531,13 +555,21 @@ def main(argv=None):
         if state:
             report['observer_failure'] = None if state.failure == 'first_request_probe_complete' else state.failure
             report.update(observations(state))
+            if args.offline:
+                report['offline_qualification_pass'] = (report['functional_pass']
+                    and state.failure is None and offline_fidelity_pass(report))
+                if report['functional_pass'] and not report['offline_qualification_pass']:
+                    report['harness_error'] = 'offline_state_fidelity_failed'
         if output.is_dir() and state is not None:
             (output / 'opencode-responses-live-smoke.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
     print(json.dumps({'functional_pass': report['functional_pass'], 'harness_error': report['harness_error'],
+        'offline_qualification_pass': report.get('offline_qualification_pass'),
         'first_request_accepted': report.get('first_request_accepted'),
         'gateway_attempts': report.get('outgoing_gateway_attempts', 0), 'client_requests': report.get('client_edge_requests', 0),
         'report_written': output.is_dir() and state is not None}))
-    return 0 if (report.get('first_request_accepted') if args.first_request_only else report['functional_pass']) else 1
+    success = (report.get('offline_qualification_pass') if args.offline else
+        report.get('first_request_accepted') if args.first_request_only else report['functional_pass'])
+    return 0 if success else 1
 
 
 def finish_multi_turn(state, report, first, marker, binary, base, env, workspace, fixture):

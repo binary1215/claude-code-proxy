@@ -201,8 +201,48 @@ class ResponseTests(unittest.TestCase):
         self.assertFalse(check['reasoning_ids_exact'])
         self.assertTrue(check['reasoning_ciphertexts_exact'])
         self.assertEqual(check['reasoning_id_present'], [False])
+        self.assertTrue(report['observed_opaque_state_pass'])
+        self.assertFalse(report['observed_reasoning_ids_pass'])
+        self.assertFalse(report['offline_authenticated_state_restored'])
+        self.assertFalse(observer.offline_fidelity_pass(report))
         for private in ('SYNTHETIC_PRIVATE_OPAQUE', 'rs_synthetic', KEY, MARKER):
             self.assertNotIn(private, json.dumps(report))
+
+    def test_missing_ids_can_pass_only_with_exact_authenticated_native_restoration(self):
+        evidence = {'observed_opaque_state_pass': True,
+            'observed_reasoning_ids_pass': False, 'offline_authenticated_state_restored': True,
+            'responses': [{'http_status': 200, 'complete': True, 'opaque_done_completed_exact': True}],
+            'replays': [{'reasoning_ids_exact': False, 'function_calls_json_equal': True,
+                'tool_result_ids_match_issued_order': True, 'fixture_read_result_present': True}]}
+        self.assertTrue(observer.offline_fidelity_pass(evidence))
+        mutations = [('observed_opaque_state_pass', False), ('offline_authenticated_state_restored', False),
+                     ('offline_authenticated_state_restored', None), ('replays', [])]
+        for name, value in mutations:
+            changed = copy.deepcopy(evidence); changed[name] = value
+            with self.subTest(name=name, value=value):
+                self.assertFalse(observer.offline_fidelity_pass(changed))
+        for name in ('function_calls_json_equal', 'tool_result_ids_match_issued_order', 'fixture_read_result_present'):
+            changed = copy.deepcopy(evidence); changed['replays'][0][name] = False
+            with self.subTest(name=name):
+                self.assertFalse(observer.offline_fidelity_pass(changed))
+        for change in ({'complete': False}, {'http_status': 400}, {'opaque_done_completed_exact': False}):
+            changed = copy.deepcopy(evidence); changed['responses'][0].update(change)
+            with self.subTest(change=change):
+                self.assertFalse(observer.offline_fidelity_pass(changed))
+
+    def test_native_restoration_requires_each_client_request_to_reach_actual_proxy_upstream(self):
+        state = new_state(); reserve(state); state.active = False
+        wire, blocks = observer.fake_native_events(state, 0)
+        state.native_records.append({'body': {'messages': []}, 'blocks': blocks})
+        body = request(); body['input'].append({'role': 'assistant', 'content': 'Synthetic result'})
+        reserve(state, body)
+        # A successful native prefix does not cover the rejected second request.
+        self.assertFalse(observer.observations(state)['offline_authenticated_state_restored'])
+        state.native_records.append({'body': {'messages': [{'role': 'assistant', 'content': copy.deepcopy(blocks)}]},
+                                     'blocks': [{'type': 'text', 'text': 'Synthetic completion'}]})
+        self.assertTrue(observer.observations(state)['offline_authenticated_state_restored'])
+        state.native_records[1]['body']['messages'][0]['content'][0]['signature'] = 'changed-synthetic-signature'
+        self.assertFalse(observer.observations(state)['offline_authenticated_state_restored'])
 
     def test_json_tool_arguments_semantics_separate_from_serialization(self):
         first = [{'call_id': 'call_synthetic', 'name': 'read', 'arguments': '{"filePath": "fixture.txt"}'}]
