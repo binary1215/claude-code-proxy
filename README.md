@@ -239,8 +239,8 @@ long repository editing sessions are not covered by that fixture.
 The historical synthetic split-signature defect claim was
 [corrected against official SDK semantics](docs/VERIFICATION.md#signature-oracle-correction-2026-10-06).
 Subscription acceptance is not a general provider entitlement or a measured
-billing/quality guarantee. Production
-and `master` have not been replaced.
+billing/quality guarantee. These tests updated only `test-claudemock`; production
+was unchanged. Git branch integration is separate from a production rollout.
 
 ## Source map
 
