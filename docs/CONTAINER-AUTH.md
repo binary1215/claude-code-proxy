@@ -94,6 +94,13 @@ renew with `claude-auth login` before expiry. Logout:
 docker exec han-claudemock claude-auth logout
 ```
 
+Subsequent [isolated refresh verification](../integration/auth/README.md) found
+that official `claude auth status` in 2.1.318 can refresh near-expiry/expired
+credentials without a model request. The hyphenated `claude-auth status` helper
+above remains file-only. A production scheduler is still absent, and Linux/live
+refresh qualification remains outstanding. Exit code 0 alone is insufficient:
+the CLI also returned 0 after a synthetic refresh HTTP 503 with no token renewal.
+
 The next request sees logout immediately; deleting only a DB token does not log
 the CLI out. Responses encrypted reasoning state retains its existing binding
 to the exact upstream token. **A token change invalidates previous capsules**
