@@ -103,6 +103,20 @@ be separate work; this change does not weaken the existing credential binding.
 
 ## Scope and references
 
+Validation on 2026-11-05 used source commit `2efc59d` and the pinned CLI image:
+
+- Windows: 173 tests passed; the Linux shell-helper test was skipped there.
+- Linux image: 170 tests passed, including email argument quoting, callback
+  stdin forwarding, environment isolation, both HTTP routes, rotation, expiry
+  and logout. Four admin-observability tests then passed with their test-only
+  TypeScript dependency mounted separately (174 passing cases in total).
+- Actual official CLI `auth login --help` confirmed `--email` prefill and
+  subscription login as the default. No CLI binary was modified.
+
+These checks used synthetic credentials and loopback providers. They establish
+the adapter behavior, not a real account login, model entitlement, automatic
+refresh or end-to-end subscription acceptance.
+
 Container login does not change Anthropic subscription-token usage restrictions
 or make native relay acceptance an official guarantee. No paid API fallback or
 Claude Code caller impersonation is added. Protect the auth volume and backups.
