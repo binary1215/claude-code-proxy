@@ -1,4 +1,6 @@
 import { db } from "../db/connection.js";
+import { UPSTREAM_AUTH_SOURCE } from "../config.js";
+import { readClaudeCliCredentials, type CliAuthStatus } from "./claudeCliCredentials.js";
 
 // In-memory credential cache, invalidated by the admin API.
 let cachedToken: string | null = null;
@@ -34,6 +36,7 @@ export function deleteSetting(key: string): void {
  * Priority: database setting > CLAUDE_CODE_OAUTH_TOKEN env var > ANTHROPIC_API_KEY env var
  */
 export function getOAuthToken(): string | null {
+  if (UPSTREAM_AUTH_SOURCE === "claude_cli") return readClaudeCliCredentials().credential?.token ?? null;
   if (!cacheLoaded) {
     cachedToken = getSetting("claude_oauth_token");
     cacheLoaded = true;
@@ -42,6 +45,7 @@ export function getOAuthToken(): string | null {
 }
 
 export function getUpstreamCredential(): { token: string; kind: "oauth" | "api_key" } | null {
+  if (UPSTREAM_AUTH_SOURCE === "claude_cli") return readClaudeCliCredentials().credential;
   const token = getOAuthToken();
   if (!token) return null;
   const fromDatabase = Boolean(cachedToken);
@@ -52,7 +56,8 @@ export function getUpstreamCredential(): { token: string; kind: "oauth" | "api_k
 /**
  * Get token status info for admin display (never expose the full token).
  */
-export function getTokenStatus(): { configured: boolean; source: string; preview: string | null } {
+export function getTokenStatus(): { configured: boolean; source: string; preview: string | null } | CliAuthStatus {
+  if (UPSTREAM_AUTH_SOURCE === "claude_cli") return readClaudeCliCredentials().status;
   const preview = (token: string) => token.length >= 24 ? token.slice(0, 8) + "..." + token.slice(-4) : "[configured]";
   const dbToken = getSetting("claude_oauth_token");
   if (dbToken) {
@@ -73,4 +78,10 @@ export function getTokenStatus(): { configured: boolean; source: string; preview
   }
 
   return { configured: false, source: "none", preview: null };
+}
+
+export function missingCredentialMessage(): string {
+  return UPSTREAM_AUTH_SOURCE === "claude_cli"
+    ? "Claude CLI login is missing, expired, or unreadable. Check claude-auth status and run claude-auth login in the container."
+    : "Upstream credential is not configured.";
 }

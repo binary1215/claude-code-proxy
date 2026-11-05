@@ -3,7 +3,7 @@ import https from "node:https";
 import { randomUUID } from "node:crypto";
 import type { Request, Response } from "express";
 import { ANTHROPIC_BASE_URL, UPSTREAM_TIMEOUT_MS } from "../config.js";
-import { getUpstreamCredential } from "./settingsService.js";
+import { getUpstreamCredential, missingCredentialMessage } from "./settingsService.js";
 import { insertPendingRequest, completeRequest } from "./historyService.js";
 import { registerTask, unregisterTask } from "./taskTracker.js";
 import { recordTokensForRateLimit } from "../middleware/rateLimiter.js";
@@ -51,7 +51,7 @@ export function upstreamHeaders(req: Request, credential: { token: string; kind:
 export function relayNative(req: Request, res: Response, endpoint: string): void {
   const credential = getUpstreamCredential();
   if (!credential || /[^\x21-\x7e]/.test(credential.token)) {
-    res.status(503).json({ type: "error", error: { type: "api_error", message: "Upstream credential is not configured." } });
+    res.status(503).json({ type: "error", error: { type: "api_error", message: missingCredentialMessage() } });
     return;
   }
   let url: URL;

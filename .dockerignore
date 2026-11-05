@@ -8,5 +8,7 @@ data
 *.log
 .env
 .env.*
+.claude
+**/.credentials.json
 tests
 docs

@@ -5,7 +5,7 @@ import { once } from "node:events";
 import type { Request, Response } from "express";
 import { ANTHROPIC_BASE_URL, UPSTREAM_TIMEOUT_MS, RESPONSES_ENABLED, RESPONSES_STATE_KEY,
   RESPONSES_STATE_TTL_SECONDS, RESPONSES_MAX_OUTPUT_TOKENS, RESPONSES_THINKING_BUDGET_TOKENS, RESPONSES_APPLY_PATCH_MODE, RESPONSES_DEVELOPER_MESSAGE_MODE } from "../config.js";
-import { getUpstreamCredential } from "./settingsService.js";
+import { getUpstreamCredential, missingCredentialMessage } from "./settingsService.js";
 import { upstreamHeaders, upstreamUrl } from "./nativeRelay.js";
 import { ResponsesStateCodec, upstreamStateScope } from "./responsesState.js";
 import { prepareResponsesRequest } from "./responsesRequest.js";
@@ -30,7 +30,7 @@ function sendError(res: Response, status: number, code: string, message: string)
 export function relayResponses(req: Request, res: Response): void {
   const credential = getUpstreamCredential();
   if (!codec || !credential || /[^\x21-\x7e]/.test(credential.token)) {
-    sendError(res, 503, "upstream_not_configured", "Responses adapter credentials are not configured.");
+    sendError(res, 503, "upstream_not_configured", !codec ? "Responses state key is not configured." : missingCredentialMessage());
     return;
   }
   let prepared: PreparedResponsesRequest;

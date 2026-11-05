@@ -54,7 +54,8 @@ The optional Responses endpoint translates protocols; it does **not** claim byte
 
 ## Authentication and subscription limitation
 
-The upstream credential is selected once per request, in this order:
+The upstream credential is selected once per request. The default
+`UPSTREAM_AUTH_SOURCE=configured` uses this order:
 
 1. Admin database credential (`claude_oauth_token`, retained storage key).
 2. `CLAUDE_CODE_OAUTH_TOKEN` environment variable.
@@ -62,7 +63,16 @@ The upstream credential is selected once per request, in this order:
 
 Database credentials starting with `sk-ant-oat` and the OAuth environment variable use `Authorization: Bearer`. API keys use `x-api-key`. There is no fallback to another credential after failure. A database override must be explicitly removed before an environment credential takes effect.
 
-`claude setup-token` output can still be provided through a private container environment file. **Accepting the token as configuration does not establish that Anthropic will accept it for every model on this native HTTP path.** In an isolated test, Haiku accepted signed thinking/tool replay and produced a real cache hit, while minimal Opus/Fable requests returned a bare 429. The same credential worked for Opus in unmodified official Claude Code. These observations do not establish the server's rejection rule or authorize arbitrary subscription-token intermediation. No token refresh/login service, browser automation or Claude Code impersonation is included. Rejections remain visible; there is no automatic paid-key fallback. See [verification and limitations](docs/VERIFICATION.md).
+An optional **`cli-auth` image target** adds official Claude Code login inside
+the container, a separate persistent auth volume, and a live credential-file
+adapter. Set `CLAUDE_AUTH_EMAIL` to prefill the login email, then run
+`docker exec -it <container> claude-auth login`; open the displayed URL and enter
+the browser's login code in that same terminal. Actual inference remains the
+native HTTP relay. See [container login, expiry and logout](docs/CONTAINER-AUTH.md).
+Automatic token refresh is not implemented; a changed token also changes the
+existing Responses reasoning-state binding, requiring a fresh conversation.
+
+`claude setup-token` output can still be provided through a private container environment file in configured mode. **Accepting credentials does not establish that Anthropic will accept them for every model/client on this native HTTP path.** Earlier isolated tests observed differences between minimal requests and official Claude Code requests; see [verification and limitations](docs/VERIFICATION.md). Login inside a container does not change the subscription usage boundary. Rejections remain visible; there is no automatic paid-key fallback or Claude Code caller impersonation.
 
 The proxy API key given to LiteLLM, the admin secret, and the upstream credential are three different secrets. Database upstream credentials are stored in plaintext in the mounted volume; protect the volume and backups. New history records retain operational metadata only, never request/reply bodies or raw upstream error text. Historical rows are preserved by migration, so old data may still exist.
 

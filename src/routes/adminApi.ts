@@ -114,6 +114,11 @@ router.get("/settings/token", (_req, res) => {
 });
 
 router.post("/settings/token", (req, res) => {
+  if (getTokenStatus().source === "claude_cli") {
+    res.status(409).json({ error: { type: "credential_source_managed_by_cli",
+      message: "This instance uses CLI login. Run claude-auth login in the container." } });
+    return;
+  }
   const { token } = req.body;
   if (!token || typeof token !== "string" || token.trim().length < 10 || /[^\x21-\x7e]/.test(token.trim())) {
     res.status(400).json({
@@ -128,6 +133,11 @@ router.post("/settings/token", (req, res) => {
 });
 
 router.delete("/settings/token", (_req, res) => {
+  if (getTokenStatus().source === "claude_cli") {
+    res.status(409).json({ error: { type: "credential_source_managed_by_cli",
+      message: "This instance uses CLI login. Run claude-auth logout in the container." } });
+    return;
+  }
   deleteSetting("claude_oauth_token");
   const status = getTokenStatus();
   res.json({ success: true, ...status });

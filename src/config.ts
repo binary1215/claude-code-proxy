@@ -5,6 +5,10 @@ export const PORT = parseInt(process.env.PORT || "3456");
 export const DATABASE_PATH = process.env.DATABASE_PATH || "./data/proxy.db";
 export const ADMIN_API_SECRET = process.env.ADMIN_API_SECRET || "";
 export const AUTH_DISABLED = process.env.AUTH_DISABLED === "true";
+export const UPSTREAM_AUTH_SOURCE = process.env.UPSTREAM_AUTH_SOURCE || "configured";
+if (UPSTREAM_AUTH_SOURCE !== "configured" && UPSTREAM_AUTH_SOURCE !== "claude_cli") {
+  throw new Error("UPSTREAM_AUTH_SOURCE must be configured or claude_cli");
+}
 export const ANTHROPIC_BASE_URL = process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com";
 export const UPSTREAM_TIMEOUT_MS = Number(process.env.UPSTREAM_TIMEOUT_MS || 300_000);
 if (!Number.isSafeInteger(UPSTREAM_TIMEOUT_MS) || UPSTREAM_TIMEOUT_MS <= 0 || UPSTREAM_TIMEOUT_MS > 2_147_483_647) {

@@ -24,6 +24,7 @@ data/
 
 # Claude Code local settings (contains machine-specific paths, IPs)
 .claude/
+**/.credentials.json
 
 # OS files
 .DS_Store
