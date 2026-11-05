@@ -1,0 +1,57 @@
+{
+  "source_commit": "81a9024e2bae40fcf6d5aae344e9a01fe6ac9ddc",
+  "image_id": "sha256:8a95d65779391c74994654b60675e05b18bd4ecb6cc15a49ab18d5cc02187cae",
+  "official_cli_version": "2.1.318",
+  "linux_tests": {
+    "passed": 181,
+    "failed": 0,
+    "skipped": 0
+  },
+  "official_cli_manual_refresh": {
+    "success": true,
+    "cli_exit": 0,
+    "cli_timed_out": false,
+    "access_token_changed": true,
+    "refresh_token_changed": true,
+    "same_account": true,
+    "previous_expires_at": "2026-11-05T21:19:52.055Z",
+    "current_expires_at": "2026-11-05T22:03:10.809Z",
+    "original_expiry_restored": false,
+    "model_prompt_submitted": false,
+    "old_tokens_restored": false
+  },
+  "background_timer_refresh": {
+    "verified_at": "2026-11-05T14:30:32.965Z",
+    "trigger": "background_timer_only",
+    "elapsed_seconds": 10,
+    "access_token_changed": true,
+    "refresh_token_changed": true,
+    "expiry_advanced": true,
+    "same_account": true,
+    "same_session_binding": true,
+    "pre_refresh_synthetic_reasoning_capsule_restored": true,
+    "refresh_success_count_incremented": true,
+    "previous_expires_at": "2026-11-05T22:03:10.809Z",
+    "current_expires_at": "2026-11-05T22:30:31.96Z",
+    "automatic_refresh": true,
+    "ready": true,
+    "refresh_status": {
+      "state": "refreshed",
+      "checked_at": "2026-11-05T14:30:31.981Z",
+      "last_success_at": "2026-11-05T14:30:31.981Z",
+      "next_attempt_at": "2026-11-05T22:27:31.96Z",
+      "failures": 0,
+      "successes": 1,
+      "reason": null
+    },
+    "explicit_refresh_command_invoked": false,
+    "model_prompts_submitted": 0,
+    "old_tokens_restored": false,
+    "original_expiry_restored": false,
+    "success": true
+  },
+  "same_named_volumes": true,
+  "existing_private_files_preserved": true,
+  "other_containers_preserved": true,
+  "real_model_inference": "not_tested"
+}

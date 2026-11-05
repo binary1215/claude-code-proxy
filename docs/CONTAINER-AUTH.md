@@ -136,7 +136,7 @@ originally selected credential.
 
 ## Scope and references
 
-Validation on 2026-11-05 used source commit `2efc59d` and the pinned CLI image:
+Initial login validation on 2026-11-05 used source commit `2efc59d` and the pinned CLI image:
 
 - Windows: 173 tests passed; the Linux shell-helper test was skipped there.
 - Linux image: 170 tests passed, including email argument quoting, callback
@@ -146,9 +146,17 @@ Validation on 2026-11-05 used source commit `2efc59d` and the pinned CLI image:
 - Actual official CLI `auth login --help` confirmed `--email` prefill and
   subscription login as the default. No CLI binary was modified.
 
-These checks used synthetic credentials and loopback providers. They establish
-the adapter behavior, not a real account login, model entitlement, automatic
-refresh or end-to-end subscription acceptance.
+Those initial adapter checks used synthetic credentials and loopback providers.
+The subsequent official browser login completed on the Han account. Automatic
+refresh implementation `81a9024` then passed **181 Linux tests**, all five CLI
+fixture cases, all five coordinator cases, and actual account refresh. After
+deploying with automatic refresh enabled, the background timer rotated both
+tokens without a manual refresh command or model prompt. The same account and
+session binding survived, and a pre-refresh synthetic reasoning capsule restored
+unchanged. The [verification receipts](../integration/auth/README.md#linux-deployment-and-live-timer-verification)
+record the exact scope. Existing private settings, named volumes and other
+containers were preserved. Model entitlement and real inference were not tested
+as part of the authentication rollout.
 
 Container login does not change Anthropic subscription-token usage restrictions
 or make native relay acceptance an official guarantee. No paid API fallback or

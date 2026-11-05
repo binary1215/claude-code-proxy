@@ -1,0 +1,125 @@
+{
+  "cli_version_under_test": "2.1.318",
+  "platform": "posix",
+  "official_binary_modified": false,
+  "synthetic_credentials_only": true,
+  "tls_verification_disabled": false,
+  "coordinator": true,
+  "cases": [
+    {
+      "case": "fresh",
+      "exit_code": 0,
+      "reported_logged_in": null,
+      "access_rotated": false,
+      "refresh_rotated": false,
+      "expiry_advanced": false,
+      "requests": [],
+      "elapsed_seconds": 0.33,
+      "coordinator_state": "idle",
+      "session_preserved": false,
+      "concurrent_lock_excluded": true
+    },
+    {
+      "case": "near_expiry",
+      "exit_code": 0,
+      "reported_logged_in": null,
+      "access_rotated": true,
+      "refresh_rotated": true,
+      "expiry_advanced": true,
+      "requests": [
+        {
+          "method": "POST",
+          "path": "/v1/oauth/token",
+          "grant_is_refresh": true,
+          "public_client_matches": true,
+          "fixture_refresh_matches": true,
+          "session_established_before_refresh": true
+        },
+        {
+          "method": "GET",
+          "path": "/api/oauth/profile"
+        }
+      ],
+      "elapsed_seconds": 3.29,
+      "coordinator_state": "refreshed",
+      "session_preserved": true,
+      "concurrent_lock_excluded": true
+    },
+    {
+      "case": "expired",
+      "exit_code": 0,
+      "reported_logged_in": null,
+      "access_rotated": true,
+      "refresh_rotated": true,
+      "expiry_advanced": true,
+      "requests": [
+        {
+          "method": "POST",
+          "path": "/v1/oauth/token",
+          "grant_is_refresh": true,
+          "public_client_matches": true,
+          "fixture_refresh_matches": true,
+          "session_established_before_refresh": true
+        },
+        {
+          "method": "GET",
+          "path": "/api/oauth/profile"
+        }
+      ],
+      "elapsed_seconds": 0.88,
+      "coordinator_state": "refreshed",
+      "session_preserved": true,
+      "concurrent_lock_excluded": true
+    },
+    {
+      "case": "rejected",
+      "exit_code": 0,
+      "reported_logged_in": null,
+      "access_rotated": false,
+      "refresh_rotated": false,
+      "expiry_advanced": false,
+      "requests": [
+        {
+          "method": "POST",
+          "path": "/v1/oauth/token",
+          "grant_is_refresh": true,
+          "public_client_matches": true,
+          "fixture_refresh_matches": true,
+          "session_established_before_refresh": true
+        }
+      ],
+      "elapsed_seconds": 0.54,
+      "coordinator_state": "login_required",
+      "session_preserved": false,
+      "immediate_repeat_auth_requests": 0,
+      "concurrent_lock_excluded": true
+    },
+    {
+      "case": "transient_failure",
+      "exit_code": 0,
+      "reported_logged_in": null,
+      "access_rotated": false,
+      "refresh_rotated": false,
+      "expiry_advanced": false,
+      "requests": [
+        {
+          "method": "POST",
+          "path": "/v1/oauth/token",
+          "grant_is_refresh": true,
+          "public_client_matches": true,
+          "fixture_refresh_matches": true,
+          "session_established_before_refresh": true
+        },
+        {
+          "method": "GET",
+          "path": "/api/oauth/profile"
+        }
+      ],
+      "elapsed_seconds": 0.48,
+      "coordinator_state": "retrying",
+      "session_preserved": true,
+      "immediate_repeat_auth_requests": 0,
+      "concurrent_lock_excluded": true
+    }
+  ]
+}

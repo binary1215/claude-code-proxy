@@ -64,5 +64,30 @@ that official command; the hyphenated helper is not the refresh trigger.
 The opt-in scheduler and login-session continuity now implement this behavior;
 see [container auth](../../docs/CONTAINER-AUTH.md) for lifecycle and crash limits.
 
+## Linux deployment and live timer verification
+
+Implementation commit `81a9024` was built as the `cli-auth` image with official
+CLI 2.1.318. All **181 Linux backend tests passed**, with no skips. The five
+coordinator fixture cases also passed, including a real cross-process `flock`,
+retry suppression after HTTP 503, terminal handling after `invalid_grant`, and
+same-account session preservation. See the [CLI Linux receipt](verification-20261105-linux.json)
+and [coordinator receipt](verification-20261105-coordinator-linux.json).
+
+The Han deployment retained its existing auth/data volumes and private settings;
+the other containers were unchanged. With `CLAUDE_AUTH_AUTO_REFRESH=true`, a
+separate live test moved only local expiry metadata to 90 seconds ahead, then
+waited for the background timer. It did **not** invoke a manual refresh command.
+Within 10 seconds the timer rotated both tokens, advanced expiry, and incremented
+the persisted success counter. The account and login-session binding were
+unchanged. A synthetic Responses thinking capsule sealed before rotation opened
+unchanged afterward using the deployed state key. No model prompt was submitted,
+and no old tokens were restored. See the [live receipt](verification-20261105-live.json).
+
+This establishes actual authentication refresh and local reasoning-state
+continuity. It does not establish model entitlement, real provider-signed
+thinking acceptance, cache savings, or end-to-end inference quality. The live
+test advances local expiry metadata rather than waiting eight hours; its refresh
+HTTP exchange and rotated credentials are real.
+
 References: [official CLI reference](https://code.claude.com/docs/en/cli-reference),
 [official authentication guidance](https://code.claude.com/docs/en/authentication).
