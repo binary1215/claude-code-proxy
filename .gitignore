@@ -24,7 +24,9 @@ data/
 
 # Claude Code local settings (contains machine-specific paths, IPs)
 .claude/
-**/.credentials.json
+**/.credentials.json*
+**/.claude.json*
+**/.proxy-auth*
 
 # OS files
 .DS_Store
@@ -41,6 +43,8 @@ Thumbs.db
 
 # SSH keys and other secrets
 secrets/
+private/
+.agent-work/
 
 # Local verification output
 *.log

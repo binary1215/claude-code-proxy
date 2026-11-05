@@ -9,6 +9,14 @@ data
 .env
 .env.*
 .claude
-**/.credentials.json
+**/.credentials.json*
+**/.claude.json*
+**/.proxy-auth*
+private
+secrets
+.agent-work
+*.pem
+*.key
+*.crt
 tests
 docs
