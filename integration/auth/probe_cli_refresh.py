@@ -208,4 +208,3 @@ summary = {'cli_version_under_test': '2.1.318', 'platform': os.name,
 if args.output:
     args.output.resolve().write_text(json.dumps(summary, indent=2))
 temporary.cleanup()
-
