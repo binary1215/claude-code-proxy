@@ -1,1 +1,4 @@
+# The version-pinned installer diff is byte-verified on Windows and Linux.
+# Unified diff blank context lines intentionally contain one space.
+integration/litellm/*.patch text eol=lf whitespace=-blank-at-eol
 bin/claude-auth text eol=lf
