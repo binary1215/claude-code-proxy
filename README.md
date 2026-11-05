@@ -1,6 +1,6 @@
 # Claude Code Proxy — native relay and opt-in Responses adapter
 
-A native Anthropic HTTP relay, forked from [MehdiMohseni82/claude-code-proxy](https://github.com/MehdiMohseni82/claude-code-proxy). **This branch removes the Claude Agent SDK/CLI execution backend.** It is a breaking transport change, not an SDK upgrade.
+A native Anthropic HTTP relay, forked from [MehdiMohseni82/claude-code-proxy](https://github.com/MehdiMohseni82/claude-code-proxy). **Model requests use native HTTP instead of the Claude Agent SDK/CLI execution backend.** An optional `cli-auth` image includes the official CLI for browser login and token refresh. The default image is CLI-free.
 
 ```text
 Claude Code / Messages -> stock LiteLLM pass-through -> native /v1/messages
@@ -10,9 +10,34 @@ Codex / Responses     -> stock LiteLLM pass-through -> opt-in /v1/responses
 
 No automatic SDK fallback, tool execution, invented thinking, conversation storage, or provider/account failover is included. The caller owns conversation history and executes its client tools. Upstream-native server-tool definitions are forwarded on the native route; they are not executed on the proxy host. The new [Responses adapter](docs/RESPONSES-ADAPTER.md) is disabled by default and supports a deliberately bounded client-tool subset.
 
-## Latest tested improvement — 2026-10-23
+## Latest verified update — 2026-11-05
 
-The test backend now runs core commit `4969a63` with self-contained **`ccpr2`**
+Container login and automatic refresh are implemented and deployed on the
+isolated Han service, using unmodified official Claude Code **2.1.318** for
+authentication and the native relay for model traffic.
+
+- Optional `CLAUDE_AUTH_EMAIL` prefills the official browser login. The user
+  returns the final OAuth callback code to the same running CLI terminal.
+- Opt-in `CLAUDE_AUTH_AUTO_REFRESH=true` checks at startup and every minute,
+  invoking the official CLI within three minutes of token expiry. Login,
+  logout and refresh share a cross-process lock. Temporary failures use bounded
+  retry delays; a revoked login requires authentication again.
+- A verified same-account refresh preserves the persistent login-session
+  binding used by Responses reasoning capsules. New requests wait for an
+  ongoing refresh to finish before selecting their credential.
+- **181 Linux backend tests passed**, together with five official-CLI fixture
+  cases and five coordinator cases. A real account's background timer rotated
+  both tokens and advanced expiry without a manual refresh command or model
+  prompt. A pre-refresh **synthetic** thinking capsule restored unchanged.
+
+These authentication checks establish refresh and local state continuity;
+model acceptance and real provider-signed thinking were outside this rollout.
+See the [login and refresh guide](docs/CONTAINER-AUTH.md) and
+[verification receipts](integration/auth/README.md#linux-deployment-and-live-timer-verification).
+
+## Earlier protocol and client verification — 2026-10-23
+
+The test backend was updated to core commit `4969a63` with self-contained **`ccpr2`**
 reasoning state. OpenCode may omit public reasoning IDs without losing the
 authenticated native thinking/signature blocks. Existing `ccpr1` history remains
 readable with its original IDs. See [migration/rollback limits](docs/RESPONSES-ADAPTER.md).
@@ -28,7 +53,7 @@ readable with its original IDs. See [migration/rollback limits](docs/RESPONSES-A
 - Stock LiteLLM cancellation passes on both local protocol chains. Error-hop and
   cache/usage diagnostics distinguish unreported values from zero or free usage.
 
-Only `test-claudemock` was replaced; LiteLLM and client sources were not changed.
+In that protocol rollout, only `test-claudemock` was replaced; LiteLLM and client sources were not changed.
 The dashboard source was built locally, **not deployed** with the backend-only
 image. Use the [client connection profiles](integration/clients/profiles/README.md)
 and [no-inference connection diagnostic](integration/clients/check_gateway_connection.py).
@@ -65,14 +90,10 @@ Database credentials starting with `sk-ant-oat` and the OAuth environment variab
 
 An optional **`cli-auth` image target** adds official Claude Code login inside
 the container, a separate persistent auth volume, and a live credential-file
-adapter. Set `CLAUDE_AUTH_EMAIL` to prefill the login email, then run
-`docker exec -it <container> claude-auth login`; open the displayed URL and enter
-the browser's login code in that same terminal. Actual inference remains the
-native HTTP relay. See [container login, expiry and logout](docs/CONTAINER-AUTH.md).
-Set `CLAUDE_AUTH_AUTO_REFRESH=true` in CLI-auth mode to enable serialized,
-official-CLI refresh near expiry. Coordinated same-account refresh preserves
-Responses reasoning continuity; explicit login/logout or an uncoordinated token
-change starts a new binding. See the container guide for activation and limits.
+adapter. Its `UPSTREAM_AUTH_SOURCE=claude_cli` reads only that CLI store, with no
+database or environment credential fallback. The [container login workflow](#container-login-and-automatic-refresh)
+below covers setup and opt-in refresh. A configured setup-token or API key uses
+the precedence above; automatic CLI refresh applies only to CLI-auth mode.
 
 `claude setup-token` output can still be provided through a private container environment file in configured mode. **Accepting credentials does not establish that Anthropic will accept them for every model/client on this native HTTP path.** Earlier isolated tests observed differences between minimal requests and official Claude Code requests; see [verification and limitations](docs/VERIFICATION.md). Login inside a container does not change the subscription usage boundary. Rejections remain visible; there is no automatic paid-key fallback or Claude Code caller impersonation.
 
@@ -86,7 +107,52 @@ provider's exact rule. It does not establish arbitrary-client OAuth eligibility
 or the deployed LiteLLM path. The [test-only shape observer](integration/diagnostics/README.md)
 records no system text, tokens or thinking/signature content.
 
-## Standalone Docker deployment
+## Container login and automatic refresh
+
+The `docker-compose.cli-auth.yml` overlay targets the `app` service in
+`docker-compose.yml`. Start that backend with its persistent data and auth volumes:
+
+```sh
+cp .env.example .env
+# Edit .env privately: set ADMIN_API_SECRET and optional CLAUDE_AUTH_EMAIL.
+# Set CLAUDE_AUTH_AUTO_REFRESH=true to enable background refresh (default false).
+# For Responses, also set RESPONSES_ENABLED=true and a durable RESPONSES_STATE_KEY.
+docker compose --env-file .env -f docker-compose.yml -f docker-compose.cli-auth.yml up -d --build app
+
+docker compose --env-file .env -f docker-compose.yml -f docker-compose.cli-auth.yml exec app claude-auth login
+docker compose --env-file .env -f docker-compose.yml -f docker-compose.cli-auth.yml exec app claude-auth status
+```
+
+Open the official URL printed by `login`, complete sign-in, and paste the final
+**OAuth callback code** into that same terminal when prompted. An email sign-in
+code belongs on the website. Once login completes, the relay picks up credentials
+from the auth volume without a restart. The commands above start only `app`,
+available on the Docker network at port `3456`; configure the published port or
+network connection for your separate LiteLLM deployment. This overlay uses a
+different service name from the standalone `compose.adapter.yml` profile below.
+
+| CLI-auth setting | Behavior |
+| --- | --- |
+| `UPSTREAM_AUTH_SOURCE` | The `cli-auth` image selects `claude_cli`; the normal image defaults to `configured` |
+| `CLAUDE_CONFIG_DIR` | Defaults to `/home/node/.claude` in the CLI image; persist its separate auth volume |
+| `CLAUDE_AUTH_EMAIL` | Optional login-email prefill; keep the actual address in private runtime configuration |
+| `CLAUDE_AUTH_AUTO_REFRESH` | Default `false`; `true` enables startup/minute checks and refresh near expiry |
+
+For an already running CLI-auth container, use
+`docker exec -it <container> claude-auth login`.
+The helper also supports `status`, `refresh` and `logout`.
+`status` reads local files only; `refresh` performs the same due check as the
+background worker. Inspect `auth_refresh` in `/health` for state, last success
+and retry timing. Local readiness does not prove provider/model acceptance.
+
+Keep the data volume, auth volume and Responses state key across container
+replacement. Coordinated same-account refresh preserves reasoning continuity.
+Enabling/disabling refresh, explicit login/logout or an external credential
+replacement requires a fresh Responses conversation. The
+[lifecycle guide](docs/CONTAINER-AUTH.md#credential-selection-and-lifecycle)
+also documents the token-save/session-commit crash limit.
+
+## Standalone Docker deployment with a configured credential
 
 `compose.adapter.yml` runs only this backend; LiteLLM remains a separate container/host. It uses a read-only filesystem, non-root user, dropped capabilities, and a writable data volume.
 
@@ -167,7 +233,7 @@ rollback and backup restoration using fresh synthetic volumes with networking di
 replace or back up a running deployment. The [operating checklist](docs/ADAPTER-PATCH.md#native-only-update-and-rollback-checklist)
 separates that rehearsal from an authorized service cutover.
 
-- SDK/CLI and server-side tool grants, internal Chat translation, injected system prompts and proxy-managed cache TTLs are removed, not hidden behind a mode flag.
+- The SDK/CLI model-execution backend, server-side tool grants, internal Chat translation, injected system prompts and proxy-managed cache TTLs are removed. The optional authentication-only CLI does not restore those features.
 - API keys, configured credentials and request history are retained. Token/cost columns become nullable transactionally; new cache fields are added.
 - Keys with old non-null `monthly_budget_usd`, `system_prompt` or `cache_ttl_seconds` fail with **409**. Move budget enforcement to LiteLLM and system/cache settings to caller requests, then clear those fields through `PATCH /api/admin/keys/:id` using `null`. The dashboard offers clear-only migration actions. New non-null values are rejected.
 - Built-in-tool grants left in old database rows are inert. Native TPM limits are best-effort observed-token windows, not prepaid reservations or financial budget enforcement. Unknown usage and simultaneous requests can exceed a requested limit; use the gateway for policy enforcement.
@@ -230,8 +296,11 @@ to native Messages; LiteLLM pass-through avoids a second, lossy conversion.
 - OpenCode: one native and one Responses request were each rejected by the
   provider with HTTP 400 and a third-party plan/extra-usage restriction.
   Switching routes alone did not resolve rejection. Separately, offline
-  Responses replay preserves ciphertexts but omits reasoning IDs, which the
-  proxy currently requires. See the [two distinct findings](integration/clients/README-live-opencode-responses.md).
+  Responses replay preserved ciphertexts but omitted reasoning IDs, which the
+  then-current `ccpr1` format required. The later `ccpr2` update supports ID-less
+  replay; the provider rejection is a separate finding. See the
+  [earlier comparison](integration/clients/README-live-opencode-responses.md) and
+  [current replay format](docs/RESPONSES-ADAPTER.md).
   No spoofing, retry or paid fallback was used.
 - LiteLLM generic pass-through logs record **zero tokens/spend and no provider
   cache usage**, even for these real requests. This is missing accounting, not
@@ -240,7 +309,7 @@ to native Messages; LiteLLM pass-through avoids a second, lossy conversion.
   configured; Haiku-only test scope was enforced by the harness.
 
 An empty tool-argument stream bug was fixed in `f5031f3`; **152/152 local backend
-regressions** pass. The image is deployed to **test-claudemock only**, preserving
+regressions** passed for that revision. That image was deployed to **test-claudemock only**, preserving
 its volume, keys and state key. See [current image, evidence and rollback](docs/VERIFICATION.md#actual-shared-gateway-clients-2026-10-06)
 and the [client profiles](integration/clients/README.md).
 
@@ -261,6 +330,9 @@ src/routes/anthropic.ts       native endpoint validation
 src/services/nativeRelay.ts  HTTP bytes, credentials, cancellation and lifecycle
 src/routes/responses.ts      gated optional Responses endpoint
 src/services/responses*.ts   strict translation, stream lifecycle and AEAD state
+src/authCommand.ts           serialized official CLI login/logout/refresh
+src/services/claudeCli*.ts    live CLI credentials and persistent session binding
+src/services/authRefresh*.ts background refresh scheduling and safe status
 src/services/usageObserver.ts bounded side-channel usage observation
 src/services/upstreamDiagnostics.ts allowlisted, bounded error/header observation
 src/services/historyService.ts / src/db/  metadata and migrations
@@ -268,6 +340,7 @@ admin/                       optional administration UI
 tests/                       loopback native relay regression tests
 integration/litellm/          stock gateway verification and configuration notes
 integration/clients/          actual CLI synthetic compatibility checks
+integration/auth/             isolated official CLI probes and live refresh receipts
 integration/deployment/       isolated image/state/rollback qualification
 ```
 
