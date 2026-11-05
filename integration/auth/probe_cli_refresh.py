@@ -19,6 +19,7 @@ from cryptography.x509.oid import NameOID
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--cli', required=True, type=Path, help='Unmodified official Claude Code 2.1.318 binary')
 parser.add_argument('--output', type=Path, help='Optional safe JSON result file')
+parser.add_argument('--coordinator', action='store_true', help='Probe a wrapper running claude-auth refresh; --version must report the official CLI')
 args = parser.parse_args()
 cli_executable = args.cli.resolve(strict=True)
 temporary = tempfile.TemporaryDirectory(prefix='claude-refresh-fixture-')
@@ -73,6 +74,10 @@ class MockAPI(BaseHTTPRequestHandler):
             item.update(grant_is_refresh=body.get('grant_type') == 'refresh_token',
                 public_client_matches=body.get('client_id') == '9d1c250a-e61b-44d9-88ed-5944d1962f5e',
                 fixture_refresh_matches=body.get('refresh_token') == 'sk-ant-ort01-SYNTHETIC-NOT-A-REAL-CREDENTIAL')
+            if args.coordinator:
+                session = json.loads((config / '.proxy-auth-session.json').read_text())
+                item['session_established_before_refresh'] = bool(session.get('sessionId'))
+                item['_before_session'] = session.get('sessionId')
             if reject_refresh:
                 return self.respond(400, {'error': 'invalid_grant', 'error_description': 'Synthetic revoked refresh'})
             if transient_failure:
@@ -119,6 +124,13 @@ try:
             'refreshToken': 'sk-ant-ort01-SYNTHETIC-NOT-A-REAL-CREDENTIAL',
             'expiresAt': expiry, 'scopes': scopes, 'subscriptionType': 'max',
             'rateLimitTier': 'default_claude_max_5x'}}))
+        if args.coordinator and label == 'near_expiry':
+            (config / '.proxy-auth-refresh.json').write_text(json.dumps({
+                'state': 'idle', 'checked_at': datetime.now(timezone.utc).isoformat(),
+                'last_success_at': None, 'next_attempt_at': (datetime.now(timezone.utc)+timedelta(hours=7)).isoformat(),
+                'failures': 0, 'successes': 0, 'reason': None,
+                'access_digest': hashlib.sha256(b'sk-ant-oat01-SYNTHETIC-NOT-A-REAL-CREDENTIAL').hexdigest(),
+                'refresh_digest': hashlib.sha256(b'sk-ant-ort01-SYNTHETIC-NOT-A-REAL-CREDENTIAL').hexdigest()}))
         (config / '.claude.json').write_text(json.dumps({'hasCompletedOnboarding': True,
             'oauthAccount': {'accountUuid': '00000000-0000-4000-8000-000000000001',
                 'organizationUuid': '00000000-0000-4000-8000-000000000002',
@@ -137,7 +149,8 @@ try:
             assert version.returncode == 0 and version.stdout.strip() == '2.1.318 (Claude Code)'
         requests.clear()
         started = time.monotonic()
-        proc = subprocess.run([str(cli_executable), 'auth', 'status'], env=env, cwd=config,
+        command = [str(cli_executable), 'refresh'] if args.coordinator else [str(cli_executable), 'auth', 'status']
+        proc = subprocess.run(command, env=env, cwd=config,
             stdin=subprocess.DEVNULL, capture_output=True, text=True, encoding='utf8', errors='replace', timeout=40)
         try:
             reported = json.loads(proc.stdout)
@@ -149,6 +162,28 @@ try:
             'refresh_rotated': after.get('refreshToken') == new_refresh,
             'expiry_advanced': after.get('expiresAt', 0) > expiry,
             'requests': list(requests), 'elapsed_seconds': round(time.monotonic()-started, 2)}
+        if args.coordinator:
+            record = json.loads((config / '.proxy-auth-refresh.json').read_text())
+            row['coordinator_state'] = record['state']
+            session_file = config / '.proxy-auth-session.json'
+            session_after = json.loads(session_file.read_text()).get('sessionId') if session_file.exists() else None
+            previous_ids = [r.pop('_before_session') for r in row['requests'] if '_before_session' in r]
+            row['session_preserved'] = bool(previous_ids) and all(s == session_after for s in previous_ids)
+            if label in ('rejected', 'transient_failure'):
+                requests.clear()
+                subprocess.run(command, env=env, cwd=config, stdin=subprocess.DEVNULL,
+                    capture_output=True, timeout=40, check=True)
+                row['immediate_repeat_auth_requests'] = len(requests)
+                assert not requests, 'Terminal failure/backoff must suppress immediate repeat'
+            if os.name == 'posix':
+                import fcntl
+                requests.clear()
+                with (config / '.proxy-auth.lock').open('a') as lock:
+                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    blocked = subprocess.run(command, env=env, cwd=config, stdin=subprocess.DEVNULL,
+                        capture_output=True, timeout=40)
+                    assert blocked.returncode == 75 and not requests, 'Shared auth lock must exclude overlap'
+                    row['concurrent_lock_excluded'] = True
         assert not any(r.get('path', '').startswith('/v1/messages') for r in requests), 'Unexpected inference request'
         print(json.dumps(row), flush=True)
         results.append(row)
@@ -161,10 +196,15 @@ for row in results:
     assert row['access_rotated'] == expected, row['case']
     assert row['refresh_rotated'] == expected, row['case']
     assert row['expiry_advanced'] == expected, row['case']
-    assert row['exit_code'] == (1 if row['case'] == 'rejected' else 0), row['case']
+    assert row['exit_code'] == (1 if row['case'] == 'rejected' and not args.coordinator else 0), row['case']
+    if args.coordinator:
+        expected_state = {'fresh': 'idle', 'near_expiry': 'refreshed', 'expired': 'refreshed',
+                          'rejected': 'login_required', 'transient_failure': 'retrying'}[row['case']]
+        assert row['coordinator_state'] == expected_state, row['case']
+        if expected: assert row['session_preserved'], row['case']
 summary = {'cli_version_under_test': '2.1.318', 'platform': os.name,
     'official_binary_modified': False, 'synthetic_credentials_only': True,
-    'tls_verification_disabled': False, 'cases': results}
+    'tls_verification_disabled': False, 'coordinator': args.coordinator, 'cases': results}
 if args.output:
     args.output.resolve().write_text(json.dumps(summary, indent=2))
 temporary.cleanup()

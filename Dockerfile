@@ -23,7 +23,7 @@ RUN npm ci --omit=dev
 COPY --from=build /app/dist/ ./dist/
 COPY licenses/ ./licenses/
 
-# The relay never starts a CLI or executes caller tools.
+# Model request transport never starts a CLI or executes caller tools.
 RUN mkdir -p /app/data && chown -R node:node /app/data
 USER node
 
@@ -34,12 +34,13 @@ VOLUME /app/data
 
 CMD ["node", "dist/server.js"]
 
-# Optional official CLI for interactive login only; never used for inference.
+# Optional official CLI for login and scheduled token refresh; never inference.
 FROM runtime AS cli-auth
 USER root
 ARG CLAUDE_CODE_VERSION=2.1.318
 RUN npm install --global @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} \
     && claude --version \
+    && command -v flock >/dev/null \
     && mkdir -p /home/node/.claude \
     && chown node:node /home/node/.claude \
     && chmod 700 /home/node/.claude

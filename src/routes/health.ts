@@ -32,7 +32,7 @@ router.get("/health", async (_req, res) => {
     token_configured: token.configured,
     token_source: token.source,
     ...("state" in token ? { token_state: token.state, token_expires_at: token.expires_at,
-      automatic_token_refresh: token.automatic_refresh } : {}),
+      automatic_token_refresh: token.automatic_refresh, auth_refresh: token.refresh } : {}),
     ollama_status: ollamaStatus,
   });
 });

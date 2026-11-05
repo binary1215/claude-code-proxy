@@ -5,7 +5,7 @@ import { once } from "node:events";
 import type { Request, Response } from "express";
 import { ANTHROPIC_BASE_URL, UPSTREAM_TIMEOUT_MS, RESPONSES_ENABLED, RESPONSES_STATE_KEY,
   RESPONSES_STATE_TTL_SECONDS, RESPONSES_MAX_OUTPUT_TOKENS, RESPONSES_THINKING_BUDGET_TOKENS, RESPONSES_APPLY_PATCH_MODE, RESPONSES_DEVELOPER_MESSAGE_MODE } from "../config.js";
-import { getUpstreamCredential, missingCredentialMessage } from "./settingsService.js";
+import { resolveUpstreamCredential, missingCredentialMessage } from "./settingsService.js";
 import { upstreamHeaders, upstreamUrl } from "./nativeRelay.js";
 import { ResponsesStateCodec, upstreamStateScope } from "./responsesState.js";
 import { prepareResponsesRequest } from "./responsesRequest.js";
@@ -27,8 +27,9 @@ function sendError(res: Response, status: number, code: string, message: string)
 }
 
 /** One direct native provider request; no SDK, tool execution, retry or model fallback. */
-export function relayResponses(req: Request, res: Response): void {
-  const credential = getUpstreamCredential();
+export async function relayResponses(req: Request, res: Response): Promise<void> {
+  const credential = await resolveUpstreamCredential(() => res.destroyed);
+  if (res.destroyed) return;
   if (!codec || !credential || /[^\x21-\x7e]/.test(credential.token)) {
     sendError(res, 503, "upstream_not_configured", !codec ? "Responses state key is not configured." : missingCredentialMessage());
     return;

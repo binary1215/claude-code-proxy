@@ -9,6 +9,10 @@ export const UPSTREAM_AUTH_SOURCE = process.env.UPSTREAM_AUTH_SOURCE || "configu
 if (UPSTREAM_AUTH_SOURCE !== "configured" && UPSTREAM_AUTH_SOURCE !== "claude_cli") {
   throw new Error("UPSTREAM_AUTH_SOURCE must be configured or claude_cli");
 }
+export const CLAUDE_AUTH_AUTO_REFRESH = process.env.CLAUDE_AUTH_AUTO_REFRESH === "true";
+if (CLAUDE_AUTH_AUTO_REFRESH && UPSTREAM_AUTH_SOURCE !== "claude_cli") {
+  throw new Error("CLAUDE_AUTH_AUTO_REFRESH requires UPSTREAM_AUTH_SOURCE=claude_cli");
+}
 export const ANTHROPIC_BASE_URL = process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com";
 export const UPSTREAM_TIMEOUT_MS = Number(process.env.UPSTREAM_TIMEOUT_MS || 300_000);
 if (!Number.isSafeInteger(UPSTREAM_TIMEOUT_MS) || UPSTREAM_TIMEOUT_MS <= 0 || UPSTREAM_TIMEOUT_MS > 2_147_483_647) {

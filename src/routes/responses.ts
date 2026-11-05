@@ -8,6 +8,6 @@ router.post("/responses", (req, res) => {
     res.status(404).json({ error: { type: "invalid_request_error", code: "responses_disabled", message: "The Responses adapter is not enabled on this relay." } });
     return;
   }
-  relayResponses(req, res);
+  return relayResponses(req, res);
 });
 export default router;

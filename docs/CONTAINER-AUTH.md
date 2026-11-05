@@ -1,9 +1,10 @@
 # Container login with the official CLI
 
 The optional `cli-auth` image target includes pinned, unmodified Claude Code
-2.1.318 for **operator-initiated authentication only**. All Messages and Responses
-requests still use this project's native HTTP relay. Neither a model request nor
-a status probe starts the CLI. LiteLLM requires no source/configuration changes.
+2.1.318 for **authentication only**. All Messages and Responses
+requests still use this project's native HTTP relay. Model requests never start
+the CLI. The optional background worker invokes its auth command independently.
+LiteLLM requires no source/configuration changes.
 
 ## Build and persist login
 
@@ -84,29 +85,54 @@ the upstream accepts the account/model/client. Missing/expired credentials give
 HTTP 503 with login instructions before contacting upstream. Actual upstream
 401/400/429 responses are not masked or retried with another account.
 
-**Automatic refresh is not implemented.** A saved refresh token's presence is
-reported as `refresh_available`, but the relay does not use undocumented refresh
-endpoints or generate dummy model calls. If the official CLI updates the file,
-the new token is picked up. For unattended operation, check `expires_at` and
-renew with `claude-auth login` before expiry. Logout:
+Enable **`CLAUDE_AUTH_AUTO_REFRESH=true`** with `UPSTREAM_AUTH_SOURCE=claude_cli`
+to start the background refresh worker. It checks on startup and every minute,
+invoking official `claude auth status --json` within three minutes of access-token
+expiry. The CLI owns the refresh HTTP exchange and credential persistence; the
+proxy submits no dummy model calls and implements no private OAuth endpoint.
+The normal image/configured-source mode remains unchanged and refresh is opt-in.
+
+The worker checks that credentials actually changed and expiry advanced; CLI
+exit code 0 alone is insufficient. Temporary expired-token refresh failures use
+bounded backoff (30–300 seconds, attempted on minute ticks). A revoked login or
+missing refresh token requires `claude-auth login`. Missing/invalid credentials
+never trigger another account or paid API-key fallback. Check the safe `refresh`
+object in `claude-auth status` or admin token status, or `auth_refresh` in health.
+
+`claude-auth refresh` runs the same check manually. A Linux `flock` in the auth
+volume serializes refresh with helper login/logout across processes. Refresh
+skips a busy lock (exit 75), while interactive login/logout waits up to 120 seconds.
+The official command has a 60-second worker deadline. New model requests wait
+for an ongoing refresh to finish (bounded to 75 seconds); no tools or models are
+executed by this authentication work. Use the helper for lifecycle commands so
+they participate in the same lock. Logout:
 
 ```sh
 docker exec han-claudemock claude-auth logout
 ```
 
-Subsequent [isolated refresh verification](../integration/auth/README.md) found
+The [isolated refresh verification](../integration/auth/README.md) found
 that official `claude auth status` in 2.1.318 can refresh near-expiry/expired
 credentials without a model request. The hyphenated `claude-auth status` helper
-above remains file-only. A production scheduler is still absent, and Linux/live
-refresh qualification remains outstanding. Exit code 0 alone is insufficient:
+above remains file-only. Linux fixture and real account refresh validation also
+passed on 2026-11-05. Exit code 0 alone is insufficient:
 the CLI also returned 0 after a synthetic refresh HTTP 503 with no token renewal.
 
 The next request sees logout immediately; deleting only a DB token does not log
-the CLI out. Responses encrypted reasoning state retains its existing binding
-to the exact upstream token. **A token change invalidates previous capsules**
-(409); start a fresh Responses conversation after re-login/rotation. Native
-Messages transport remains unchanged. Account-stable reasoning binding would
-be separate work; this change does not weaken the existing credential binding.
+the CLI out. With auto-refresh enabled, a persistent random login-session binding
+and verified account/organization identity keep Responses thinking capsules
+valid across **coordinator-observed same-account refresh**. Only digests and the
+random binding are stored in `.proxy-auth-session.json`; no extra token copies
+are made. Keep this metadata in the same persistent auth volume.
+
+Start a fresh Responses conversation when enabling/disabling auto-refresh,
+explicitly logging in/out, changing accounts, or replacing credentials outside
+the coordinator. Configured-source credentials keep their existing token binding.
+If a worker/container crashes after the CLI saves tokens but before committing
+session metadata, the next check creates a new binding: auth can recover but old
+capsules require a fresh conversation. No thinking is silently removed. Native
+Messages transport remains unchanged. Requests already in flight retain their
+originally selected credential.
 
 ## Scope and references
 

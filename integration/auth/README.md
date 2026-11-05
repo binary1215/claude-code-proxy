@@ -16,7 +16,10 @@ python integration/auth/probe_cli_refresh.py --cli /path/to/claude --output /tmp
 
 The test asserts fresh, near-expiry, expired, revoked-refresh and transient-error
 behavior. It records paths and boolean observations, never a real credential.
-Its `--output` file is safe evidence. No production refresh scheduler is installed.
+Its `--output` file is safe evidence. `--coordinator` instead probes a wrapper
+running `claude-auth refresh`, checking session continuity, terminal/backoff
+suppression, and cross-process lock exclusion on Linux. The wrapper's `--version`
+must still report the pinned official CLI version.
 
 ## Observed on 2026-11-05
 
@@ -41,24 +44,25 @@ a status command, and the executable advertises no standalone `auth refresh`.
 The HTTP 503 result is why a scheduler must check the stored expiry/readiness
 after the command, not trust exit code 0 or `loggedIn` alone.
 
-Linux/Han and a real provider refresh have **not** been qualified by this run:
-the server's available memory fell to roughly 200 MiB and SSH attempts timed
-out during banner exchange. No forced expiration or refresh of the live account
-was performed. Windows fixture success must not be reported as Linux/live success.
+The initial Linux run was delayed by server resource pressure and SSH timeouts.
+After access recovered, the same five cases passed inside the exact Linux image.
+A separately authorized live check then moved only local expiry metadata to
+90 seconds ahead and ran official CLI auth status: access and refresh tokens
+changed, expiry advanced, and account identity was unchanged. No model prompt
+was submitted, and old tokens were never restored. These are separate results
+from the Windows fixture run.
 
 ## Consequence for the proposed implementation
 
-There is a promising CLI-owned refresh path that keeps model requests in the
+The implemented CLI-owned refresh path keeps model requests in the
 native relay: invoke the pinned official `claude auth status` near expiry,
 serialize it with login/logout, then reread the credentials and verify a usable
 expiry. Treat temporary network/provider failures separately from revoked login.
 The existing **`claude-auth status` helper only reads the file** and does not run
 that official command; the hyphenated helper is not the refresh trigger.
 
-Before enabling this in Han, repeat this probe on Linux and verify one real
-refresh with safe persistence. Existing Responses capsules bind to the exact
-upstream token, so account-preserving refresh continuity remains separate work.
-This investigation changes neither that binding nor the production relay.
+The opt-in scheduler and login-session continuity now implement this behavior;
+see [container auth](../../docs/CONTAINER-AUTH.md) for lifecycle and crash limits.
 
 References: [official CLI reference](https://code.claude.com/docs/en/cli-reference),
 [official authentication guidance](https://code.claude.com/docs/en/authentication).

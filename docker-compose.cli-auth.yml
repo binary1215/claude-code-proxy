@@ -8,6 +8,7 @@ services:
       - UPSTREAM_AUTH_SOURCE=claude_cli
       - CLAUDE_CONFIG_DIR=/home/node/.claude
       - CLAUDE_AUTH_EMAIL=${CLAUDE_AUTH_EMAIL:-}
+      - CLAUDE_AUTH_AUTO_REFRESH=${CLAUDE_AUTH_AUTO_REFRESH:-false}
     volumes:
       - claude-auth:/home/node/.claude
 

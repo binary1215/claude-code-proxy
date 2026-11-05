@@ -1,6 +1,7 @@
 import { closeSync, fstatSync, openSync, readSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { credentialStateBinding } from "./claudeCliSession.js";
 
 export type CliAuthState = "login_required" | "ready" | "expired" | "invalid" | "unreadable";
 export interface CliAuthStatus {
@@ -10,17 +11,18 @@ export interface CliAuthStatus {
   state: CliAuthState;
   expires_at: string | null;
   refresh_available: boolean;
-  automatic_refresh: false;
+  automatic_refresh: boolean;
 }
 
 /** Local file readiness only; this does not validate account access with Anthropic. */
 export function readClaudeCliCredentials(
   configDir = process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude"),
   now = Date.now(),
-): { credential: { token: string; kind: "oauth" } | null; status: CliAuthStatus } {
+): { credential: { token: string; kind: "oauth"; stateIdentity?: string } | null; status: CliAuthStatus } {
   const status: CliAuthStatus = { configured: false, source: "claude_cli", preview: null,
-    state: "login_required", expires_at: null, refresh_available: false, automatic_refresh: false };
-  const result = { credential: null as { token: string; kind: "oauth" } | null, status };
+    state: "login_required", expires_at: null, refresh_available: false,
+    automatic_refresh: process.env.CLAUDE_AUTH_AUTO_REFRESH === "true" };
+  const result = { credential: null as { token: string; kind: "oauth"; stateIdentity?: string } | null, status };
   let fd: number | undefined;
   try {
     fd = openSync(join(configDir, ".credentials.json"), "r");
@@ -53,7 +55,8 @@ export function readClaudeCliCredentials(
     if (expiresAt <= now) { status.state = "expired"; return result; }
     status.state = "ready";
     status.configured = true;
-    result.credential = { token: accessToken, kind: "oauth" };
+    const stateIdentity = status.automatic_refresh ? credentialStateBinding(configDir, accessToken) : undefined;
+    result.credential = { token: accessToken, kind: "oauth", ...(stateIdentity ? { stateIdentity } : {}) };
     return result;
   } catch (error) {
     status.state = (error as NodeJS.ErrnoException).code === "ENOENT" ? "login_required" : "unreadable";

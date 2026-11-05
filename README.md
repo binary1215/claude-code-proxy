@@ -69,8 +69,10 @@ adapter. Set `CLAUDE_AUTH_EMAIL` to prefill the login email, then run
 `docker exec -it <container> claude-auth login`; open the displayed URL and enter
 the browser's login code in that same terminal. Actual inference remains the
 native HTTP relay. See [container login, expiry and logout](docs/CONTAINER-AUTH.md).
-Automatic token refresh is not implemented; a changed token also changes the
-existing Responses reasoning-state binding, requiring a fresh conversation.
+Set `CLAUDE_AUTH_AUTO_REFRESH=true` in CLI-auth mode to enable serialized,
+official-CLI refresh near expiry. Coordinated same-account refresh preserves
+Responses reasoning continuity; explicit login/logout or an uncoordinated token
+change starts a new binding. See the container guide for activation and limits.
 
 `claude setup-token` output can still be provided through a private container environment file in configured mode. **Accepting credentials does not establish that Anthropic will accept them for every model/client on this native HTTP path.** Earlier isolated tests observed differences between minimal requests and official Claude Code requests; see [verification and limitations](docs/VERIFICATION.md). Login inside a container does not change the subscription usage boundary. Rejections remain visible; there is no automatic paid-key fallback or Claude Code caller impersonation.
 

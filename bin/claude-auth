@@ -3,8 +3,8 @@ set -eu
 
 # Interactive operator command only. The HTTP server never starts this helper.
 case "${1:-status}" in
-  login|logout|status) action=${1:-status} ;;
-  *) echo 'Usage: claude-auth [login|status|logout]' >&2; exit 2 ;;
+  login|logout|status|refresh) action=${1:-status} ;;
+  *) echo 'Usage: claude-auth [login|status|logout|refresh]' >&2; exit 2 ;;
 esac
 if [ "$#" -gt 1 ]; then
   echo 'Use CLAUDE_AUTH_EMAIL for the optional login email.' >&2
@@ -25,7 +25,7 @@ unset CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY
 unset CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR
 export DISABLE_AUTOUPDATER=1
 export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
-if [ "$action" = login ] && [ -n "${CLAUDE_AUTH_EMAIL:-}" ]; then
-  exec claude auth login --email "$CLAUDE_AUTH_EMAIL"
+if [ "$action" = refresh ]; then
+  exec flock -n -E 75 "$CLAUDE_CONFIG_DIR/.proxy-auth.lock" node /app/dist/authCommand.js refresh
 fi
-exec claude auth "$action"
+exec flock -w 120 -E 75 "$CLAUDE_CONFIG_DIR/.proxy-auth.lock" node /app/dist/authCommand.js "$action"

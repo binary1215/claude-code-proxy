@@ -2,8 +2,12 @@ import { PORT, RESPONSES_ENABLED } from "./config.js";
 // Importing connection module triggers DB init + migrations
 import "./db/connection.js";
 import { app } from "./app.js";
+import { startAuthRefreshScheduler } from "./services/authRefreshScheduler.js";
 
-app.listen(PORT, () => {
+const stopAuthRefresh = startAuthRefreshScheduler();
+process.once("exit", stopAuthRefresh);
+
+const server = app.listen(PORT, () => {
   console.log(`Native Anthropic relay running on port ${PORT}`);
   console.log(`  POST http://localhost:${PORT}/v1/messages`);
   console.log(`  POST http://localhost:${PORT}/v1/messages/count_tokens`);
@@ -11,4 +15,9 @@ app.listen(PORT, () => {
   if (RESPONSES_ENABLED) console.log(`  POST http://localhost:${PORT}/v1/responses (stateless adapter)`);
   console.log(`  GET  http://localhost:${PORT}/health`);
   console.log(`  Admin API at http://localhost:${PORT}/api/admin/*`);
+});
+for (const signal of ["SIGTERM", "SIGINT"] as const) process.once(signal, () => {
+  stopAuthRefresh();
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 3000).unref();
 });

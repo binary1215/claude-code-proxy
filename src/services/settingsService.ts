@@ -1,6 +1,9 @@
 import { db } from "../db/connection.js";
-import { UPSTREAM_AUTH_SOURCE } from "../config.js";
+import { UPSTREAM_AUTH_SOURCE, CLAUDE_AUTH_AUTO_REFRESH } from "../config.js";
 import { readClaudeCliCredentials, type CliAuthStatus } from "./claudeCliCredentials.js";
+import { publicRefreshStatus, readRefreshRecord } from "./authRefreshStatus.js";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 // In-memory credential cache, invalidated by the admin API.
 let cachedToken: string | null = null;
@@ -44,7 +47,7 @@ export function getOAuthToken(): string | null {
   return cachedToken || process.env.CLAUDE_CODE_OAUTH_TOKEN || process.env.ANTHROPIC_API_KEY || null;
 }
 
-export function getUpstreamCredential(): { token: string; kind: "oauth" | "api_key" } | null {
+export function getUpstreamCredential(): { token: string; kind: "oauth" | "api_key"; stateIdentity?: string } | null {
   if (UPSTREAM_AUTH_SOURCE === "claude_cli") return readClaudeCliCredentials().credential;
   const token = getOAuthToken();
   if (!token) return null;
@@ -53,11 +56,27 @@ export function getUpstreamCredential(): { token: string; kind: "oauth" | "api_k
   return { token, kind: oauth ? "oauth" : "api_key" };
 }
 
+/** Avoid a transient Responses 409 between CLI credential save and session commit. */
+export async function resolveUpstreamCredential(cancelled: () => boolean = () => false) {
+  let credential = getUpstreamCredential();
+  if (!CLAUDE_AUTH_AUTO_REFRESH) return credential;
+  const dir = process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude");
+  const deadline = Date.now() + 75_000;
+  while (!cancelled()) {
+    const refresh = readRefreshRecord(dir);
+    if (refresh?.state !== "refreshing" || Date.now() - Date.parse(refresh.checked_at) >= 75_000 || Date.now() >= deadline) break;
+    await new Promise(resolve => setTimeout(resolve, 50));
+    credential = getUpstreamCredential();
+  }
+  return getUpstreamCredential();
+}
+
 /**
  * Get token status info for admin display (never expose the full token).
  */
-export function getTokenStatus(): { configured: boolean; source: string; preview: string | null } | CliAuthStatus {
-  if (UPSTREAM_AUTH_SOURCE === "claude_cli") return readClaudeCliCredentials().status;
+export function getTokenStatus(): { configured: boolean; source: string; preview: string | null } | (CliAuthStatus & { refresh: object | null }) {
+  if (UPSTREAM_AUTH_SOURCE === "claude_cli") return { ...readClaudeCliCredentials().status,
+    refresh: publicRefreshStatus(process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude")) };
   const preview = (token: string) => token.length >= 24 ? token.slice(0, 8) + "..." + token.slice(-4) : "[configured]";
   const dbToken = getSetting("claude_oauth_token");
   if (dbToken) {

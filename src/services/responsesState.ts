@@ -15,8 +15,8 @@ function validateItemId(value: unknown): asserts value is string {
 }
 
 /** Secrets are used only in a local binding digest; never placed in a capsule. */
-export function upstreamStateScope(base: string, credential: { token: string; kind: string }): string {
-  return createHash("sha256").update(JSON.stringify([base, credential.kind, credential.token])).digest("hex");
+export function upstreamStateScope(base: string, credential: { token: string; kind: string; stateIdentity?: string }): string {
+  return createHash("sha256").update(JSON.stringify([base, credential.kind, credential.stateIdentity ?? credential.token])).digest("hex");
 }
 
 function validateBlock(block: unknown): asserts block is JsonObject {

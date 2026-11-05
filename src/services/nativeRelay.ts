@@ -3,7 +3,7 @@ import https from "node:https";
 import { randomUUID } from "node:crypto";
 import type { Request, Response } from "express";
 import { ANTHROPIC_BASE_URL, UPSTREAM_TIMEOUT_MS } from "../config.js";
-import { getUpstreamCredential, missingCredentialMessage } from "./settingsService.js";
+import { resolveUpstreamCredential, missingCredentialMessage } from "./settingsService.js";
 import { insertPendingRequest, completeRequest } from "./historyService.js";
 import { registerTask, unregisterTask } from "./taskTracker.js";
 import { recordTokensForRateLimit } from "../middleware/rateLimiter.js";
@@ -48,8 +48,9 @@ export function upstreamHeaders(req: Request, credential: { token: string; kind:
   return headers;
 }
 
-export function relayNative(req: Request, res: Response, endpoint: string): void {
-  const credential = getUpstreamCredential();
+export async function relayNative(req: Request, res: Response, endpoint: string): Promise<void> {
+  const credential = await resolveUpstreamCredential(() => res.destroyed);
+  if (res.destroyed) return;
   if (!credential || /[^\x21-\x7e]/.test(credential.token)) {
     res.status(503).json({ type: "error", error: { type: "api_error", message: missingCredentialMessage() } });
     return;

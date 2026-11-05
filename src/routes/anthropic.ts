@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { relayNative } from "../services/nativeRelay.js";
 
 const router = Router();
-function messages(req: Request, res: Response, countTokens: boolean): void {
+async function messages(req: Request, res: Response, countTokens: boolean): Promise<void> {
   const body = req.body;
   if (!req.rawBody || !body || typeof body.model !== "string" || !body.model.trim() ||
       !Array.isArray(body.messages) || (!countTokens && (!Number.isInteger(body.max_tokens) || body.max_tokens <= 0)) ||
@@ -15,7 +15,7 @@ function messages(req: Request, res: Response, countTokens: boolean): void {
     res.status(403).json({ type: "error", error: { type: "permission_error", message: "Model is not permitted for this key." } });
     return;
   }
-  relayNative(req, res, countTokens ? "/messages/count_tokens" : "/messages");
+  return relayNative(req, res, countTokens ? "/messages/count_tokens" : "/messages");
 }
 router.post("/messages", (req, res) => messages(req, res, false));
 router.post("/messages/count_tokens", (req, res) => messages(req, res, true));
