@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "model": "claude-haiku-4-5-20251001",
+  "context_window": null,
+  "context_evidence": null,
+  "qualification": {
+    "shell": "unverified",
+    "apply_patch": "unverified",
+    "thinking_replay": "observed",
+    "evidence": ["docs/evidence/20261023-ccpr2-live.json (bounded thinking replay only; not ordinary shell/editing or context-limit proof)"]
+  }
+}

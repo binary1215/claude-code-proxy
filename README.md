@@ -10,7 +10,32 @@ Codex / Responses     -> stock LiteLLM pass-through -> opt-in /v1/responses
 
 No automatic SDK fallback, tool execution, invented thinking, conversation storage, or provider/account failover is included. The caller owns conversation history and executes its client tools. Upstream-native server-tool definitions are forwarded on the native route; they are not executed on the proxy host. The new [Responses adapter](docs/RESPONSES-ADAPTER.md) is disabled by default and supports a deliberately bounded client-tool subset.
 
-## Latest verified update — 2026-11-05
+## Latest integrated improvements — 2026-11-06
+
+- Usage statistics now aggregate fresh input, cache writes, cache reads and
+  output by period/model. Complete totals, known subtotals and missing usage
+  remain distinct; the dashboard shows cache-inclusive totals and coverage.
+  This does not repair LiteLLM spend/budget accounting or estimate an invoice.
+- An [opt-in profile generator](integration/clients/profiles/README.md#generate-an-isolated-ordinary-coding-profile)
+  supplies a native-model catalog and isolated launch configuration without
+  modifying either client. Unknown context limits remain explicitly unverified.
+- Actual Claude Code completes a seven-request **Read → failing shell test →
+  edit two files → passing test** loop against a local scripted provider, with
+  exact thinking/signature replay. The earlier Codex shell+patch+follow-up chain
+  preserved state over seven requests, but actual execution was denied by this Windows
+  client's read-only policy: it is **not** a successful coding-task result.
+
+These source and test features are integrated with container authentication and
+automatic refresh. The workflow evidence below uses a scripted provider;
+automatic compaction and ordinary live-provider coding remain open. The combined
+source passes **189/189 Linux backend tests** and **112/112 pure client tests**;
+the admin typecheck, production build and three dashboard SSR scenarios pass.
+Actual Codex catalog parsing and the Claude coding loop were rerun successfully;
+Codex shell/edit execution remains unqualified in this Windows environment.
+See [acceptance and remaining work](docs/ACCEPTANCE.md) and
+[integration evidence](docs/evidence/20261106-master-integration.json).
+
+## Latest verified authentication update — 2026-11-05
 
 Container login and automatic refresh are implemented and deployed on the
 isolated Han service, using unmodified official Claude Code **2.1.318** for

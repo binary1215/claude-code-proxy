@@ -1,0 +1,188 @@
+{
+  "observed_date_kst": "2026-11-06",
+  "scope": "Merge coding-workflow-usage into master with CLI-auth implementation; isolated feature/regression verification",
+  "master_before_merge": "6d525cd2285cce581a865db8ed4c7190fc0c272a",
+  "feature_branch_head": "b7ad29903282156e6ad28c28a1bbb856672b59fb",
+  "backend": {
+    "typescript_build": "pass",
+    "windows": {
+      "tests": 189,
+      "pass": 188,
+      "fail": 0,
+      "skipped": 1
+    },
+    "linux": {
+      "tests": 189,
+      "pass": 189,
+      "fail": 0,
+      "skipped": 0
+    },
+    "linux_test_image": "sha256:70b5c88efb4abbe9347dac1e0126fd375dfa522a5491466fed18686d36dcfa5c",
+    "linux_test_source_tree": "19e58278e0e28f2c5d8b19cfe482105dea611a39",
+    "linux_network": "none",
+    "existing_auth_data_volumes_mounted": false,
+    "later_source_changes": "Documentation and trailing test-file whitespace only"
+  },
+  "admin": {
+    "observed_date_kst": "2026-11-06",
+    "scope": "Integrated usage aggregation API and actual admin dashboard component verification",
+    "source_worktree": "claude-code-proxy-han-auth",
+    "typecheck": {
+      "command": "node admin/node_modules/typescript/bin/tsc --noEmit --incremental false -p admin/tsconfig.json",
+      "exit_code": 0,
+      "passed": true
+    },
+    "production_build": {
+      "working_directory": "admin",
+      "command": "node node_modules/next/dist/bin/next build --webpack",
+      "next_version": "16.2.3",
+      "exit_code": 0,
+      "passed": true,
+      "warnings": [
+        "Multiple lockfiles: output tracing root inferred as backend project root"
+      ],
+      "environment": {
+        "NEXT_TELEMETRY_DISABLED": "1"
+      }
+    },
+    "dashboard_ssr": {
+      "command": "node -",
+      "actual_component_rendered": true,
+      "exit_code": 0,
+      "cases": [
+        {
+          "name": "complete_counts_and_model_table",
+          "passed": true
+        },
+        {
+          "name": "partial_counts_not_presented_as_complete_or_free",
+          "passed": true
+        },
+        {
+          "name": "empty_day_unknown_totals_and_no_phantom_model_rows",
+          "passed": true
+        }
+      ],
+      "stdin_driver": "Inline JS transpiles the actual dashboard component with synthetic fetchStats/fetchTasks, renders via react-dom/server, and asserts three user-visible outcomes"
+    },
+    "review": {
+      "material_defects_found": 0,
+      "ttl_specific_cache_writes_not_double_counted": true,
+      "missing_and_zero_counters_distinct": true,
+      "terminal_and_partial_observations_distinct": true,
+      "date_filters_shared_by_overall_model_and_status_aggregates": true
+    },
+    "real_provider_calls": 0,
+    "verification_api_network_calls": 0,
+    "source_files_modified_by_worker": [],
+    "limitations": [
+      "No browser visual QA",
+      "Synthetic dashboard API values; backend full suite is owned by parent",
+      "Production build may retrieve public Google font assets; zero-egress isolation is not claimed"
+    ],
+    "dependency_setup": "Ignored admin/node_modules junction reuses existing sibling worktree dependencies; generated .next and next-env.d.ts remain ignored"
+  },
+  "clients": {
+    "date_kst": "2026-11-06",
+    "scope": "merged source, actual pinned clients and synthetic providers only",
+    "real_provider_calls": 0,
+    "pure_client_tests": {
+      "passed": 112,
+      "failed": 0
+    },
+    "profile_generation": {
+      "actual_generation_passed": true,
+      "pinned_stock_prompt_hash_verified": true,
+      "normal_client_configuration_modified": false
+    },
+    "codex_catalog": {
+      "version": "codex-cli 0.160.0",
+      "passed": true,
+      "listed_models": [
+        "claude-haiku-4-5-20251001"
+      ],
+      "inference_calls": 0,
+      "tool_execution_attempted": false
+    },
+    "claude_coding_workflow": {
+      "claude_version": "2.1.289 (Claude Code)",
+      "exit_code": 0,
+      "final_exact": true,
+      "files_exact": true,
+      "independent_test_pass": true,
+      "upstream_requests": 7,
+      "gateway_requests": 7,
+      "result_checks": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "replay_checks": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "non_text_replay_checks": [
+        true,
+        true,
+        true,
+        false,
+        false,
+        false
+      ],
+      "reasoning_checks": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "native_messages_exact": true,
+      "synthetic_upstream_auth": true,
+      "credential_leak": false,
+      "http_statuses": [
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "source_unchanged": true,
+      "pass": true
+    },
+    "guarded_stock_litellm_files": 13,
+    "official_claude_binary": {
+      "package": "@anthropic-ai/claude-code-win32-x64",
+      "version": "2.1.289",
+      "npm_integrity_verified": true,
+      "sha256": "bcc6d9117aec30ad9414490302a25414359c871f5647e32e49b055c92bf84e0b"
+    },
+    "not_tested": [
+      "Actual Codex combined shell/apply_patch execution: earlier Windows policy denial not retried or bypassed",
+      "Real provider/model coding behavior",
+      "Production deployment",
+      "Long-session automatic compaction or restart/resume"
+    ],
+    "litellm_version": "1.103.1",
+    "prisma_version": "0.11.0",
+    "client_or_litellm_sources_modified": false
+  },
+  "real_provider_calls": 0,
+  "running_services_replaced": false,
+  "existing_han_image_unchanged_and_healthy": true,
+  "limitations": [
+    "No browser visual QA",
+    "Actual Codex shell/edit effects remain unqualified because prior local policy denied them",
+    "No real-provider coding, billing or quality validation",
+    "No new long-session automatic compaction or restart/resume qualification"
+  ]
+}

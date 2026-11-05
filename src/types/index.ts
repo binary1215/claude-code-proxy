@@ -103,15 +103,39 @@ export interface HistoryQuery {
   to?: string;
 }
 
+export interface TokenAggregate {
+  /** Final total only when every selected request reported terminal usage and this counter. */
+  total_tokens: number | null;
+  /** Sum of observed counters, including incomplete requests; never substitutes for a final total. */
+  known_tokens: number | null;
+  reported_requests: number;
+  unknown_requests: number;
+}
+
+export interface UsageAggregate {
+  complete_requests: number;
+  partial_requests: number;
+  unknown_requests: number;
+  terminal_usage_requests: number;
+  fresh_input: TokenAggregate;
+  cache_write: TokenAggregate;
+  cache_read: TokenAggregate;
+  output: TokenAggregate;
+  total_input: TokenAggregate;
+  total_tokens: TokenAggregate;
+}
+
 export interface HistoryStats {
   total_requests: number;
   total_cost_usd: number | null;
   total_input_tokens: number | null;
   total_output_tokens: number | null;
+  usage: UsageAggregate;
   by_model: Array<{
     model: string;
     count: number;
     cost_usd: number | null;
+    usage: UsageAggregate;
   }>;
   by_status: Array<{
     status: string;

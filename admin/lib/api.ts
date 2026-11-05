@@ -68,12 +68,33 @@ export async function fetchTokenStatus() {
   return res.json();
 }
 
+export interface TokenAggregate {
+  total_tokens: number | null;
+  known_tokens: number | null;
+  reported_requests: number;
+  unknown_requests: number;
+}
+
+export interface UsageAggregate {
+  complete_requests: number;
+  partial_requests: number;
+  unknown_requests: number;
+  terminal_usage_requests: number;
+  fresh_input: TokenAggregate;
+  cache_write: TokenAggregate;
+  cache_read: TokenAggregate;
+  output: TokenAggregate;
+  total_input: TokenAggregate;
+  total_tokens: TokenAggregate;
+}
+
 export interface HistoryStats {
   total_requests: number;
   total_input_tokens: number | null;
   total_output_tokens: number | null;
   total_cost_usd: number | null;
-  by_model: { model: string; count: number; cost_usd: number | null }[];
+  usage: UsageAggregate;
+  by_model: { model: string; count: number; cost_usd: number | null; usage: UsageAggregate }[];
   by_status: { status: string; count: number }[];
 }
 

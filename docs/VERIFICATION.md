@@ -1,4 +1,94 @@
-# Native relay verification — updated 2026-10-23
+# Native relay verification — updated 2026-11-06
+
+## Master integration of coding workflows and usage aggregation (2026-11-06 KST)
+
+The current `master` authentication/refresh implementation and all five
+`codex/coding-workflow-usage` commits are combined. Only README's introductory
+status sections conflicted; both feature sets were retained. No code conflict
+or regression fix was needed.
+
+- Backend TypeScript build passed. The combined Windows suite passed **188**
+  tests with one Linux-only helper skipped. The Linux Docker image passed
+  **189/189**, with no skips. New aggregation cases cover cache-inclusive totals,
+  per-model/date filtering, observed zero versus unknown, incomplete terminal
+  usage, and unsafe legacy counters. Existing authentication/refresh regressions
+  are included in this combined run.
+- Admin TypeScript and the Next.js 16.2.3 production build passed. Three SSR
+  checks rendered the actual dashboard component with synthetic API data:
+  complete totals/model rows, partial usage with known subtotals and coverage,
+  and an empty day. No browser visual verification was performed.
+- All **112 pure client tests** passed in a fresh test-only environment with
+  pristine LiteLLM 1.103.1. The profile generator verified the pinned public
+  Codex prompt, and actual Codex 0.160.0 accepted the native Haiku catalog via
+  `model/list` without inference or tool execution.
+- Actual Claude Code 2.1.289 repeated the complete seven-request workflow against
+  the scripted provider: Read two files, failing Bash test, Edit both files,
+  passing Bash test. All HTTP responses were 200; exact final files, the unchanged
+  test, and an independent Node rerun passed. All six reasoning/replay/tool-result
+  checks passed, and client-sent native message arrays were preserved. As in the
+  earlier run, Claude adds `replace_all:false` to Edit inputs; that client-side
+  normalization is reported, not described as raw tool-input equality. Official
+  CLI npm archive integrity and executable version were verified. All thirteen
+  guarded LiteLLM source files were unchanged.
+- Codex combined shell/edit execution was not rerun through its previously
+  observed Windows policy denial. Its actual catalog check and pure tests pass;
+  ordinary functional coding is not claimed. No client permissions or source
+  were changed.
+- The tested Linux source tree is
+  `19e58278e0e28f2c5d8b19cfe482105dea611a39`, image
+  `sha256:70b5c88efb4abbe9347dac1e0126fd375dfa522a5491466fed18686d36dcfa5c`.
+  Tests ran with `--network=none`, test-only TypeScript and source mounts, and no
+  existing auth/data volume. Later integration edits affect documentation and
+  trailing test-file whitespace only.
+
+This update does not replace Han, test-claudemock or the shared LiteLLM gateway.
+The existing Han image/health were checked before and after the isolated tests.
+No real model requests or live authentication changes were part of this merge.
+The earlier actual-account login/refresh result is documented separately in
+[container authentication](CONTAINER-AUTH.md).
+The secret-free [integration receipt](evidence/20261106-master-integration.json)
+contains the combined counts and individual client/UI observations.
+
+## Ordinary coding profiles and cache aggregation (2026-10-24 KST)
+
+Source-only work on `codex/coding-workflow-usage`; no shared service, account,
+credential, client source or host permission was changed. Existing runtime
+deployed-image facts in the following section remain unchanged by this work.
+
+- Usage aggregation adds period/model counters and observation coverage, with
+  additive API fields and no migration. Seven new backend tests and one new
+  admin-formatting test bring the backend suite to **175/175**. The final pure
+  client/harness suite passes **112/112**. TypeScript and
+  the local Next production build pass. UI browser rendering and remote UI
+  deployment were not exercised.
+- The opt-in generator pins Codex 0.160.0's original fallback instructions and
+  native-model metadata; actual `model/list` accepts its catalog without
+  inference. Seven ordinary-profile requests contain `summary:auto` without
+  `effort:none`; the adapter retains its enabled 1024-token thinking budget.
+  Context remains unverified in the example, not borrowed from a GPT model.
+- Actual Claude Code 2.1.289 completes Read/Read/Bash-failure/Edit/Edit/Bash-pass
+  through stock LiteLLM and the built native relay to a scripted local provider.
+  Both repaired files and unchanged tests match exact bytes; independent Node
+  tests pass. All six signed/empty/redacted reasoning replays match. Claude adds
+  Edit's omitted `replace_all:false`, so raw tool-input equality is not claimed;
+  the native message arrays sent by the client and received upstream are equal.
+- Actual Codex 0.160.0 offers shell and freeform patch together and completes
+  seven protocol turns with exact opaque/native replay and no metadata fallback.
+  However, its Windows policy resolves the requested workspace-write sandbox to
+  **read-only**, denies shell/patch execution, and leaves the files unrepaired.
+  The harness correctly returns a failed functional result even though the
+  scripted model returns final markers. No denied action was retried by changing
+  permissions, clients, tools or execution policy.
+
+Both workflow chains use pristine LiteLLM 1.103.1 and synthetic credentials;
+thirteen guarded gateway source hashes stay unchanged. These are not live-provider
+quality, billing/cache reuse, automatic compaction, Linux execution, or deployed
+service proofs. Reports and the initial fixture-only failures remain in temporary
+evidence directories; the sanitized summary is committed in
+[20261024-coding-workflows.json](evidence/20261024-coding-workflows.json).
+Reproduction: [Claude Code](../integration/clients/README-claude-coding-workflow.md),
+[Codex](../integration/clients/README-coding-workflow.md), and
+[profile generator](../integration/clients/profiles/README.md).
 
 ## ccpr2 deployment and actual-client qualification (2026-10-23 KST)
 

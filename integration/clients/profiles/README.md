@@ -1,13 +1,16 @@
 # Client connection profiles
 
-These are opt-in **connection settings**, not copies of the synthetic test
-clients. No model catalog, replacement system prompt, User-Agent override,
-fixture-only tool restriction or sandbox/approval change is included. Nothing
-here installs or modifies a client or changes the shared LiteLLM server.
+The static snippets are opt-in **connection settings**, not copies of the
+synthetic test clients. They contain no model catalog, replacement system prompt,
+User-Agent override, fixture-only tool restriction or sandbox/approval change.
+The optional generator below adds an explicitly described native-model catalog
+and isolated launcher. Nothing here installs or modifies a client or changes the
+shared LiteLLM server.
 
 Use an unexpired **LiteLLM gateway key**, supplied privately as
 `CLAUDE_PROXY_GATEWAY_KEY`; do not give clients the proxy's internal API key or
-Anthropic credential. The earlier 24-hour test key is expired. Route permission
+Anthropic credential. Test keys are short-lived; verify the selected key's current
+expiry instead of assuming a key from an earlier run is still valid. Route permission
 must include the exact path selected below. A gateway key does not grant
 provider entitlement, and a passing local test does not remove an upstream
 subscription restriction.
@@ -53,6 +56,90 @@ The stronger manual-compaction and Linux file-edit qualifications use separate,
 explicitly limited catalogs. They do **not** establish every normal-profile tool
 or later Codex version. Keep those coverage boundaries when adopting this
 profile; a connection snippet is not whole-client certification.
+
+## Generate an isolated ordinary coding profile
+
+[generate_client_profiles.py](../generate_client_profiles.py) creates a **new**
+directory containing a Codex home/config/catalog, a Claude Code launcher, and
+qualification notes. It does not start a client, call a model, install a package,
+copy saved credentials, or overwrite an existing directory. Python 3.11+ is
+needed for the tests; the generated launcher uses only the standard library.
+
+Start with [metadata.example.json](metadata.example.json), copied to a private
+path if you want to supply additional evidence. Its native Haiku model ID matches
+the existing route. `context_window:null` deliberately means **unverified**; it
+is not a claimed unlimited context window or a copied GPT limit. Set a positive
+token limit only with a corresponding `context_evidence` reference for that exact
+model/provider. A null limit leaves context-based automatic compaction without a
+declared threshold: qualify a real limit before adopting long sessions.
+Capability statuses are records of evidence, not switches that hide tools. The
+example's shell/editing statuses remain unverified until the ordinary coding
+workflow is actually tested; its bounded thinking replay evidence is narrower.
+
+```powershell
+python integration/clients/generate_client_profiles.py `
+  --manifest integration/clients/profiles/metadata.example.json `
+  --output 'C:/private/claude-coding-profile' `
+  --download-stock-prompt
+```
+
+The parent of `--output` must exist; the output itself must not. The optional
+download fetches **only the pinned public Codex source prompt**, with no gateway
+credential. For offline generation, replace `--download-stock-prompt` with
+`--stock-prompt PATH` pointing to the exact source file; LF and CRLF checkouts are
+accepted. Responses/Messages URL overrides are available in `--help`, with the
+same path rules as the static snippets.
+
+The generated catalog targets Codex **0.160.0** at commit
+`a956835d020762cb2b570053af06f643a11c0ecc`, based on its
+[fallback descriptor](https://github.com/openai/codex/blob/a956835d020762cb2b570053af06f643a11c0ecc/codex-rs/models-manager/src/model_info.rs)
+and [model schema](https://github.com/openai/codex/blob/a956835d020762cb2b570053af06f643a11c0ecc/codex-rs/protocol/src/openai_models.rs).
+It retains the [stock generic instructions](https://github.com/openai/codex/blob/a956835d020762cb2b570053af06f643a11c0ecc/codex-rs/models-manager/prompt.md)
+verbatim, advertises ordinary `unified_exec` shell plus `freeform` apply_patch,
+uses the native Claude ID and `upgrade:null`, and does not borrow GPT context or
+reasoning metadata. The existing proxy `validated` patch/`hoist` prerequisites
+above still apply. No reasoning effort picker is advertised: the proxy owns its
+configured native thinking budget, and encrypted thinking replay remains in use.
+This first profile is text-only and does not advertise hosted search or image
+capabilities. See the official [catalog rollout guidance](https://learn.chatgpt.com/docs/enterprise/roll-out-a-gateway).
+
+Supply the gateway credential privately in `CLAUDE_PROXY_GATEWAY_KEY`, then
+explicitly launch from the workspace you want the client to operate in:
+
+```powershell
+python 'C:/private/claude-coding-profile/launch.py' codex
+python 'C:/private/claude-coding-profile/launch.py' claude
+# A non-PATH executable must be selected before the client positional argument:
+python 'C:/private/claude-coding-profile/launch.py' --executable 'C:/tools/codex.exe' codex
+# Client arguments follow --; they are the caller's deliberate overrides.
+python 'C:/private/claude-coding-profile/launch.py' claude -- --continue
+```
+
+The Codex child receives an isolated `CODEX_HOME`; your normal chats, MCP/plugin
+setup and preferences are not copied or modified. Its version is checked against
+the catalog. No sandbox or approval policy is set by the generated profile; use
+the client's ordinary controls for the workspace. The Claude child receives the
+native gateway base URL and bearer token, without persisting either credential.
+Inherited competing Anthropic API/OAuth credentials and alternate-cloud selector
+variables are removed **only from that child environment**; the parent shell is
+unchanged. Claude's managed/project settings still apply: verify `/status` before
+using the route. This is not client isolation from its managed/project policy.
+
+`qualification.json` records unknowns, metadata evidence and proxy prerequisites.
+Generation is not certification of reliable tools, automatic compaction, provider
+entitlement, or billed savings. Keep the generated directory private because a
+subsequently launched client may create its own conversation/session state there.
+
+Local verification on 2026-10-24: actual Codex 0.160.0 `model/list` parsed the
+generated catalog with the native ID, text modality and no migration. Although
+its picker reports the empty reasoning-effort list's default as `none`, all
+seven requests in the bounded offline workflow sent `reasoning:{summary:"auto"}`
+without `effort`; the native side retained `thinking:{type:"enabled",
+budget_tokens:1024}`. This confirms profile/wire behavior against the scripted
+loopback provider, not real-provider reasoning quality. The same run could not
+execute the file/shell workflow under the existing Windows read-only policy;
+catalog parsing and protocol passage must not be reported as successful coding
+task completion. No client permissions were changed to obtain these observations.
 
 ## OpenCode Responses
 

@@ -10,7 +10,52 @@ support-scope decisions. Do not silently replace the agreed model/account, resto
 the SDK/CLI proxy backend, spoof an official client, remove rejected thinking,
 or modify LiteLLM source/license flags.
 
-## Current functional status — 2026-10-23
+## Current source integration — 2026-11-06
+
+The coding-workflow/usage branch is integrated with the current `master`
+authentication and automatic-refresh implementation. The combined backend
+passes **189/189 tests in an isolated Linux Docker image**; Windows passes
+188 with only the Linux helper test skipped. The admin typecheck, Next.js
+production build and three actual dashboard-component SSR scenarios pass.
+The dashboard checks cover complete usage, partial/unknown usage and an empty
+period; they are not browser visual verification.
+
+All **112 pure client tests** pass. A newly generated native-model profile and
+the actual Codex 0.160.0 `model/list` check pass without inference or tool
+execution. Actual Claude Code 2.1.289 completes the scripted-provider coding
+loop over seven requests, repairing two files and passing the independent test;
+all six reasoning/tool-result checks pass. Codex combined editing was not rerun
+through the previously observed Windows policy denial and is not a functional
+pass. See the [integration receipt](evidence/20261106-master-integration.json).
+
+This is source integration and isolated testing, not a service rollout. The
+existing Han CLI-auth container remains on its previously verified image.
+Its real-account login/automatic refresh evidence is recorded separately in
+[container authentication](CONTAINER-AUTH.md) and the
+[refresh receipts](../integration/auth/README.md). The source tests use synthetic
+credentials and providers, so they do not establish new model entitlement,
+real-provider coding quality, long-session compaction or gateway billing.
+
+## Earlier local improvement status — 2026-10-24
+
+The current work adds cache-inclusive aggregation and reusable ordinary coding
+profiles, plus real-client multi-tool regression harnesses. These changes have
+**not** been redeployed, and this update made no real-provider requests.
+
+| Area | Local result | Remaining boundary |
+| --- | --- | --- |
+| Claude Code coding loop | Stock 2.1.289: Read two files, real Bash test failure, two real Edit operations, test success and independent Node rerun; seven requests, six exact reasoning replays | Scripted provider, not model planning/quality or live-provider coding; client adds Edit default `replace_all:false` |
+| Codex coding loop | Stock 0.160.0 with both shell and freeform patch: seven requests preserve opaque state, signed/empty/redacted thinking and tool identities; catalog accepted without metadata fallback | Actual Windows policy reports read-only and denies tools; transport pass is not functional coding success. No permission change or retry around that denial |
+| Reusable profiles | Native ID, pinned stock prompt, shell+patch catalog; actual Codex model/list parsing; no effort-to-thinking guessing | Unknown context is null, not a fabricated limit; no automatic-compaction qualification. User-managed/project settings and permission controls still apply |
+| Usage aggregation | Period/model fresh, cache-write, cache-read, output, cache-inclusive totals; complete/partial/unknown coverage; local dashboard build passes | API supports existing from/to filters; dashboard shows today UTC. No remote UI deployment or LiteLLM cost/budget repair |
+
+Next functional work is the combined Codex workflow in an already authorized,
+working writable client environment, followed by automatic compaction and resume
+under the ordinary profile. Do not weaken host permissions or discard reasoning
+to turn a failed qualification into a pass. Real-provider acceptance remains a
+separate bounded test. See [workflow evidence](evidence/20261024-coding-workflows.json).
+
+## Historical protocol deployment — 2026-10-23
 
 Core `4969a63` is deployed to **test-claudemock only**, image
 `sha256:6c26b0c39b672a0e56e502331a947d1a59f17f6e3f67b6d0b9356bf93dcd8104`.
