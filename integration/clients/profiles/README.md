@@ -65,6 +65,13 @@ qualification notes. It does not start a client, call a model, install a package
 copy saved credentials, or overwrite an existing directory. Python 3.11+ is
 needed for the tests; the generated launcher uses only the standard library.
 
+For newer models, optional manifests are available for
+[Fable 5.2](metadata.fable-5-2.example.json) and
+[Haiku 5.5](metadata.haiku-5-5.example.json). Their 1M context values are backed by
+the authenticated catalogue and official model documentation. They select the
+exact native ID and use the proxy's [model-aware thinking defaults](../../../docs/MODEL-COMPATIBILITY.md);
+they do not qualify automatic compaction, real-provider tools or model quality.
+
 Start with [metadata.example.json](metadata.example.json), copied to a private
 path if you want to supply additional evidence. Its native Haiku model ID matches
 the existing route. `context_window:null` deliberately means **unverified**; it
@@ -98,8 +105,9 @@ It retains the [stock generic instructions](https://github.com/openai/codex/blob
 verbatim, advertises ordinary `unified_exec` shell plus `freeform` apply_patch,
 uses the native Claude ID and `upgrade:null`, and does not borrow GPT context or
 reasoning metadata. The existing proxy `validated` patch/`hoist` prerequisites
-above still apply. No reasoning effort picker is advertised: the proxy owns its
-configured native thinking budget, and encrypted thinking replay remains in use.
+above still apply. No reasoning effort picker is advertised: the proxy uses
+model-specific thinking defaults (a budget only for manual-thinking models),
+and encrypted thinking replay remains in use.
 This first profile is text-only and does not advertise hosted search or image
 capabilities. See the official [catalog rollout guidance](https://learn.chatgpt.com/docs/enterprise/roll-out-a-gateway).
 

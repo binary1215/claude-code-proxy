@@ -198,7 +198,7 @@ def generate(manifest: dict, stock_prompt: str, output: Path, responses_url: str
             'manifest': manifest, 'codex_source_commit': CODEX_COMMIT,
             'stock_prompt_sha256': PROMPT_SHA256, 'stock_prompt_source': PROMPT_URL,
             'generated_not_certified': True,
-            'reasoning_policy': 'No effort mapping is advertised; the proxy owns its configured native thinking budget.',
+            'reasoning_policy': 'No client effort picker is advertised; the proxy uses model-specific thinking defaults, with a token budget only for manual-thinking models.',
             'context_warning': None if manifest['context_window'] is not None else
                 'Context limit is unverified. Automatic context-based compaction has no declared threshold; do not treat this as long-session qualification.',
             'proxy_prerequisites': ['RESPONSES_ENABLED=true', 'RESPONSES_APPLY_PATCH_MODE=validated',

@@ -10,7 +10,23 @@ Codex / Responses     -> stock LiteLLM pass-through -> opt-in /v1/responses
 
 No automatic SDK fallback, tool execution, invented thinking, conversation storage, or provider/account failover is included. The caller owns conversation history and executes its client tools. Upstream-native server-tool definitions are forwarded on the native route; they are not executed on the proxy host. The new [Responses adapter](docs/RESPONSES-ADAPTER.md) is disabled by default and supports a deliberately bounded client-tool subset.
 
-## Latest integrated improvements — 2026-11-06
+## Current model compatibility — 2026-11-11
+
+The dynamic upstream catalogue includes **Fable 5.2, Haiku 5.5, Sonnet 5.5 and
+Opus 5.5**. Native Messages preserves their IDs and options. The Responses
+adapter now selects adaptive thinking for verified modern models instead of
+injecting a legacy token budget, accepts their 128,000-token output limit, and
+maps supported effort labels directly to native effort. Thinking-off and forced
+tool choices follow each model's actual contract.
+
+See [model defaults, examples and migration limits](docs/MODEL-COMPATIBILITY.md).
+The registry describes request compatibility; account access still comes from
+the upstream catalogue and provider. Existing legacy/unknown model behavior and
+the authentication-only CLI remain available. Optional client manifests include
+[Fable 5.2](integration/clients/profiles/metadata.fable-5-2.example.json) and
+[Haiku 5.5](integration/clients/profiles/metadata.haiku-5-5.example.json).
+
+## Earlier integrated improvements — 2026-11-06
 
 - Usage statistics now aggregate fresh input, cache writes, cache reads and
   output by period/model. Complete totals, known subtotals and missing usage

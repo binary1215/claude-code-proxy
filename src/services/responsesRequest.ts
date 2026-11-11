@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
+import { claudeModelPolicy, type ClaudeModelPolicy } from "./claudeModelPolicy.js";
 import { patchInputDescription, recognizePatchGrammar, validPatchInput, type PatchGrammar } from "./responsesPatchGrammar.js";
 import { MAX_TOOL_CALL_ID_LENGTH, ResponsesError, type JsonObject, type PreparedResponsesRequest, type RequestTranslationOptions, type ToolBinding } from "./responsesTypes.js";
 
-const MAX_OUTPUT_TOKENS = 65_536;
+const LEGACY_MAX_OUTPUT_TOKENS = 65_536;
+const MAX_MANUAL_THINKING_BUDGET = 65_535;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const NAME = /^[A-Za-z0-9_-]+$/;
 const own = (value: JsonObject, key: string): boolean => Object.hasOwn(value, key);
@@ -105,7 +107,8 @@ function content(value: unknown, images: boolean): JsonObject[] {
   });
 }
 
-function thinkingPolicy(request: JsonObject, extension: JsonObject, options: RequestTranslationOptions, maxTokens: number): JsonObject | undefined {
+function thinkingPolicy(request: JsonObject, extension: JsonObject, options: RequestTranslationOptions, maxTokens: number,
+  policy: Readonly<ClaudeModelPolicy> | undefined): { thinking?: JsonObject; output?: JsonObject } {
   const reasoning = own(request, "reasoning") ? object(request.reasoning) : {};
   keys(reasoning, ["effort", "summary"]);
   if (own(reasoning, "summary") && !["auto", "concise", "detailed"].includes(reasoning.summary)) fail("unsupported_parameter");
@@ -114,32 +117,70 @@ function thinkingPolicy(request: JsonObject, extension: JsonObject, options: Req
   if (own(extension, "output_config")) {
     output = object(extension.output_config);
     keys(output, ["effort"]);
-    if (!own(output, "effort") || !["low", "medium", "high", "max"].includes(output.effort)) fail("unsupported_parameter");
+    if (!own(output, "effort") || !(policy?.effortLevels ?? ["low", "medium", "high", "max"]).includes(output.effort)) fail("unsupported_parameter", "The native effort level is not supported for this model.");
   }
   let thinking: JsonObject;
   if (own(extension, "thinking")) {
     thinking = object(extension.thinking);
+    if (policy && !policy.thinkingTypes.includes(thinking.type)) {
+      if (thinking.type === "disabled" && policy.thinkingTypes.includes("between_tools")) {
+        fail("unsupported_parameter", "This model cannot disable thinking. Use anthropic.thinking.type between_tools to disable up-front thinking at high effort or below.");
+      }
+      fail("unsupported_parameter", "This thinking mode is not supported for this model. Use anthropic.thinking.type adaptive and output_config.effort to control thinking.");
+    }
     if (thinking.type === "enabled") {
       keys(thinking, ["type", "budget_tokens"]);
-      integer(thinking.budget_tokens, 1024, maxTokens - 1);
-    } else if (["disabled", "adaptive"].includes(thinking.type)) {
+      integer(thinking.budget_tokens, 1024, Math.min(MAX_MANUAL_THINKING_BUDGET, maxTokens - 1));
+    } else if (thinking.type === "adaptive" && policy) {
+      keys(thinking, ["type", "display"]);
+      // These non-beta values are documented for adaptive thinking. Beta
+      // display/binding controls keep their explicit unsupported behavior.
+      if (own(thinking, "display") && !["summarized", "omitted"].includes(thinking.display)) fail("unsupported_parameter");
+    } else if (["disabled", "adaptive"].includes(thinking.type) || (thinking.type === "between_tools" && policy)) {
       keys(thinking, ["type"]);
     } else fail("unsupported_parameter");
+  } else if (policy && effort !== "none" && (policy.defaultThinking === "adaptive" || effort !== undefined)) {
+    thinking = { type: "adaptive" };
   } else {
-    const budget = integer(effort === "none" ? 0 : options.defaultThinkingBudget, 0, MAX_OUTPUT_TOKENS - 1);
+    const budget = integer(effort === "none" ? 0 : options.defaultThinkingBudget, 0, MAX_MANUAL_THINKING_BUDGET);
     if (budget > 0) integer(budget, 1024, maxTokens - 1);
     thinking = budget ? { type: "enabled", budget_tokens: budget } : { type: "disabled" };
   }
+  if (policy) {
+    if (effort === "none") {
+      if (own(extension, "thinking") && thinking.type !== "disabled") fail("unsupported_parameter", "Reasoning effort none conflicts with the explicit native thinking mode.");
+      if (!policy.thinkingTypes.includes("disabled")) {
+        fail("unsupported_parameter", policy.thinkingTypes.includes("between_tools")
+          ? "This model cannot disable thinking. Use anthropic.thinking.type between_tools to disable up-front thinking at high effort or below."
+          : "This model always uses adaptive thinking. Choose a supported reasoning effort instead of none.");
+      }
+      thinking = { type: "disabled" };
+    } else if (effort !== undefined) {
+      if (!policy.effortLevels.includes(effort)) fail("unsupported_parameter", "The reasoning effort level is not supported for this model.");
+      if (output && output.effort !== effort) fail("unsupported_parameter", "Reasoning effort conflicts with native output_config.effort.");
+      if (thinking.type === "enabled") fail("unsupported_parameter", "Reasoning effort requires adaptive thinking rather than an explicit manual token budget.");
+      // The labels have the same native meaning. Never translate them into a
+      // guessed token budget or silently override an explicit native mode.
+      output = { effort };
+    }
+    const activeEffort = output?.effort ?? policy.defaultEffort;
+    if ((thinking.type === "disabled" && policy.disabledMaxEffort ||
+        thinking.type === "between_tools" && policy.betweenToolsMaxEffort) && ["xhigh", "max"].includes(activeEffort)) {
+      fail("unsupported_parameter", "This thinking mode supports only low, medium, or high effort. Use adaptive thinking at xhigh or max effort.");
+    }
+    return { thinking: json(thinking) as JsonObject, ...(output ? { output: json(output) as JsonObject } : {}) };
+  }
   if (effort === "none") {
     if ((own(extension, "thinking") && thinking.type !== "disabled") || output) fail("unsupported_parameter");
-    return undefined;
+    return {};
   }
   if (effort !== undefined) {
     // No guessed mapping of OpenAI effort to an Anthropic token budget.
     if (!["low", "medium", "high"].includes(effort) || thinking.type !== "adaptive" || output?.effort !== effort) fail("unsupported_parameter", "Reasoning effort requires an explicit matching native adaptive policy.");
   }
   if (output && thinking.type !== "adaptive") fail("unsupported_parameter");
-  return thinking.type === "disabled" ? undefined : json(thinking) as JsonObject;
+  return { ...(thinking.type === "disabled" ? {} : { thinking: json(thinking) as JsonObject }),
+    ...(output ? { output: json(output) as JsonObject } : {}) };
 }
 
 /** Strict stateless translation. Signed state is opened only through the bound codec.
@@ -170,11 +211,13 @@ export function prepareResponsesRequest(input: unknown, options: RequestTranslat
   }
   const extension = own(request, "anthropic") ? object(request.anthropic) : {};
   keys(extension, ["thinking", "output_config", "cache_control"]);
-  const maxTokens = integer(own(request, "max_output_tokens") ? request.max_output_tokens : options.defaultMaxTokens, 1, MAX_OUTPUT_TOKENS);
-  const thinking = thinkingPolicy(request, extension, options, maxTokens);
+  const modelPolicy = claudeModelPolicy(model);
+  const maxTokens = integer(own(request, "max_output_tokens") ? request.max_output_tokens : options.defaultMaxTokens, 1,
+    modelPolicy?.maxOutputTokens ?? LEGACY_MAX_OUTPUT_TOKENS);
+  const { thinking, output } = thinkingPolicy(request, extension, options, maxTokens, modelPolicy);
   const nativeBody: JsonObject = { model, max_tokens: maxTokens, messages: [], stream: request.stream ?? false };
   if (thinking) nativeBody.thinking = thinking;
-  if (own(extension, "output_config")) nativeBody.output_config = json(extension.output_config);
+  if (output) nativeBody.output_config = output;
   if (own(extension, "cache_control")) nativeBody.cache_control = cache(extension.cache_control);
   for (const key of ["temperature", "top_p"]) {
     if (own(request, key)) {
@@ -182,7 +225,7 @@ export function prepareResponsesRequest(input: unknown, options: RequestTranslat
       nativeBody[key] = request[key];
     }
   }
-  if (thinking && ((own(request, "temperature") && request.temperature !== 1) || own(request, "top_p"))) fail("unsupported_parameter", "Sampling overrides with native thinking are not supported.");
+  if (thinking && thinking.type !== "disabled" && ((own(request, "temperature") && request.temperature !== 1) || own(request, "top_p"))) fail("unsupported_parameter", "Sampling overrides with native thinking are not supported.");
 
   const tools = new Map<string, ToolBinding>();
   const identities = new Map<string, ToolBinding>();
@@ -282,7 +325,10 @@ export function prepareResponsesRequest(input: unknown, options: RequestTranslat
       translated = { type: "tool", name: resolveTool(selected.type, selected.name, selected.namespace).nativeName };
     }
     if (!definitions.length && !["auto", "none"].includes(translated.type)) fail("unsupported_tool");
-    if (thinking && !["auto", "none"].includes(translated.type)) fail("unsupported_parameter", "Forced tool choices with native thinking are not supported.");
+    if (!["auto", "none"].includes(translated.type) && (modelPolicy?.forcedToolUse === false ||
+        thinking?.type === "enabled" || thinking?.type === "adaptive" && !modelPolicy)) {
+      fail("unsupported_parameter", "Forced tool choices are not supported with this model or thinking mode. Use tool_choice auto or none.");
+    }
     if (own(request, "parallel_tool_calls") && translated.type !== "none") translated.disable_parallel_tool_use = !request.parallel_tool_calls;
     if (definitions.length) nativeBody.tool_choice = translated;
   }

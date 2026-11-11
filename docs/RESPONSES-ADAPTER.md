@@ -98,11 +98,13 @@ read new `ccpr2` history: an image rollback preserves data/configuration but not
 continuation of those new sessions. Re-upgrade or start a new conversation after
 such a rollback. The format change does not extend expiry or provider cache TTL.
 
-The default native thinking policy is a 1024-token enabled budget with an
-8192-token output limit; `0` disables the default budget. Model capability must
-be verified. An explicit request `anthropic.thinking` can select an authorized
-native policy. The adapter does not guess what a model supports or turn a
-provider rejection into a different model or thinking mode.
+The default output limit is 8192 tokens. Verified modern model IDs select
+adaptive thinking; older/unknown IDs retain the 1024-token manual default
+(`0` disables that manual default). The model policy supports a 128000-token
+output ceiling where verified, while older/unknown IDs retain the prior bounded
+ceiling. An explicit `anthropic.thinking` selects a supported native policy.
+See [model-specific defaults and limits](MODEL-COMPATIBILITY.md). The adapter
+does not retry a provider rejection with another model or thinking mode.
 
 ### Optional Codex apply_patch grammar adaptation
 
@@ -232,11 +234,13 @@ stream_max_retries = 0
 stream_idle_timeout_ms = 300000
 ```
 
-Do not inherit a conflicting global reasoning-effort setting. Effort is not
-silently translated into an arbitrary Anthropic token budget. `none` disables
-thinking; `low`/`medium`/`high` require explicit native adaptive thinking with the
-same `output_config.effort`. Other values are rejected. Some models do not support
-adaptive thinking, so use their explicit enabled-budget policy instead.
+Do not inherit a conflicting global reasoning-effort setting. For verified
+modern model IDs, supported `low`/`medium`/`high`/`xhigh`/`max` labels map to the
+same native `output_config.effort`, with adaptive thinking selected when needed.
+They are never converted into guessed token budgets. Explicit native effort
+conflicts are rejected. `none` emits native disabled thinking only where the
+model allows it; always-on models reject it. Older/unknown IDs retain the
+explicit matching-native-policy contract. See [per-model rules](MODEL-COMPATIBILITY.md).
 
 Clients unable to add JSON extension fields can supply the same native options
 as a bounded `x-claude-proxy-native-options` JSON header. For example, to explicitly
@@ -246,7 +250,7 @@ request automatic 5-minute prompt caching, add **under the provider table**:
 http_headers = { "x-claude-proxy-native-options" = '{"cache_control":{"type":"ephemeral","ttl":"5m"}}' }
 ```
 
-An adaptive policy can use a header such as
+An explicit adaptive policy can use a header such as
 `{"thinking":{"type":"adaptive"},"output_config":{"effort":"high"}}`
 with matching `model_reasoning_effort="high"`. Set the latter before the TOML
 provider table. Body `anthropic` and this header are mutually exclusive; they are

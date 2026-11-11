@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "model": "claude-haiku-5-5",
+  "context_window": 1000000,
+  "context_evidence": "Authenticated upstream /v1/models on 2026-11-11: max_input_tokens=1000000; https://platform.claude.com/docs/en/models/overview",
+  "qualification": {
+    "shell": "unverified",
+    "apply_patch": "unverified",
+    "thinking_replay": "unverified",
+    "evidence": ["docs/MODEL-COMPATIBILITY.md (model configuration evidence; not real-model coding qualification)"]
+  }
+}
