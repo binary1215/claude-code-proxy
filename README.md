@@ -28,9 +28,14 @@ the authentication-only CLI remain available. Optional client manifests include
 
 The CLI-auth Linux image passes **205/205** backend tests and is deployed to Han
 with its existing login/state preserved. LiteLLM has the two new `-han` aliases.
-Actual direct checks of the four latest models returned upstream **HTTP429**
-without a specific cause, so answer-generation/replay acceptance remains
-unconfirmed. See the [verification evidence](docs/evidence/20261111-current-models.json).
+The first direct HTTP checks returned upstream **HTTP429** without a specific
+cause. Subsequent **2026-11-12 real Claude Code 2.1.322 tests through LiteLLM's
+managed `/v1/messages` succeeded on all four latest `-han` models**. Fable 5.2
+also passed resumed follow-up and exact client-side signed-thinking replay;
+the latter follow-up reported 3326 cache-read tokens. Generic HTTP still returned
+429, so arbitrary-client/Responses acceptance is not established by these runs.
+See [rollout evidence](docs/evidence/20261111-current-models.json) and
+[actual-client evidence](docs/evidence/20261112-han-managed-client-tests.json).
 
 ## Earlier integrated improvements — 2026-11-06
 

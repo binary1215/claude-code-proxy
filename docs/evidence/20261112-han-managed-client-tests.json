@@ -1,0 +1,655 @@
+{
+  "observed_date_kst": "2026-11-12",
+  "proxy_source_revision": "532e0030b73bbc8764f52fc366d4163c9007b6f9",
+  "route": "Shared LiteLLM managed /v1/messages -> Han; -han model aliases",
+  "raw_http_managed_tests": {
+    "started_at": "2026-11-11T15:06:41.168418+00:00",
+    "scope": "Registered Han aliases through shared LiteLLM managed native Messages",
+    "request_num_retries_header": 0,
+    "shared_settings_modified": false,
+    "client_impersonation": false,
+    "fallback_requested": false,
+    "checks": [
+      {
+        "name": "first_response",
+        "alias": "claude-fable-5-2-han",
+        "http_status": 429,
+        "seconds": 0.62,
+        "response_model": null,
+        "stop_reason": null,
+        "expected_text_present": false,
+        "content_types": [],
+        "signed_thinking_blocks": 0,
+        "error_type": "rate_limit_error",
+        "error_code": null,
+        "subscription_restriction_detected": false,
+        "retry_after": null,
+        "routing": {
+          "x-litellm-model-id": "2d155b29-552e-417a-8a70-21bec4c300f8"
+        },
+        "usage": {},
+        "passed": false
+      },
+      {
+        "name": "first_response",
+        "alias": "claude-haiku-5-5-han",
+        "http_status": 429,
+        "seconds": 0.67,
+        "response_model": null,
+        "stop_reason": null,
+        "expected_text_present": false,
+        "content_types": [],
+        "signed_thinking_blocks": 0,
+        "error_type": "rate_limit_error",
+        "error_code": null,
+        "subscription_restriction_detected": false,
+        "retry_after": null,
+        "routing": {
+          "x-litellm-model-id": "13e9c7da-02e2-4024-aec4-67faf7ce695e"
+        },
+        "usage": {},
+        "passed": false
+      },
+      {
+        "name": "first_response",
+        "alias": "claude-sonnet-5-5-han",
+        "http_status": 429,
+        "seconds": 0.62,
+        "response_model": null,
+        "stop_reason": null,
+        "expected_text_present": false,
+        "content_types": [],
+        "signed_thinking_blocks": 0,
+        "error_type": "rate_limit_error",
+        "error_code": null,
+        "subscription_restriction_detected": false,
+        "retry_after": null,
+        "routing": {
+          "x-litellm-model-id": "678d0b09-e291-48d6-8318-e6e8fb00d34a"
+        },
+        "usage": {},
+        "passed": false
+      },
+      {
+        "name": "first_response",
+        "alias": "claude-opus-5-5-han",
+        "http_status": 429,
+        "seconds": 0.59,
+        "response_model": null,
+        "stop_reason": null,
+        "expected_text_present": false,
+        "content_types": [],
+        "signed_thinking_blocks": 0,
+        "error_type": "rate_limit_error",
+        "error_code": null,
+        "subscription_restriction_detected": false,
+        "retry_after": null,
+        "routing": {
+          "x-litellm-model-id": "fb5a97bc-685d-427c-9a47-2e7edbdeb843"
+        },
+        "usage": {},
+        "passed": false
+      }
+    ],
+    "model_requests_attempted": 4,
+    "gateway_global_num_retries": 2,
+    "registered_models_verified": [
+      "claude-fable-5-2-han",
+      "claude-haiku-5-5-han",
+      "claude-sonnet-5-5-han",
+      "claude-opus-5-5-han"
+    ],
+    "router_settings_preserved": true,
+    "complete": true,
+    "all_attempted_checks_passed": false
+  },
+  "raw_control_after_official_success": {
+    "model": "claude-haiku-5-5-han",
+    "purpose": "Raw HTTP control after official client success",
+    "http_status": 429,
+    "error_type": "rate_limit_error",
+    "error_code": null,
+    "no_retries": true
+  },
+  "official_client_first_responses": [
+    {
+      "client_version": "2.1.322",
+      "official_package_integrity_verified": true,
+      "seconds": 1.9,
+      "exit_code": 0,
+      "timed_out": false,
+      "gateway_model_requests": [
+        {
+          "path": "/v1/messages?beta=true",
+          "model": "claude-haiku-5-5-han",
+          "thinking": {
+            "type": "adaptive",
+            "display": "updates"
+          },
+          "output_config": {
+            "effort": "low"
+          },
+          "max_tokens": 1024,
+          "stream": true,
+          "tools_count": 0,
+          "user_agent": "claude-cli/2.1.322 (external, sdk-cli)",
+          "retry_override": "0",
+          "http_status": 200,
+          "retry_after": null,
+          "litellm_model_id": "13e9c7da-02e2-4024-aec4-67faf7ce695e"
+        }
+      ],
+      "attempted_upstream_calls": 1,
+      "incoming_requests": [
+        {
+          "method": "POST",
+          "path": "/v1/messages"
+        }
+      ],
+      "result_events": [
+        {
+          "subtype": "success",
+          "is_error": false,
+          "num_turns": 1
+        }
+      ],
+      "expected_text_present": true,
+      "passed": true,
+      "no_tools_requested": true,
+      "client_source_modified": false,
+      "production_container_changed": false
+    },
+    {
+      "client_version": "2.1.322",
+      "official_package_integrity_verified": true,
+      "model": "claude-fable-5-2-han",
+      "two_turns_requested": true,
+      "seconds": 4.07,
+      "exit_code": 0,
+      "timed_out": false,
+      "gateway_model_requests": [
+        {
+          "path": "/v1/messages?beta=true",
+          "model": "claude-fable-5-2-han",
+          "thinking": {
+            "type": "adaptive",
+            "display": "updates"
+          },
+          "output_config": {
+            "effort": "low"
+          },
+          "max_tokens": 1024,
+          "stream": true,
+          "tools_count": 0,
+          "user_agent": "claude-cli/2.1.322 (external, sdk-cli)",
+          "retry_override": "0",
+          "history_thinking_blocks": 0,
+          "history_signed_thinking_blocks": 0,
+          "http_status": 200,
+          "retry_after": null,
+          "litellm_model_id": "2d155b29-552e-417a-8a70-21bec4c300f8"
+        },
+        {
+          "path": "/v1/messages?beta=true",
+          "model": "claude-fable-5-2-han",
+          "thinking": {
+            "type": "adaptive",
+            "display": "updates"
+          },
+          "output_config": {
+            "effort": "low"
+          },
+          "max_tokens": 1024,
+          "stream": true,
+          "tools_count": 0,
+          "user_agent": "claude-cli/2.1.322 (external, sdk-cli)",
+          "retry_override": "0",
+          "original_client_prefix_unchanged": false,
+          "history_thinking_blocks": 0,
+          "history_signed_thinking_blocks": 0,
+          "http_status": 200,
+          "retry_after": null,
+          "litellm_model_id": "2d155b29-552e-417a-8a70-21bec4c300f8"
+        }
+      ],
+      "attempted_upstream_calls": 2,
+      "incoming_requests": [
+        {
+          "method": "POST",
+          "path": "/v1/messages"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/messages"
+        }
+      ],
+      "result_events": [
+        {
+          "subtype": "success",
+          "is_error": false,
+          "num_turns": 1
+        },
+        {
+          "subtype": "success",
+          "is_error": false,
+          "num_turns": 1
+        }
+      ],
+      "expected_text_present": true,
+      "replay_text_present": true,
+      "passed": true,
+      "no_tools_requested": true,
+      "client_source_modified": false,
+      "production_container_changed": false
+    },
+    {
+      "client_version": "2.1.322",
+      "official_package_integrity_verified": true,
+      "model": "claude-sonnet-5-5-han",
+      "two_turns_requested": false,
+      "seconds": 2.32,
+      "exit_code": 0,
+      "timed_out": false,
+      "gateway_model_requests": [
+        {
+          "path": "/v1/messages?beta=true",
+          "model": "claude-sonnet-5-5-han",
+          "thinking": {
+            "type": "adaptive",
+            "display": "updates"
+          },
+          "output_config": {
+            "effort": "low"
+          },
+          "max_tokens": 1024,
+          "stream": true,
+          "tools_count": 0,
+          "user_agent": "claude-cli/2.1.322 (external, sdk-cli)",
+          "retry_override": "0",
+          "history_thinking_blocks": 0,
+          "history_signed_thinking_blocks": 0,
+          "http_status": 200,
+          "retry_after": null,
+          "litellm_model_id": "678d0b09-e291-48d6-8318-e6e8fb00d34a"
+        }
+      ],
+      "attempted_upstream_calls": 1,
+      "incoming_requests": [
+        {
+          "method": "POST",
+          "path": "/v1/messages"
+        }
+      ],
+      "result_events": [
+        {
+          "subtype": "success",
+          "is_error": false,
+          "num_turns": 1
+        }
+      ],
+      "expected_text_present": true,
+      "replay_text_present": false,
+      "passed": true,
+      "no_tools_requested": true,
+      "client_source_modified": false,
+      "production_container_changed": false
+    },
+    {
+      "client_version": "2.1.322",
+      "official_package_integrity_verified": true,
+      "model": "claude-opus-5-5-han",
+      "two_turns_requested": false,
+      "seconds": 2.36,
+      "exit_code": 0,
+      "timed_out": false,
+      "gateway_model_requests": [
+        {
+          "path": "/v1/messages?beta=true",
+          "model": "claude-opus-5-5-han",
+          "thinking": {
+            "type": "adaptive",
+            "display": "updates"
+          },
+          "output_config": {
+            "effort": "low"
+          },
+          "max_tokens": 1024,
+          "stream": true,
+          "tools_count": 0,
+          "user_agent": "claude-cli/2.1.322 (external, sdk-cli)",
+          "retry_override": "0",
+          "history_thinking_blocks": 0,
+          "history_signed_thinking_blocks": 0,
+          "http_status": 200,
+          "retry_after": null,
+          "litellm_model_id": "fb5a97bc-685d-427c-9a47-2e7edbdeb843"
+        }
+      ],
+      "attempted_upstream_calls": 1,
+      "incoming_requests": [
+        {
+          "method": "POST",
+          "path": "/v1/messages"
+        }
+      ],
+      "result_events": [
+        {
+          "subtype": "success",
+          "is_error": false,
+          "num_turns": 1
+        }
+      ],
+      "expected_text_present": true,
+      "replay_text_present": false,
+      "passed": true,
+      "no_tools_requested": true,
+      "client_source_modified": false,
+      "production_container_changed": false
+    }
+  ],
+  "official_fable_thinking_probe": {
+    "client_version": "2.1.322",
+    "official_package_integrity_verified": true,
+    "model": "claude-fable-5-2-han",
+    "two_turns_requested": true,
+    "thinking_probe": true,
+    "seconds": 6.92,
+    "exit_code": 0,
+    "timed_out": false,
+    "gateway_model_requests": [
+      {
+        "path": "/v1/messages?beta=true",
+        "model": "claude-fable-5-2-han",
+        "thinking": {
+          "type": "adaptive",
+          "display": "updates"
+        },
+        "output_config": {
+          "effort": "medium"
+        },
+        "max_tokens": 2048,
+        "stream": true,
+        "tools_count": 0,
+        "user_agent": "claude-cli/2.1.322 (external, sdk-cli)",
+        "retry_override": "0",
+        "history_thinking_blocks": 0,
+        "history_signed_thinking_blocks": 0,
+        "http_status": 200,
+        "retry_after": null,
+        "litellm_model_id": "2d155b29-552e-417a-8a70-21bec4c300f8",
+        "returned_content_types": [
+          "thinking",
+          "text"
+        ],
+        "returned_thinking_blocks": 1,
+        "returned_signed_thinking_blocks": 1
+      },
+      {
+        "path": "/v1/messages?beta=true",
+        "model": "claude-fable-5-2-han",
+        "thinking": {
+          "type": "adaptive",
+          "display": "updates"
+        },
+        "output_config": {
+          "effort": "medium"
+        },
+        "max_tokens": 2048,
+        "stream": true,
+        "tools_count": 0,
+        "user_agent": "claude-cli/2.1.322 (external, sdk-cli)",
+        "retry_override": "0",
+        "original_client_prefix_unchanged": false,
+        "history_thinking_blocks": 1,
+        "history_signed_thinking_blocks": 1,
+        "prior_thinking_blocks_exact_replayed": true,
+        "http_status": 200,
+        "retry_after": null,
+        "litellm_model_id": "2d155b29-552e-417a-8a70-21bec4c300f8",
+        "returned_content_types": [
+          "text"
+        ],
+        "returned_thinking_blocks": 0,
+        "returned_signed_thinking_blocks": 0
+      }
+    ],
+    "attempted_upstream_calls": 2,
+    "incoming_requests": [
+      {
+        "method": "POST",
+        "path": "/v1/messages"
+      },
+      {
+        "method": "POST",
+        "path": "/v1/messages"
+      }
+    ],
+    "result_events": [
+      {
+        "subtype": "success",
+        "is_error": false,
+        "num_turns": 1
+      },
+      {
+        "subtype": "success",
+        "is_error": false,
+        "num_turns": 1
+      }
+    ],
+    "expected_text_present": true,
+    "replay_text_present": true,
+    "passed": true,
+    "no_tools_requested": true,
+    "client_source_modified": false,
+    "production_container_changed": false
+  },
+  "han_history_crosscheck": {
+    "rows": [
+      {
+        "id": 18,
+        "requested_model": "claude-fable-5-2",
+        "status": "success",
+        "created_at": "2026-11-11 15:20:45",
+        "input_tokens": 4,
+        "output_tokens": 23,
+        "cache_creation_input_tokens": 366,
+        "cache_read_input_tokens": 3326,
+        "usage_complete": 1,
+        "upstream_http_status": 200,
+        "upstream_error_type": null,
+        "upstream_error_code": null,
+        "upstream_diagnostic": "success"
+      },
+      {
+        "id": 17,
+        "requested_model": "claude-fable-5-2",
+        "status": "success",
+        "created_at": "2026-11-11 15:20:41",
+        "input_tokens": 2,
+        "output_tokens": 407,
+        "cache_creation_input_tokens": 393,
+        "cache_read_input_tokens": 3233,
+        "usage_complete": 1,
+        "upstream_http_status": 200,
+        "upstream_error_type": null,
+        "upstream_error_code": null,
+        "upstream_diagnostic": "success"
+      },
+      {
+        "id": 16,
+        "requested_model": "claude-haiku-5-5",
+        "status": "error",
+        "created_at": "2026-11-11 15:19:05",
+        "input_tokens": null,
+        "output_tokens": null,
+        "cache_creation_input_tokens": null,
+        "cache_read_input_tokens": null,
+        "usage_complete": 0,
+        "upstream_http_status": 429,
+        "upstream_error_type": "rate_limit_error",
+        "upstream_error_code": null,
+        "upstream_diagnostic": "unknown_429"
+      },
+      {
+        "id": 15,
+        "requested_model": "claude-opus-5-5",
+        "status": "success",
+        "created_at": "2026-11-11 15:18:19",
+        "input_tokens": 2,
+        "output_tokens": 22,
+        "cache_creation_input_tokens": 2203,
+        "cache_read_input_tokens": 0,
+        "usage_complete": 1,
+        "upstream_http_status": 200,
+        "upstream_error_type": null,
+        "upstream_error_code": null,
+        "upstream_diagnostic": "success"
+      },
+      {
+        "id": 14,
+        "requested_model": "claude-sonnet-5-5",
+        "status": "success",
+        "created_at": "2026-11-11 15:18:17",
+        "input_tokens": 2,
+        "output_tokens": 22,
+        "cache_creation_input_tokens": 2131,
+        "cache_read_input_tokens": 0,
+        "usage_complete": 1,
+        "upstream_http_status": 200,
+        "upstream_error_type": null,
+        "upstream_error_code": null,
+        "upstream_diagnostic": "success"
+      },
+      {
+        "id": 13,
+        "requested_model": "claude-fable-5-2",
+        "status": "success",
+        "created_at": "2026-11-11 15:18:14",
+        "input_tokens": 4,
+        "output_tokens": 22,
+        "cache_creation_input_tokens": 358,
+        "cache_read_input_tokens": 3261,
+        "usage_complete": 1,
+        "upstream_http_status": 200,
+        "upstream_error_type": null,
+        "upstream_error_code": null,
+        "upstream_diagnostic": "success"
+      },
+      {
+        "id": 12,
+        "requested_model": "claude-fable-5-2",
+        "status": "success",
+        "created_at": "2026-11-11 15:18:12",
+        "input_tokens": 2,
+        "output_tokens": 22,
+        "cache_creation_input_tokens": 3561,
+        "cache_read_input_tokens": 0,
+        "usage_complete": 1,
+        "upstream_http_status": 200,
+        "upstream_error_type": null,
+        "upstream_error_code": null,
+        "upstream_diagnostic": "success"
+      },
+      {
+        "id": 11,
+        "requested_model": "claude-haiku-5-5",
+        "status": "success",
+        "created_at": "2026-11-11 15:15:30",
+        "input_tokens": 2,
+        "output_tokens": 22,
+        "cache_creation_input_tokens": 2955,
+        "cache_read_input_tokens": 0,
+        "usage_complete": 1,
+        "upstream_http_status": 200,
+        "upstream_error_type": null,
+        "upstream_error_code": null,
+        "upstream_diagnostic": "success"
+      },
+      {
+        "id": 10,
+        "requested_model": "claude-opus-5-5",
+        "status": "error",
+        "created_at": "2026-11-11 15:06:44",
+        "input_tokens": null,
+        "output_tokens": null,
+        "cache_creation_input_tokens": null,
+        "cache_read_input_tokens": null,
+        "usage_complete": 0,
+        "upstream_http_status": 429,
+        "upstream_error_type": "rate_limit_error",
+        "upstream_error_code": null,
+        "upstream_diagnostic": "unknown_429"
+      },
+      {
+        "id": 9,
+        "requested_model": "claude-sonnet-5-5",
+        "status": "error",
+        "created_at": "2026-11-11 15:06:43",
+        "input_tokens": null,
+        "output_tokens": null,
+        "cache_creation_input_tokens": null,
+        "cache_read_input_tokens": null,
+        "usage_complete": 0,
+        "upstream_http_status": 429,
+        "upstream_error_type": "rate_limit_error",
+        "upstream_error_code": null,
+        "upstream_diagnostic": "unknown_429"
+      },
+      {
+        "id": 8,
+        "requested_model": "claude-haiku-5-5",
+        "status": "error",
+        "created_at": "2026-11-11 15:06:43",
+        "input_tokens": null,
+        "output_tokens": null,
+        "cache_creation_input_tokens": null,
+        "cache_read_input_tokens": null,
+        "usage_complete": 0,
+        "upstream_http_status": 429,
+        "upstream_error_type": "rate_limit_error",
+        "upstream_error_code": null,
+        "upstream_diagnostic": "unknown_429"
+      },
+      {
+        "id": 7,
+        "requested_model": "claude-fable-5-2",
+        "status": "error",
+        "created_at": "2026-11-11 15:06:42",
+        "input_tokens": null,
+        "output_tokens": null,
+        "cache_creation_input_tokens": null,
+        "cache_read_input_tokens": null,
+        "usage_complete": 0,
+        "upstream_http_status": 429,
+        "upstream_error_type": "rate_limit_error",
+        "upstream_error_code": null,
+        "upstream_diagnostic": "unknown_429"
+      }
+    ]
+  },
+  "generation_requests": {
+    "official_client": 7,
+    "raw_http": 5,
+    "total": 12,
+    "provider_http200": 7,
+    "provider_http429": 5
+  },
+  "findings": {
+    "four_latest_models_reply_through_official_claude_code": true,
+    "fable_same_session_followup_passed": true,
+    "fable_signed_thinking_exact_at_client_gateway_boundary": true,
+    "fable_thinking_probe_followup_cache_read_tokens": 3326,
+    "generic_http_still_returns429": true,
+    "exact429_trigger_identified": false
+  },
+  "test_harness_note": "Initial observer bootstrap rejected the SDK beta query before gateway access; fixed locally, zero provider calls for that preflight.",
+  "limitations": [
+    "Client/gateway wire observed; gateway/Han wire not separately captured",
+    "Whole client prefix changed across resume; no claim of full prefix byte identity",
+    "Tools disabled: no new shell/file editing or long-session qualification",
+    "No new Codex/Responses path acceptance claimed",
+    "Observed cache counts do not establish invoice savings or answer-quality gains",
+    "Observer buffers bounded streaming responses; latency/cancellation behavior not tested",
+    "Official CLI used a fresh isolated test container; production CLI/version/configuration not replaced"
+  ]
+}

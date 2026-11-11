@@ -107,9 +107,40 @@ documentation; they do not certify client coding quality or automatic compaction
 - One bounded direct Responses check per latest model reached upstream but all
   four returned HTTP429 `rate_limit_error`. There was no specific error code,
   Retry-After or quota header; the recorded classification is `unknown_429`.
-  This does not establish account-quota exhaustion. Actual answer generation
-  and Fable's real signed-state follow-up remain unconfirmed. No retry or
+  This did not establish account-quota exhaustion. Actual answer generation
+  and Fable's real signed-state follow-up were unconfirmed in that run. No retry or
   identity/account/model fallback was used.
 
 See the [sanitized evidence](evidence/20261111-current-models.json). Offline
 compatibility and deployment success are separate from provider acceptance.
+
+## Actual managed-gateway client tests on 2026-11-12
+
+An unmodified official Claude Code **2.1.322**, verified against the official npm
+archive integrity, ran in fresh isolated test containers through the existing
+shared LiteLLM **managed `/v1/messages`** endpoint to Han. The model names were
+`claude-fable-5-2-han`, `claude-haiku-5-5-han`, `claude-sonnet-5-5-han`, and
+`claude-opus-5-5-han`. All four produced the expected short answer with HTTP200.
+The production auth CLI and gateway settings were not changed.
+
+Fable 5.2 passed a resumed two-turn marker conversation and a separate
+medium-effort arithmetic probe. The probe returned a signed thinking block;
+the next actual client request replayed that block exactly and its follow-up
+returned HTTP200 and the correct answer. Han observed 3233/3326 cache-read tokens
+on the probe's first/follow-up turns. These are provider counters, not invoice
+savings or a controlled quality comparison. The full client prefix changed on
+resume; only the recorded thinking-block equality is claimed.
+
+The request-only `x-litellm-num-retries: 0` override prevented the gateway's
+default two retries. Han's history matched exactly **7 successful official-client
+requests and 5 generic-HTTP requests returning429**. A raw Haiku control still
+returned429 after official-client success. This narrows the observation to
+request/client differences but does not identify which header, payload field or
+other provider rule caused it. No identity was forged and no account/model
+fallback was used.
+
+This qualification covers genuine Claude Code text/reasoning through the managed
+Messages path. It does not certify Codex, the separate Responses route, tools,
+automatic compaction or long repository work. The observer captured only the
+client/gateway wire, so gateway/Han byte identity is not inferred. See the
+[sanitized actual-client receipt](evidence/20261112-han-managed-client-tests.json).
