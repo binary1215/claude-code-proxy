@@ -92,3 +92,24 @@ Optional profile manifests for the latest models are provided at
 [Haiku 5.5](../integration/clients/profiles/metadata.haiku-5-5.example.json).
 Their context limits come from the authenticated catalogue and official model
 documentation; they do not certify client coding quality or automatic compaction.
+
+## Verification on 2026-11-11
+
+- Windows backend: 204 passed, one Linux-only helper skipped. The built Linux
+  CLI-auth image passed all 205 backend tests, including 16 new-model regressions.
+  Profile-generator tests passed 11/11.
+- Han received source `532e003` while retaining its data/auth volumes, private
+  settings and login-session binding. Its existing 19 refresh successes and zero
+  refresh failures survived the update. Other containers were preserved.
+- The LiteLLM owner added `claude-fable-5-2-han` and `claude-haiku-5-5-han` using
+  the existing Han credential, adaptive thinking, 1M input and 128K output
+  metadata. Existing model entries, keys and routes were retained.
+- One bounded direct Responses check per latest model reached upstream but all
+  four returned HTTP429 `rate_limit_error`. There was no specific error code,
+  Retry-After or quota header; the recorded classification is `unknown_429`.
+  This does not establish account-quota exhaustion. Actual answer generation
+  and Fable's real signed-state follow-up remain unconfirmed. No retry or
+  identity/account/model fallback was used.
+
+See the [sanitized evidence](evidence/20261111-current-models.json). Offline
+compatibility and deployment success are separate from provider acceptance.

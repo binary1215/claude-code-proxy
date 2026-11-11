@@ -1,0 +1,231 @@
+{
+  "observed_date_kst": "2026-11-11",
+  "source_revision": "532e0030b73bbc8764f52fc366d4163c9007b6f9",
+  "image_id": "sha256:5766992ec7cc5178f0cf3d35a67fedb11b35177ac7adccafa93629661041c292",
+  "windows_backend": {
+    "tests": 205,
+    "pass": 204,
+    "fail": 0,
+    "skipped": 1
+  },
+  "linux_backend": {
+    "tests": 205,
+    "pass": 205,
+    "fail": 0,
+    "skipped": 0
+  },
+  "new_model_regressions": {
+    "passed": 16,
+    "failed": 0
+  },
+  "profile_generator_tests": {
+    "passed": 11,
+    "failed": 0
+  },
+  "catalog": {
+    "http_status": 200,
+    "observed_date_kst": "2026-11-11",
+    "total_models": 15,
+    "latest_models": [
+      {
+        "id": "claude-fable-5-2",
+        "type": "model",
+        "display_name": "Claude Fable 5.2",
+        "max_input_tokens": 1000000,
+        "max_tokens": 128000
+      },
+      {
+        "id": "claude-haiku-5-5",
+        "type": "model",
+        "display_name": "Claude Haiku 5.5",
+        "max_input_tokens": 1000000,
+        "max_tokens": 128000
+      },
+      {
+        "id": "claude-sonnet-5-5",
+        "type": "model",
+        "display_name": "Claude Sonnet 5.5",
+        "max_input_tokens": 1000000,
+        "max_tokens": 128000
+      },
+      {
+        "id": "claude-opus-5-5",
+        "type": "model",
+        "display_name": "Claude Opus 5.5",
+        "max_input_tokens": 1000000,
+        "max_tokens": 128000
+      }
+    ],
+    "model_inference_calls": 0
+  },
+  "deployment": {
+    "same_named_volumes": true,
+    "same_auth_session_binding": true,
+    "existing_private_files_preserved": true,
+    "other_containers_preserved": true
+  },
+  "authentication": {
+    "state": "ready",
+    "automatic_refresh": true,
+    "refresh_successes_retained": 19,
+    "refresh_failures": 0
+  },
+  "litellm_registration": {
+    "models": [
+      {
+        "name": "claude-fable-5-2-han",
+        "upstream_model": "claude-fable-5-2",
+        "listed": true,
+        "params_match": true,
+        "credential": "claudemock_han",
+        "thinking": {
+          "type": "adaptive"
+        },
+        "max_input_tokens": 1000000,
+        "max_output_tokens": 128000
+      },
+      {
+        "name": "claude-haiku-5-5-han",
+        "upstream_model": "claude-haiku-5-5",
+        "listed": true,
+        "params_match": true,
+        "credential": "claudemock_han",
+        "thinking": {
+          "type": "adaptive"
+        },
+        "max_input_tokens": 1000000,
+        "max_output_tokens": 128000
+      }
+    ],
+    "original_models_preserved": true,
+    "keys_preserved": true,
+    "routes_preserved": true
+  },
+  "live_smoke": {
+    "source_revision": "532e0030b73bbc8764f52fc366d4163c9007b6f9",
+    "scope": "Direct Han Responses small independent model checks and same-model Fable replay",
+    "checks": [
+      {
+        "name": "first_response",
+        "model": "claude-fable-5-2",
+        "http_status": 429,
+        "seconds": 0.41,
+        "status": null,
+        "response_model": null,
+        "expected_text_present": false,
+        "output_types": [],
+        "reasoning_capsules_returned": 0,
+        "error_type": "rate_limit_error",
+        "error_code": null,
+        "subscription_restriction_detected": false,
+        "usage": {},
+        "passed": false
+      },
+      {
+        "name": "first_response",
+        "model": "claude-haiku-5-5",
+        "http_status": 429,
+        "seconds": 0.25,
+        "status": null,
+        "response_model": null,
+        "expected_text_present": false,
+        "output_types": [],
+        "reasoning_capsules_returned": 0,
+        "error_type": "rate_limit_error",
+        "error_code": null,
+        "subscription_restriction_detected": false,
+        "usage": {},
+        "passed": false
+      },
+      {
+        "name": "first_response",
+        "model": "claude-sonnet-5-5",
+        "http_status": 429,
+        "seconds": 0.33,
+        "status": null,
+        "response_model": null,
+        "expected_text_present": false,
+        "output_types": [],
+        "reasoning_capsules_returned": 0,
+        "error_type": "rate_limit_error",
+        "error_code": null,
+        "subscription_restriction_detected": false,
+        "usage": {},
+        "passed": false
+      },
+      {
+        "name": "first_response",
+        "model": "claude-opus-5-5",
+        "http_status": 429,
+        "seconds": 0.27,
+        "status": null,
+        "response_model": null,
+        "expected_text_present": false,
+        "output_types": [],
+        "reasoning_capsules_returned": 0,
+        "error_type": "rate_limit_error",
+        "error_code": null,
+        "subscription_restriction_detected": false,
+        "usage": {},
+        "passed": false
+      }
+    ],
+    "model_requests_attempted": 4,
+    "automatic_retries": 0,
+    "client_impersonation": false,
+    "credential_or_model_fallback": false,
+    "complete": true,
+    "all_attempted_checks_passed": false
+  },
+  "upstream_diagnostics": {
+    "rows": [
+      {
+        "requested_model": "claude-opus-5-5",
+        "status": "error",
+        "upstream_http_status": 429,
+        "upstream_error_type": "rate_limit_error",
+        "upstream_error_code": null,
+        "upstream_retry_after": null,
+        "upstream_quota_headers": null,
+        "upstream_diagnostic": "unknown_429"
+      },
+      {
+        "requested_model": "claude-sonnet-5-5",
+        "status": "error",
+        "upstream_http_status": 429,
+        "upstream_error_type": "rate_limit_error",
+        "upstream_error_code": null,
+        "upstream_retry_after": null,
+        "upstream_quota_headers": null,
+        "upstream_diagnostic": "unknown_429"
+      },
+      {
+        "requested_model": "claude-haiku-5-5",
+        "status": "error",
+        "upstream_http_status": 429,
+        "upstream_error_type": "rate_limit_error",
+        "upstream_error_code": null,
+        "upstream_retry_after": null,
+        "upstream_quota_headers": null,
+        "upstream_diagnostic": "unknown_429"
+      },
+      {
+        "requested_model": "claude-fable-5-2",
+        "status": "error",
+        "upstream_http_status": 429,
+        "upstream_error_type": "rate_limit_error",
+        "upstream_error_code": null,
+        "upstream_retry_after": null,
+        "upstream_quota_headers": null,
+        "upstream_diagnostic": "unknown_429"
+      }
+    ]
+  },
+  "provider_answer_generation_verified": false,
+  "real_fable_reasoning_replay": "Not attempted because initial Fable5.2 request returned429",
+  "remaining": [
+    "Upstream returns bare429/rate_limit_error; no specific error code, Retry-After, or quota headers",
+    "No claim that account usage is exhausted; generation/replay remains unconfirmed",
+    "Responses provider fallback/binding beta/remote compaction remain outside this update"
+  ]
+}

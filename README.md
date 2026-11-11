@@ -26,6 +26,12 @@ the authentication-only CLI remain available. Optional client manifests include
 [Fable 5.2](integration/clients/profiles/metadata.fable-5-2.example.json) and
 [Haiku 5.5](integration/clients/profiles/metadata.haiku-5-5.example.json).
 
+The CLI-auth Linux image passes **205/205** backend tests and is deployed to Han
+with its existing login/state preserved. LiteLLM has the two new `-han` aliases.
+Actual direct checks of the four latest models returned upstream **HTTP429**
+without a specific cause, so answer-generation/replay acceptance remains
+unconfirmed. See the [verification evidence](docs/evidence/20261111-current-models.json).
+
 ## Earlier integrated improvements — 2026-11-06
 
 - Usage statistics now aggregate fresh input, cache writes, cache reads and
