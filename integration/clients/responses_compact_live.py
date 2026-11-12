@@ -120,13 +120,16 @@ def answer_object(items: list) -> dict:
 
 
 class Gateway:
-    def __init__(self, base: str, key: str, timeout: int, report: dict):
+    def __init__(self, base: str, key: str, timeout: int, report: dict, no_retries: bool = False):
         self.scheme, self.host, self.port, self.prefix = endpoint(base)
         self.key, self.timeout, self.report = key, timeout, report
+        self.no_retries = no_retries
 
     def post(self, suffix: str, body: dict, phase: str) -> dict:
         if len(self.report['requests']) >= 6:
             raise Failure('request_budget_exhausted')
+        if self.no_retries:
+            body = {**body, 'num_retries': 0, 'disable_fallbacks': True}
         row = {'phase': phase, 'path': self.prefix + suffix,
                'input_items': len(body['input']), 'input_counts': item_counts(body['input']),
                'replayed_reasoning_capsules': reasoning_capsules(body['input']), 'http_status': None}
@@ -145,10 +148,11 @@ class Gateway:
             if response.status != 200:
                 # Fixed protocol classifications only; never persist arbitrary
                 # upstream error messages, original prompts or credentials.
+                error_wire = raw.replace(b'\\"', b'"')
                 for code in ('invalid_request', 'invalid_tool_history', 'unsupported_parameter',
                              'invalid_compaction_state', 'compaction_failed', 'cli_compaction_failed',
-                             'compaction_backend_unavailable', 'cli_timeout', 'model_not_allowed'):
-                    if ('"code": "' + code + '"').encode() in raw or ('"code":"' + code + '"').encode() in raw:
+                             'compaction_backend_unavailable', 'compact_snapshot_failed', 'cli_timeout', 'model_not_allowed'):
+                    if ('"code": "' + code + '"').encode() in error_wire or ('"code":"' + code + '"').encode() in error_wire:
                         row['recognized_error_code'] = code
                         break
                 raise Failure('gateway_http_error')
@@ -190,7 +194,7 @@ def user(text: str) -> dict:
 
 
 def run(args: argparse.Namespace, key: str, report: dict) -> None:
-    gateway = Gateway(args.base_url, key, args.timeout, report)
+    gateway = Gateway(args.base_url, key, args.timeout, report, args.litellm_no_retries)
     suffix = secrets.token_hex(6)
     facts = {'project': 'project-' + suffix, 'ledger_checksum': 'ledger-' + secrets.token_hex(8),
              'open_items': 17}
@@ -251,6 +255,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--model', default=DEFAULT_MODEL)
     parser.add_argument('--key-stdin', action='store_true')
     parser.add_argument('--pause-after-second-compact', action='store_true')
+    parser.add_argument('--litellm-no-retries', action='store_true',
+                        help='Set per-request LiteLLM retries to zero and disable fallbacks; omit on direct proxy calls.')
     parser.add_argument('--timeout', type=int, default=180)
     parser.add_argument('--padding-chars', type=int, default=12000)
     parser.add_argument('--report', type=Path)
@@ -261,6 +267,7 @@ def main(argv: list[str] | None = None) -> int:
                           'standalone_api_probe': True, 'key_required_for_live': True}))
         return 0
     report = {'schema_version': 1, 'functional_pass': False, 'standalone_api_probe': True,
+              'gateway_retries_disabled_in_request': args.litellm_no_retries,
               'raw_history_saved': False, 'restart_independently_verified': False,
               'operator_pause_completed': False, 'requests': [], 'checks': {}}
     try:

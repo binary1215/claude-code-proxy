@@ -11,6 +11,8 @@ const directory = mkdtempSync(join(tmpdir(), 'claude-compact-api-'));
 const calls = [];
 let phase = 'compact';
 let requestStarted;
+const taggedSummary = '<analysis>SYNTHETIC_ANALYSIS_MUST_NOT_REPLAY</analysis>\n\n\n<summary>\n# Retained project context\nTARGET_COPPER_731 remains required.\n<tools-used-before-summary>read_project</tools-used-before-summary>\n</summary>\n';
+const normalizedTaggedSummary = 'Summary:\n# Retained project context\nTARGET_COPPER_731 remains required.\n&lt;tools-used-before-summary>read_project&lt;/tools-used-before-summary>';
 const sse = (type, body = {}) => `event: ${type}\ndata: ${JSON.stringify({ type, ...body })}\n\n`;
 const provider = http.createServer(async (req, res) => {
   const chunks = []; for await (const chunk of req) chunks.push(chunk);
@@ -22,7 +24,8 @@ const provider = http.createServer(async (req, res) => {
     res.writeHead(400, { 'content-type': 'application/json' });
     return res.end(JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', message: 'Synthetic compaction rejection.' } }));
   }
-  const text = phase === 'compact' ? '# Compacted conversation\nThe project invariant is TARGET_COPPER_731. Earlier research is complete.' : 'COLD_CONTINUATION_OK';
+  const text = phase === 'compact-tagged' ? taggedSummary : phase === 'compact' ?
+    '# Compacted conversation\nThe project invariant is TARGET_COPPER_731. Earlier research is complete.' : 'COLD_CONTINUATION_OK';
   const usage = { input_tokens: 17, output_tokens: 13, cache_read_input_tokens: 7, cache_creation_input_tokens: 3,
     cache_creation: { ephemeral_5m_input_tokens: 3, ephemeral_1h_input_tokens: 0 } };
   res.writeHead(200, { 'content-type': 'text/event-stream' });
@@ -78,7 +81,7 @@ test('standalone genuine CLI compact returns summary plus native retained tail a
     'Only CLI summarization requests may precede compact response');
   assert.ok(JSON.stringify(compact.messages).includes('TARGET_COPPER_731'));
   assert.deepEqual(compact.messages[0], { role: 'user', content: [{ type: 'text', text: compact.summary }] },
-    'The actual hook summary replaces only its CLI-local transcript wrapper');
+    'The CLI-normalized hook summary replaces only its local transcript wrapper');
   assert.equal(JSON.stringify(compact.messages).includes('read the full transcript at:'), false);
   t.diagnostic(`Compacted native roles: ${compact.messages.map(message => message.role).join(',')}; messages ${compact.messages.length}.`);
   assert.deepEqual(compact.messages.at(-1), body.messages.at(-1), 'The recent assistant is outside the summary and must be retained verbatim');
@@ -111,6 +114,25 @@ test('pending caller tool stays outside compact import and continues with its or
   assert.ok(JSON.stringify(replay).includes('PENDING_TOOL_VALUE_188'));
   assert.ok(JSON.stringify(replay).includes('synthetic-pending-signature'));
   assert.equal(JSON.stringify(replay).includes('interrupted'), false);
+});
+
+test('tagged CLI summary normalization excludes analysis and preserves native retained context', async () => {
+  phase = 'compact-tagged';
+  const before = calls.length;
+  const compact = await compactCliHistory(body, 'synthetic-tagged-owner', credential);
+  assert.equal(compact.providerCalls, calls.length - before);
+  assert.equal(compact.summary, normalizedTaggedSummary);
+  assert.deepEqual(compact.messages[0], { role: 'user', content: [{ type: 'text', text: normalizedTaggedSummary }] });
+  assert.deepEqual(compact.messages.at(-1), body.messages.at(-1));
+  assert.equal(JSON.stringify(compact.messages).includes('SYNTHETIC_ANALYSIS_MUST_NOT_REPLAY'), false);
+  assert.equal(JSON.stringify(compact.messages).includes('read the full transcript at:'), false);
+  phase = 'continue';
+  const lease = await acquireCliSession({ ...body, messages: [...compact.messages, { role: 'user', content: 'Continue from the normalized summary.' }] },
+    'synthetic-tagged-owner', credential);
+  for await (const _event of lease.session.events()) {}
+  lease.session.commit(lease.messages); lease.detach();
+  assert.ok(JSON.stringify(calls.at(-1).body.messages).includes('TARGET_COPPER_731'));
+  assert.equal(JSON.stringify(calls.at(-1).body.messages).includes('SYNTHETIC_ANALYSIS_MUST_NOT_REPLAY'), false);
 });
 
 test('user-ended complete tool history retains its unanswered native round without ordinary inference', async () => {

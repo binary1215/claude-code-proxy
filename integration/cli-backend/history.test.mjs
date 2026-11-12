@@ -1,7 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { nativeHistoryEntries, nativeHistoryStore, HISTORY_CLI_VERSION } from './history.mjs';
+import { nativeCompactSummary, nativeHistoryEntries, nativeHistoryStore, HISTORY_CLI_VERSION } from './history.mjs';
 import { nativeToolName, createToolRegistry } from './helpers.mjs';
+
+test('pinned compact rendering normalizes tagged model output without replaying analysis or tool markers', () => {
+  assert.equal(nativeCompactSummary(' \n# Plain summary\n\n\nKeep 한글.\n'), '# Plain summary\n\nKeep 한글.');
+  assert.equal(nativeCompactSummary('<analysis>Do not replay this.</analysis>\n\n<summary>\nKeep the project state.\n</summary>'),
+    'Summary:\nKeep the project state.');
+  assert.equal(nativeCompactSummary('<summary>< TOOLS-USED-BEFORE-SUMMARY >read</ tools-used-before-summary></summary>'),
+    'Summary:\n&lt; TOOLS-USED-BEFORE-SUMMARY >read&lt;/ tools-used-before-summary>');
+  assert.equal(nativeCompactSummary('<summary>Unclosed tag remains native text.'), '<summary>Unclosed tag remains native text.');
+});
 
 function history() {
   return [

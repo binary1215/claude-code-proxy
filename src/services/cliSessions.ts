@@ -162,8 +162,10 @@ class Session {
           this.options.get(message.request_id)?.resolve(); this.options.delete(message.request_id);
         } else if (message.type === "error") {
           const clientError = ["unsupported_options", "unsupported_tool_result", "invalid_tool_result", "unsupported_tool_schema", "invalid_history"].includes(message.code);
-          this.fail(new CliBackendError(clientError ? message.code : "cli_inference_failed",
-            clientError ? "The requested option, native history or tool result is outside the CLI backend contract." : "The CLI inference worker failed.", clientError ? 400 : 502));
+          const snapshotError = message.code === "compact_snapshot_failed";
+          this.fail(new CliBackendError(clientError || snapshotError ? message.code : "cli_inference_failed",
+            snapshotError ? "The CLI compacted context could not be reconstructed." :
+              clientError ? "The requested option, native history or tool result is outside the CLI backend contract." : "The CLI inference worker failed.", clientError ? 400 : 502));
         }
       } catch { this.fail(new CliBackendError("cli_worker_protocol_error", "The CLI worker returned an invalid frame.", 502)); }
     });

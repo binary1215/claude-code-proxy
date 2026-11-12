@@ -9,7 +9,7 @@ import {
   AsyncQueue, MCP_SERVER, NativeEventTransformer, ToolBroker, WorkerError,
   createToolRegistry, isRecord, nativeThinkingToSdk, nativeToolName, sdkEnvironment, validateEffort,
 } from './helpers.mjs';
-import { nativeHistoryEntries, nativeHistoryStore } from './history.mjs';
+import { nativeCompactSummary, nativeHistoryEntries, nativeHistoryStore } from './history.mjs';
 
 const ERROR_MESSAGES = {
   invalid_ipc: 'Invalid worker command.',
@@ -190,7 +190,7 @@ export class CliWorker {
             PreToolUse: [{ hooks: [preToolUse], timeout: 30, onFailure: 'block' }],
             PreCompact: [{ hooks: [async () => { await this.compactPhase(true); return {}; }], timeout: 30, onFailure: 'block' }],
             PostCompact: [{ hooks: [async input => {
-              if (typeof input.compact_summary === 'string') this.compactSummary = input.compact_summary;
+              if (typeof input.compact_summary === 'string') this.compactSummary = nativeCompactSummary(input.compact_summary);
               await this.compactPhase(false); return {};
             }], timeout: 30, onFailure: 'block' }],
           },
@@ -286,8 +286,9 @@ export class CliWorker {
       if (!Array.isArray(content)) throw new WorkerError('compact_snapshot_failed');
       if (row.isCompactSummary === true) {
         // The persisted CLI wrapper points at its ephemeral local transcript.
-        // Export the exact genuine model summary, not instructions to read a
-        // deleted file. The remaining rows below still preserve the CLI tail.
+        // Export the genuine summary with the same pinned CLI normalization,
+        // not analysis or instructions to read a deleted file. The remaining
+        // rows below still preserve the CLI tail.
         if (!content.filter(block => block.type === 'text').map(block => block.text).join('\n').includes(this.compactSummary)) {
           throw new WorkerError('compact_snapshot_failed');
         }

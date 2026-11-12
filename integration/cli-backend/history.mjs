@@ -5,6 +5,15 @@ import { WorkerError, isRecord, nativeToolName } from './helpers.mjs';
 // SessionStore is public; the JSONL entry body it transports is CLI-internal.
 export const HISTORY_CLI_VERSION = '2.1.322';
 
+/** Match the pinned CLI's w1n -> XOr summary rendering. PostCompact exposes
+ * raw model output, while the transcript removes analysis and summary tags. */
+export function nativeCompactSummary(text) {
+  return text.replaceAll(/<(?=\s*(?:\/\s*)?tools-used-before-summary\b)/gi, '&lt;')
+    .replace(/<analysis>[\s\S]*?<\/analysis>/, '')
+    .replace(/<summary>([\s\S]*?)<\/summary>/, (_match, summary) => `Summary:\n${summary.trim()}`)
+    .replace(/\n\n+/g, '\n\n').trim();
+}
+
 /**
  * Materialize a caller-composed compacted history without flattening roles or
  * replacing signed thinking. Completed calls must be loaded WITH their results:
