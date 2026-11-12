@@ -6,9 +6,31 @@ comparison. Only free supported gateway features are in scope. The new Responses
 adapter is an implementation milestone, not whole-outcome completion.
 
 The user owns authentication, new paid usage, production rollout and material
-support-scope decisions. Do not silently replace the agreed model/account, restore
-the SDK/CLI proxy backend, spoof an official client, remove rejected thinking,
-or modify LiteLLM source/license flags.
+support-scope decisions. The November12 user decision explicitly restores genuine
+SDK/CLI inference as the default. Do not silently switch models/accounts/backends,
+spoof an official client, remove rejected thinking, or modify LiteLLM source/license flags.
+
+## CLI default deployed to Han — 2026-11-12
+
+Source `fc80fa3` is deployed with genuine CLI2.1.322/SDK0.3.322 inference.
+All four current models return the expected reply, operating Haiku reuses its
+session and reads5142 cached tokens, and existing keys/auth/data/state are kept.
+The final Linux image passes274/274 isolated regressions.
+
+Unmodified real Claude Code passes cache reuse, manual compaction5876→973,
+target retention and post-compaction cache reuse. Real Codex passes tool
+execution, local compaction and two follow-ups in five requests, preserving
+opaque reasoning. Both client qualifications directly target the validation
+proxy. Genuine automatic compaction passes with a scripted provider; a real
+automatic threshold crossing and an invoice/quality comparison remain untested.
+
+Separately, the unchanged LiteLLM managed Messages path passes two real Haiku
+turns with6311 upstream cache-read tokens. Its managed Responses path completes
+a text request. Those three calls emitted no thinking, so they do not qualify
+signed reasoning/compaction through the managed conversion. Existing transparent
+gateway routes still target the separate test relay, not Han. See
+[the receipt](evidence/20261112-cli-default-compaction.json) and
+[CLI contract](CLI-INFERENCE.md).
 
 ## Current source integration — 2026-11-06
 

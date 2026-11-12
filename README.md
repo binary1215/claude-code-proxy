@@ -33,7 +33,32 @@ requests passed: tool intent, caller-result continuation and Responses SSE;
 the continuation reported **2772 cache-read tokens**. Those historical results
 precede the default/compaction work. [Historical receipt](docs/evidence/20261112-cli-inference.json).
 
-## Thinking progress-update compatibility — 2026-11-12
+## Verified CLI default — 2026-11-12
+
+Operating Han now uses the default CLI backend, source `fc80fa3`, official
+CLI2.1.322 and SDK0.3.322. Opus5.5, Sonnet5.5, Fable5.2 and Haiku5.5 all returned
+the expected reply with HTTP200. A second operating Haiku request reused its
+CLI session and reported **5142 cache-read tokens**. Existing proxy keys, auth
+and data volumes, automatic refresh and the Responses state key were retained.
+
+The final Linux image passes **274/274** offline regressions. With a real account,
+unmodified Claude Code passed cached continuation, manual compaction
+**5876 -> 973 tokens**, retained-target recall and cached post-compaction turns.
+Unmodified Codex passed its tool round trip, local compaction and two follow-ups
+over five Responses requests, including exact reasoning replay. These client
+tests directly reached the validation proxy; they are not full client tests
+through LiteLLM. Genuine SDK automatic compaction and multi-call usage accounting
+pass against a scripted provider; a real-account automatic threshold crossing
+was not induced. See the [release evidence](docs/evidence/20261112-cli-default-compaction.json)
+and [context contract](docs/CLI-INFERENCE.md).
+
+Separately, existing LiteLLM managed Messages passed two real Haiku turns with
+**6311 upstream cache-read tokens**; its managed Responses path completed a text
+request. No gateway configuration/client source changed. These three calls did
+not emit thinking or exercise compaction, and managed conversion is not a
+transparent Han Responses fidelity test.
+
+## Earlier HTTP thinking progress-update compatibility — 2026-11-12
 
 Explicit `thinking.display: "updates"` now supplies its required public
 `thinking-display-updates-2026-08-18` beta automatically on native Messages.
@@ -47,14 +72,15 @@ of updates. A real official CLI request with only the updates feature beta
 removed returned400 through the existing proxy and200 with the expected reply
 through a temporary patched candidate. The separately reproduced
 **system-content-dependent upstream429**
-remains unresolved. Tests pass **209/209 on Linux** and **208 plus one Linux-only
-skip on Windows**. This branch has not been deployed to Han. See the
+remains relevant to explicit HTTP mode. Historical tests passed **209/209 on Linux** and **208 plus one Linux-only
+skip on Windows**, before the CLI-default rollout. See the
 [verification receipt](docs/evidence/20261112-thinking-updates-beta.json).
 
 ## Current model compatibility — 2026-11-11
 
 The dynamic upstream catalogue includes **Fable 5.2, Haiku 5.5, Sonnet 5.5 and
-Opus 5.5**. Native Messages preserves their IDs and options. The Responses
+Opus 5.5**. The HTTP backend preserves native IDs/options; CLI mode supports the
+bounded SDK control subset in its contract. The Responses
 adapter now selects adaptive thinking for verified modern models instead of
 injecting a legacy token budget, accepts their 128,000-token output limit, and
 maps supported effort labels directly to native effort. Thinking-off and forced
@@ -181,9 +207,10 @@ The upstream credential is selected once per request. The default
 
 Database credentials starting with `sk-ant-oat` and the OAuth environment variable use `Authorization: Bearer`. API keys use `x-api-key`. There is no fallback to another credential after failure. A database override must be explicitly removed before an environment credential takes effect.
 
-An optional **`cli-auth` image target** adds official Claude Code login inside
-the container, a separate persistent auth volume, and a live credential-file
-adapter. Its `UPSTREAM_AUTH_SOURCE=claude_cli` reads only that CLI store, with no
+The standard CLI image includes official Claude Code login inside
+the container; the explicit **`cli-auth` image target** offers authentication
+with HTTP inference. Both use a separate persistent auth volume and a live
+credential-file adapter. `UPSTREAM_AUTH_SOURCE=claude_cli` reads only that CLI store, with no
 database or environment credential fallback. The [container login workflow](#container-login-and-automatic-refresh)
 below covers setup and opt-in refresh. A configured setup-token or API key uses
 the precedence above; automatic CLI refresh applies only to CLI-auth mode.

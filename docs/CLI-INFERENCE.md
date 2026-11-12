@@ -173,8 +173,10 @@ scope-changing tool cycles, automatic and manual compaction, and separate wire
 context versus complete internal-call accounting. These tests do not measure
 provider cache behavior or coding quality.
 
-Real-provider release results and production/client qualification are recorded
-separately. The earlier optional-backend results remain historical in
+The [CLI-default release receipt](evidence/20261112-cli-default-compaction.json)
+records the deployed image, real native/Codex client results, observed cache
+reads and real manual compaction, separately from scripted automatic compaction.
+The earlier optional-backend results remain historical in
 [20261112-cli-inference.json](evidence/20261112-cli-inference.json).
 
 Primary interfaces: [Agent SDK](https://code.claude.com/docs/en/agent-sdk/typescript),
