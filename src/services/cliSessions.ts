@@ -346,10 +346,13 @@ class Registry {
       validateNextInput(next, new Set());
       }
       if (this.sessions.size >= CLAUDE_CLI_MAX_SESSIONS) {
-        const idle = [...this.sessions.values()].filter(value => !value.busy && !value.pending.size)
+        // Pending tools execute in the caller, not in this worker. Once its
+        // response is committed, the idle worker is only a history cache;
+        // the caller's complete history can import its eventual tool results.
+        const idle = [...this.sessions.values()].filter(value => !value.closed && !value.busy && !value.upstream.active)
           .sort((a, b) => a.lastUsed - b.lastUsed)[0];
         if (idle) idle.close();
-        else throw new CliBackendError("cli_capacity", "All CLI sessions currently have active or pending caller work.", 503);
+        else throw new CliBackendError("cli_capacity", "All CLI sessions currently have active requests.", 503);
       }
       const retired: { session: Session; historyHash: string; pending: string[] }[] = [];
       if (imported) for (const old of this.sessions.values()) {
