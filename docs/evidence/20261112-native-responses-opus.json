@@ -1,0 +1,666 @@
+{
+  "date": "2026-11-12",
+  "baseline_model": "claude-opus-5-5",
+  "operating_source": "fc80fa3fbfa5e274806647a214afc24b8866792e",
+  "operating_image": "sha256:34b5f1b91a24f1d2148b4d52ec37550eccf100e7567fd968931502e14a88b870",
+  "gateway_version": "1.109.0",
+  "registration": {
+    "http_status": 200,
+    "registered_model": {
+      "model_name": "claude-opus-5-5-responses-han",
+      "litellm_params": {
+        "model": "openai/claude-opus-5-5",
+        "api_base": "http://192.168.0.64:13458/v1",
+        "litellm_credential_name": "claudemock_han"
+      },
+      "model_info": {
+        "id": "4abda793-91ae-4c0d-856b-b212cb68aebb",
+        "mode": "responses",
+        "supported_endpoints": [
+          "/v1/responses"
+        ],
+        "blocked": false,
+        "db_model": true
+      }
+    },
+    "baseline_model_count": 36,
+    "after_model_count": 37,
+    "existing_models_changed": [],
+    "models_list_contains_alias": true,
+    "restart_performed": false
+  },
+  "changes": {
+    "litellm_source": false,
+    "codex_source": false,
+    "proxy_runtime": false,
+    "new_gateway_model": true,
+    "new_keys": 0,
+    "new_credentials": 0,
+    "credential_handling": "existing key in process memory and child stdin/environment only"
+  },
+  "local_checks": {
+    "observer_unit_tests_passed": 21,
+    "observer_unit_tests_failed": 0,
+    "configuration_example_yaml_parse": true,
+    "git_diff_check": true
+  },
+  "post_test_state": {
+    "health": "ok",
+    "db_status": "ok",
+    "inference_backend": "cli",
+    "active_tasks": 0,
+    "owned_consumer_containers_present": false
+  },
+  "initial_codex": {
+    "functional_pass": true,
+    "endpoint_request_attempts": 5,
+    "actual_dot7_gateway_tested": true,
+    "gateway_responses_path": "/v1/responses",
+    "gateway_route_kind_declared": "native-responses",
+    "gateway_route_configuration_observed": false,
+    "local_compaction_pass": true,
+    "post_compaction_followups_pass": true,
+    "observed_reasoning_preserved": true,
+    "signed_reasoning_replay_qualified": null,
+    "post_compaction_reasoning_replay_observed": false,
+    "reasoning_check_count": 1,
+    "observed_no_retries": true,
+    "no_hidden_retries": null,
+    "cache_hit_observed": true,
+    "cache_write_observed": true,
+    "reasoning_fixture_requested": null,
+    "reasoning_fixture_answer_checks_passed": null,
+    "failure_code": null,
+    "failure_phase": null,
+    "phases": {
+      "initial": {
+        "functional_pass": true,
+        "terminal_status": "completed",
+        "reasoning_done_completed_exact": null,
+        "reasoning_fixture_answer_correct": null,
+        "initial_reasoning_replay_exact": null,
+        "initial_reasoning_done_replay_exact": null,
+        "initial_reasoning_replay_ids_exact": null,
+        "initial_reasoning_replay_state_exact": null,
+        "requests": [
+          {
+            "http_status": 200,
+            "response_completed_count": 1,
+            "reasoning_count": 0,
+            "reasoning_present": false,
+            "reasoning_done_completed_exact": null,
+            "reasoning_done_encrypted_content_present": false,
+            "reasoning_completed_encrypted_content_present": false,
+            "usage": {
+              "native_input_tokens": 2,
+              "native_output_tokens": 71,
+              "cache_creation_input_tokens": 11982,
+              "cache_read_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 11982,
+              "ephemeral_1h_input_tokens": 0,
+              "input_tokens": 11984,
+              "output_tokens": 71,
+              "total_tokens": 12055,
+              "cached_tokens": 0,
+              "cache_write_tokens": 11982
+            }
+          },
+          {
+            "http_status": 200,
+            "response_completed_count": 1,
+            "reasoning_count": 0,
+            "reasoning_present": false,
+            "reasoning_done_completed_exact": null,
+            "reasoning_done_encrypted_content_present": false,
+            "reasoning_completed_encrypted_content_present": false,
+            "usage": {
+              "native_input_tokens": 2,
+              "native_output_tokens": 20,
+              "cache_creation_input_tokens": 105,
+              "cache_read_input_tokens": 11982,
+              "ephemeral_5m_input_tokens": 105,
+              "ephemeral_1h_input_tokens": 0,
+              "input_tokens": 12089,
+              "output_tokens": 20,
+              "total_tokens": 12109,
+              "cached_tokens": 11982,
+              "cache_write_tokens": 105
+            }
+          }
+        ]
+      },
+      "compact": {
+        "functional_pass": true,
+        "terminal_status": "completed",
+        "reasoning_done_completed_exact": true,
+        "reasoning_fixture_answer_correct": null,
+        "initial_reasoning_compaction_replay_exact": null,
+        "initial_reasoning_compaction_done_replay_exact": null,
+        "initial_reasoning_compaction_replay_ids_exact": null,
+        "initial_reasoning_compaction_replay_state_exact": null,
+        "requests": [
+          {
+            "http_status": 200,
+            "response_completed_count": 1,
+            "reasoning_count": 1,
+            "reasoning_present": true,
+            "reasoning_done_completed_exact": true,
+            "reasoning_done_encrypted_content_present": true,
+            "reasoning_completed_encrypted_content_present": true,
+            "usage": {
+              "native_input_tokens": 2,
+              "native_output_tokens": 405,
+              "cache_creation_input_tokens": 9899,
+              "cache_read_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 9899,
+              "ephemeral_1h_input_tokens": 0,
+              "input_tokens": 9901,
+              "output_tokens": 405,
+              "total_tokens": 10306,
+              "cached_tokens": 0,
+              "cache_write_tokens": 9899
+            }
+          }
+        ]
+      },
+      "followup": {
+        "functional_pass": true,
+        "terminal_status": "completed",
+        "reasoning_done_completed_exact": null,
+        "reasoning_fixture_answer_correct": null,
+        "requests": [
+          {
+            "http_status": 200,
+            "response_completed_count": 1,
+            "reasoning_count": 0,
+            "reasoning_present": false,
+            "reasoning_done_completed_exact": null,
+            "reasoning_done_encrypted_content_present": false,
+            "reasoning_completed_encrypted_content_present": false,
+            "usage": {
+              "native_input_tokens": 2,
+              "native_output_tokens": 23,
+              "cache_creation_input_tokens": 1252,
+              "cache_read_input_tokens": 11278,
+              "ephemeral_5m_input_tokens": 1252,
+              "ephemeral_1h_input_tokens": 0,
+              "input_tokens": 12532,
+              "output_tokens": 23,
+              "total_tokens": 12555,
+              "cached_tokens": 11278,
+              "cache_write_tokens": 1252
+            }
+          }
+        ]
+      },
+      "followup_second": {
+        "functional_pass": true,
+        "terminal_status": "completed",
+        "reasoning_done_completed_exact": null,
+        "reasoning_fixture_answer_correct": null,
+        "post_compaction_reasoning_replay_exact": null,
+        "post_compaction_reasoning_done_replay_exact": null,
+        "post_compaction_reasoning_replay_ids_exact": null,
+        "post_compaction_reasoning_replay_state_exact": null,
+        "requests": [
+          {
+            "http_status": 200,
+            "response_completed_count": 1,
+            "reasoning_count": 0,
+            "reasoning_present": false,
+            "reasoning_done_completed_exact": null,
+            "reasoning_done_encrypted_content_present": false,
+            "reasoning_completed_encrypted_content_present": false,
+            "usage": {
+              "native_input_tokens": 4,
+              "native_output_tokens": 28,
+              "cache_creation_input_tokens": 404,
+              "cache_read_input_tokens": 12213,
+              "ephemeral_5m_input_tokens": 404,
+              "ephemeral_1h_input_tokens": 0,
+              "input_tokens": 12621,
+              "output_tokens": 28,
+              "total_tokens": 12649,
+              "cached_tokens": 12213,
+              "cache_write_tokens": 404
+            }
+          }
+        ]
+      }
+    }
+  },
+  "reasoning_codex": {
+    "functional_pass": true,
+    "endpoint_request_attempts": 5,
+    "actual_dot7_gateway_tested": true,
+    "gateway_responses_path": "/v1/responses",
+    "gateway_route_kind_declared": "native-responses",
+    "gateway_route_configuration_observed": false,
+    "local_compaction_pass": true,
+    "post_compaction_followups_pass": true,
+    "observed_reasoning_preserved": true,
+    "signed_reasoning_replay_qualified": true,
+    "post_compaction_reasoning_replay_observed": true,
+    "reasoning_check_count": 7,
+    "observed_no_retries": true,
+    "no_hidden_retries": null,
+    "cache_hit_observed": true,
+    "cache_write_observed": true,
+    "reasoning_fixture_requested": true,
+    "reasoning_fixture_answer_checks_passed": true,
+    "failure_code": null,
+    "failure_phase": null,
+    "phases": {
+      "initial": {
+        "functional_pass": true,
+        "terminal_status": "completed",
+        "reasoning_done_completed_exact": null,
+        "reasoning_fixture_answer_correct": null,
+        "initial_reasoning_replay_exact": null,
+        "initial_reasoning_done_replay_exact": null,
+        "initial_reasoning_replay_ids_exact": null,
+        "initial_reasoning_replay_state_exact": null,
+        "requests": [
+          {
+            "http_status": 200,
+            "response_completed_count": 1,
+            "reasoning_count": 0,
+            "reasoning_present": false,
+            "reasoning_done_completed_exact": null,
+            "reasoning_done_encrypted_content_present": false,
+            "reasoning_completed_encrypted_content_present": false,
+            "usage": {
+              "native_input_tokens": 2,
+              "native_output_tokens": 71,
+              "cache_creation_input_tokens": 11996,
+              "cache_read_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 11996,
+              "ephemeral_1h_input_tokens": 0,
+              "input_tokens": 11998,
+              "output_tokens": 71,
+              "total_tokens": 12069,
+              "cached_tokens": 0,
+              "cache_write_tokens": 11996
+            }
+          },
+          {
+            "http_status": 200,
+            "response_completed_count": 1,
+            "reasoning_count": 0,
+            "reasoning_present": false,
+            "reasoning_done_completed_exact": null,
+            "reasoning_done_encrypted_content_present": false,
+            "reasoning_completed_encrypted_content_present": false,
+            "usage": {
+              "native_input_tokens": 2,
+              "native_output_tokens": 20,
+              "cache_creation_input_tokens": 105,
+              "cache_read_input_tokens": 11996,
+              "ephemeral_5m_input_tokens": 105,
+              "ephemeral_1h_input_tokens": 0,
+              "input_tokens": 12103,
+              "output_tokens": 20,
+              "total_tokens": 12123,
+              "cached_tokens": 11996,
+              "cache_write_tokens": 105
+            }
+          }
+        ]
+      },
+      "compact": {
+        "functional_pass": true,
+        "terminal_status": "completed",
+        "reasoning_done_completed_exact": true,
+        "reasoning_fixture_answer_correct": null,
+        "initial_reasoning_compaction_replay_exact": null,
+        "initial_reasoning_compaction_done_replay_exact": null,
+        "initial_reasoning_compaction_replay_ids_exact": null,
+        "initial_reasoning_compaction_replay_state_exact": null,
+        "requests": [
+          {
+            "http_status": 200,
+            "response_completed_count": 1,
+            "reasoning_count": 1,
+            "reasoning_present": true,
+            "reasoning_done_completed_exact": true,
+            "reasoning_done_encrypted_content_present": true,
+            "reasoning_completed_encrypted_content_present": true,
+            "usage": {
+              "native_input_tokens": 2,
+              "native_output_tokens": 409,
+              "cache_creation_input_tokens": 9914,
+              "cache_read_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 9914,
+              "ephemeral_1h_input_tokens": 0,
+              "input_tokens": 9916,
+              "output_tokens": 409,
+              "total_tokens": 10325,
+              "cached_tokens": 0,
+              "cache_write_tokens": 9914
+            }
+          }
+        ]
+      },
+      "followup": {
+        "functional_pass": true,
+        "terminal_status": "completed",
+        "reasoning_done_completed_exact": true,
+        "reasoning_fixture_answer_correct": true,
+        "requests": [
+          {
+            "http_status": 200,
+            "response_completed_count": 1,
+            "reasoning_count": 1,
+            "reasoning_present": true,
+            "reasoning_done_completed_exact": true,
+            "reasoning_done_encrypted_content_present": true,
+            "reasoning_completed_encrypted_content_present": true,
+            "usage": {
+              "native_input_tokens": 2,
+              "native_output_tokens": 524,
+              "cache_creation_input_tokens": 1397,
+              "cache_read_input_tokens": 11283,
+              "ephemeral_5m_input_tokens": 1397,
+              "ephemeral_1h_input_tokens": 0,
+              "input_tokens": 12682,
+              "output_tokens": 524,
+              "total_tokens": 13206,
+              "cached_tokens": 11283,
+              "cache_write_tokens": 1397
+            }
+          }
+        ]
+      },
+      "followup_second": {
+        "functional_pass": true,
+        "terminal_status": "completed",
+        "reasoning_done_completed_exact": true,
+        "reasoning_fixture_answer_correct": true,
+        "post_compaction_reasoning_replay_exact": true,
+        "post_compaction_reasoning_done_replay_exact": true,
+        "post_compaction_reasoning_replay_ids_exact": true,
+        "post_compaction_reasoning_replay_state_exact": true,
+        "requests": [
+          {
+            "http_status": 200,
+            "response_completed_count": 1,
+            "reasoning_count": 1,
+            "reasoning_present": true,
+            "reasoning_done_completed_exact": true,
+            "reasoning_done_encrypted_content_present": true,
+            "reasoning_completed_encrypted_content_present": true,
+            "usage": {
+              "native_input_tokens": 4,
+              "native_output_tokens": 103,
+              "cache_creation_input_tokens": 648,
+              "cache_read_input_tokens": 12680,
+              "ephemeral_5m_input_tokens": 648,
+              "ephemeral_1h_input_tokens": 0,
+              "input_tokens": 13332,
+              "output_tokens": 103,
+              "total_tokens": 13435,
+              "cached_tokens": 12680,
+              "cache_write_tokens": 648
+            }
+          }
+        ]
+      }
+    }
+  },
+  "initial_claude_code": {
+    "functional_pass": true,
+    "qualification_pass": false,
+    "actions": [
+      {
+        "action": "initial_client_tool",
+        "success": true,
+        "native_replies": 2,
+        "native_completed": true,
+        "usage": {
+          "input_tokens": 2,
+          "output_tokens": 16,
+          "cache_creation_input_tokens": 422,
+          "cache_read_input_tokens": 5326
+        }
+      },
+      {
+        "action": "warm_cache",
+        "success": true,
+        "native_replies": 1,
+        "native_completed": true,
+        "usage": {
+          "input_tokens": 2,
+          "output_tokens": 14,
+          "cache_creation_input_tokens": 369,
+          "cache_read_input_tokens": 5432
+        }
+      },
+      {
+        "action": "client_manual_compact",
+        "success": true,
+        "local_command_compact": true
+      },
+      {
+        "action": "retained_tool_result",
+        "success": true,
+        "native_replies": 1,
+        "native_completed": true,
+        "usage": {
+          "input_tokens": 2,
+          "output_tokens": 15,
+          "cache_creation_input_tokens": 2018,
+          "cache_read_input_tokens": 1637
+        }
+      },
+      {
+        "action": "after_compaction_cache",
+        "success": true,
+        "native_replies": 1,
+        "native_completed": true,
+        "usage": {
+          "input_tokens": 2,
+          "output_tokens": 20,
+          "cache_creation_input_tokens": 670,
+          "cache_read_input_tokens": 3029
+        }
+      }
+    ],
+    "compaction": {
+      "boundaries": [
+        {
+          "trigger": "manual",
+          "pre_tokens": 5817,
+          "post_tokens": 969,
+          "duration_ms": 12675,
+          "cumulative_dropped_tokens": 4848
+        }
+      ],
+      "pre": [
+        {
+          "trigger": "manual"
+        }
+      ],
+      "post": [
+        {
+          "trigger": "manual",
+          "retained_target": true
+        }
+      ]
+    },
+    "checks": {
+      "client_owned_tool": true,
+      "initial_marker": true,
+      "warm_cache_read": true,
+      "client_manual_compaction": true,
+      "retained_tool_result": true,
+      "after_compaction_cache_read": true,
+      "thinking_emitted": true,
+      "signed_thinking_replayed": false,
+      "actual_returned_blocks_preserved": null,
+      "configured_model_ids_only": true,
+      "no_retry_or_fallback": true
+    }
+  },
+  "claude_code": {
+    "functional_pass": true,
+    "qualification_pass": true,
+    "model_alias": "claude-opus-5-5-han",
+    "expected_model": "claude-opus-5-5",
+    "actions": [
+      {
+        "action": "initial_client_tool",
+        "success": true,
+        "native_replies": 2,
+        "native_completed": true,
+        "usage": {
+          "input_tokens": 2,
+          "output_tokens": 566,
+          "cache_creation_input_tokens": 422,
+          "cache_read_input_tokens": 5459
+        }
+      },
+      {
+        "action": "warm_cache",
+        "success": true,
+        "native_replies": 1,
+        "native_completed": true,
+        "usage": {
+          "input_tokens": 2,
+          "output_tokens": 137,
+          "cache_creation_input_tokens": 799,
+          "cache_read_input_tokens": 5146
+        }
+      },
+      {
+        "action": "client_manual_compact",
+        "success": true,
+        "local_command_compact": true
+      },
+      {
+        "action": "retained_tool_result",
+        "success": true,
+        "native_replies": 1,
+        "native_completed": true,
+        "usage": {
+          "input_tokens": 2,
+          "output_tokens": 91,
+          "cache_creation_input_tokens": 2128,
+          "cache_read_input_tokens": 1637
+        }
+      },
+      {
+        "action": "after_compaction_cache",
+        "success": true,
+        "native_replies": 1,
+        "native_completed": true,
+        "usage": {
+          "input_tokens": 2,
+          "output_tokens": 66,
+          "cache_creation_input_tokens": 676,
+          "cache_read_input_tokens": 3139
+        }
+      }
+    ],
+    "compaction": {
+      "boundaries": [
+        {
+          "trigger": "manual",
+          "pre_tokens": 6088,
+          "post_tokens": 947,
+          "duration_ms": 14543,
+          "cumulative_dropped_tokens": 5141
+        }
+      ],
+      "pre": [
+        {
+          "trigger": "manual"
+        }
+      ],
+      "post": [
+        {
+          "trigger": "manual",
+          "retained_target": true
+        }
+      ]
+    },
+    "checks": {
+      "client_owned_tool": true,
+      "initial_marker": true,
+      "initial_reasoning_solution": true,
+      "warm_cache_read": true,
+      "client_manual_compaction": true,
+      "retained_tool_result": true,
+      "retained_reasoning_checksum": true,
+      "after_compaction_cache_read": true,
+      "thinking_emitted": true,
+      "signed_thinking_replayed": true,
+      "actual_returned_blocks_preserved": true,
+      "configured_model_ids_only": true,
+      "no_retry_or_fallback": true
+    },
+    "observer": {
+      "requests": 6,
+      "statuses": [
+        {
+          "request": 1,
+          "action": "initial_client_tool",
+          "status": 200
+        },
+        {
+          "request": 2,
+          "action": "initial_client_tool",
+          "status": 200
+        },
+        {
+          "request": 3,
+          "action": "warm_cache",
+          "status": 200
+        },
+        {
+          "request": 4,
+          "action": "client_manual_compact",
+          "status": 200
+        },
+        {
+          "request": 5,
+          "action": "retained_tool_result",
+          "status": 200
+        },
+        {
+          "request": 6,
+          "action": "after_compaction_cache",
+          "status": 200
+        }
+      ],
+      "models": [
+        "claude-opus-5-5-han"
+      ],
+      "returned_thinking": 5,
+      "returned_signed_thinking": 5,
+      "returned_redacted": 0,
+      "replayed_thinking": 5,
+      "replayed_signed_thinking": 5,
+      "replayed_redacted": 0,
+      "signature_content_mismatches": 0,
+      "unrecognized_replayed_blocks": 0
+    }
+  },
+  "earlier_native_consumer_failure": {
+    "report_missing": true,
+    "exit_code": 1,
+    "inference_request_count": null,
+    "diagnosed_startup_condition": "owned bind-mounted fixture was root:root 0600 and unreadable to image user node; original stderr was not retained",
+    "correction": "fixture changed to 0644; same-image node user network-disabled syntax check passed",
+    "unknown_attempts_not_reclassified_as_zero": true
+  },
+  "known_observed_external_requests": 22,
+  "unknown_native_start_attempts": 1,
+  "limitations": [
+    "Client-to-gateway observation; raw gateway-to-Han wire and gateway internal retries unobserved.",
+    "No-I/O tools and real manual/local compaction; no repository editing or real automatic threshold crossing.",
+    "OpenAI/OpenAI-like Responses transformation strips input/tool cache_control; CLI cache reuse measured separately.",
+    "Supported configuration is one Opus native Responses model; other model families and OpenCode not requalified here.",
+    "Full input history required; previous_response_id persistence and remote /responses/compact unsupported.",
+    "Cache counters do not establish invoice, coding quality, or gateway budget-accounting correctness."
+  ]
+}

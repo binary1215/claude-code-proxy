@@ -58,7 +58,34 @@ request. No gateway configuration/client source changed. Those initial three
 calls did not emit thinking or exercise compaction. Subsequent actual-client
 qualification is recorded below.
 
-## Actual clients through LiteLLM — 2026-11-12
+## Opus native Responses through LiteLLM — 2026-11-12
+
+The new **`claude-opus-5-5-responses-han`** deployment routes the standard
+gateway `/v1/responses` to Han's Responses adapter. Existing 36 model entries
+were preserved; no gateway restart, source patch, new key or proxy image change
+was needed. Native Claude Code keeps **`claude-opus-5-5-han`** on `/v1/messages`.
+
+Real Codex 0.160.0 passes tool execution, local compaction and two follow-ups
+using Opus 5.5. A nontrivial arithmetic task emits signed reasoning; its item
+IDs and encrypted state match between item-done, final output and the actual
+next client request. Both arithmetic answers pass. Post-compaction cache reads
+are **11283/12680 tokens**. This closes the previously observed streaming and
+signed-replay gap for this deployment; the older Anthropic-backed conversion
+route retains its limitation.
+
+Real Claude Code 2.1.322 also qualifies on the existing Opus Messages alias:
+six calls pass a client-owned tool, arithmetic/result retention, manual
+compaction **6088→947 tokens**, cache reuse and **five exact signed-thinking
+replay observations**. Warm/post-compaction cache reads are 5146/3139 tokens.
+The native replay observer follows the pinned SDK's signature replacement rule.
+
+See [configuration and limitations](docs/LITELLM-NATIVE-RESPONSES.md) and
+[the Opus qualification receipt](docs/evidence/20261112-native-responses-opus.json).
+The observation covers client-to-gateway traffic. These bounded no-I/O tools and
+manual/local compaction checks do not qualify full repository editing, real
+automatic-threshold compaction, every client/model or invoice accuracy.
+
+## Earlier managed-conversion client baseline — 2026-11-12
 
 The CLI-default branch is merged into `master`. Real Claude Code 2.1.322 and
 Codex 0.160.0 also pass their bounded workflows through the existing
@@ -340,11 +367,11 @@ router_settings:
   fallbacks: []
 ```
 
-Put the **proxy key** in the LiteLLM container, not the Anthropic credential. Use the root API Base in LiteLLM; do not append `/v1/messages`. Model aliases belong in LiteLLM. `GET /v1/models` here reads the upstream catalog rather than advertising hardcoded model families or access guarantees.
+Put the **proxy key** in the LiteLLM container, not the Anthropic credential. The Anthropic Messages deployment above uses the root API Base; do not append `/v1/messages`. Model aliases belong in LiteLLM. `GET /v1/models` here reads the upstream catalog rather than advertising hardcoded model families or access guarantees.
 
 **Do not patch LiteLLM for this project.** The earlier patch installer and patch-dependent suites have been withdrawn; their passing results were not evidence for stock LiteLLM. The configuration above uses LiteLLM's normal provider transformation and is not a lossless contract. For a fidelity-first Messages client, evaluate the stock [pass-through path and HTTP verification](integration/litellm/README.md). Pass-through is a different gateway route with different routing/accounting behavior, not a transparent fix for Chat/Responses conversions. Production gateway settings are not changed by this repository.
 
-For Codex, use a separate stock pass-through route to the **new proxy-owned Responses adapter**, bypassing LiteLLM's lossy Responses transformation. [Configuration and rollout limits](docs/RESPONSES-ADAPTER.md) include explicit route authentication, relay model restrictions, state-key persistence and caller-requested native cache/thinking options. This path uses exact native model IDs, not managed-model aliases. Gateway spend/budget behavior still needs separate acceptance.
+For Codex on LiteLLM 1.109.0, use a separate **native Responses model deployment** pointing to the proxy-owned Responses adapter: `openai/claude-opus-5-5`, API base `http://YOUR_PROXY_HOST:13458/v1`, and public alias `claude-opus-5-5-responses-han`. The client uses the standard gateway `/v1/responses` endpoint. See the [configuration example](integration/litellm/native-responses.example.yaml) and [routing/state contract](docs/LITELLM-NATIVE-RESPONSES.md). This avoids the Anthropic-backed Responses-to-Chat conversion without patching LiteLLM or requiring a custom Enterprise endpoint. Earlier custom `/claude-responses` deployments remain a distinct route; their configuration and history do not qualify the new alias. Gateway spend/budget behavior still needs separate acceptance.
 
 Client requirements:
 

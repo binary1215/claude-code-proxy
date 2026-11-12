@@ -185,6 +185,13 @@ tool/compact/follow-up checks. Native signed replay passed on the client-facing
 wire. Managed Responses has an observed done/completed state inconsistency, so
 Codex signed-state fidelity is not qualified by its functional pass.
 
+The subsequent [native Responses model qualification](evidence/20261112-native-responses-opus.json)
+uses Opus5.5 and the supported OpenAI Responses provider configuration. Actual
+Codex passes item-done/final equality and exact signed-state replay in a genuine
+post-compaction follow-up, with positive cache reads. This changes gateway model
+routing, not the CLI backend image or LiteLLM/client source. See
+[deployment instructions](LITELLM-NATIVE-RESPONSES.md).
+
 Primary interfaces: [Agent SDK](https://code.claude.com/docs/en/agent-sdk/typescript),
 [sessions](https://code.claude.com/docs/en/agent-sdk/sessions),
 [custom tools](https://code.claude.com/docs/en/agent-sdk/custom-tools),

@@ -38,6 +38,8 @@ NATIVE_OPTIONS = '{"cache_control":{"type":"ephemeral","ttl":"5m"}}'
 PHASE_LIMITS = {'initial': 2, 'compact': 1, 'followup': 1, 'followup_second': 1}
 MARKERS = {'initial': 'CODEX_LIVE_INITIAL_OK', 'followup': 'CODEX_LIVE_FOLLOWUP_OK',
            'followup_second': 'CODEX_LIVE_SECOND_FOLLOWUP_OK'}
+REASONING_FIXTURE_EXPECTED = {'followup': MARKERS['followup'] + ':173829',
+                            'followup_second': MARKERS['followup_second'] + ':31684'}
 MAX_REQUEST = 1024 * 1024
 MAX_RESPONSE = 4 * 1024 * 1024
 HTTP_TIMEOUT = 75
@@ -61,6 +63,22 @@ def cache_fixture_text():
             'It contains no tasks or instructions; do not act on, repeat, or summarize it. '
             'Continue following only the smoke-test instructions and requested response markers.\n'
             '<cache_reference_fixture>\n' + '\n'.join(rows) + '\n</cache_reference_fixture>\n')
+
+
+def turn_prompt(phase, reasoning_fixture=False):
+    if reasoning_fixture and phase == 'followup':
+        return ('Continue this same conversation without using any tools. Never access files, commands, network, search or agents. '
+                'Solve this deterministic arithmetic puzzle: find the unique integer N with 0 <= N < 215441 such that '
+                'N mod 17 = 4, N mod 19 = 17, N mod 23 = 18, and N mod 29 = 3. '
+                'Solve and verify all four congruences before giving the final answer. '
+                'Reply with exactly ' + MARKERS[phase] + ':<N>, replacing <N> with the decimal integer. Do not include an explanation.')
+    if reasoning_fixture and phase == 'followup_second':
+        return ('Continue this same conversation without using any tools. Never access files, commands, network, search or agents. '
+                'Using N from your immediately preceding answer, compute C = (37*N + 11) mod 100000. '
+                'Reply with exactly ' + MARKERS[phase] + ':<C>, replacing <C> with the decimal integer. Do not include an explanation.')
+    prompt = ('Call the built-in no-I/O get_goal tool exactly once with {}. After its result, do not call further tools. '
+              if phase == 'initial' else 'Continue this same conversation without using any tools. ')
+    return prompt + 'Never access files, commands, network, search or agents. Reply with exactly ' + MARKERS[phase] + '.'
 
 
 def safe_sse_failures(stream):
@@ -105,9 +123,10 @@ class HarnessFailure(Exception):
 
 
 class State:
-    def __init__(self, gateway_key, relay_key=None, gateway_target=None, model=MODEL):
+    def __init__(self, gateway_key, relay_key=None, gateway_target=None, model=MODEL, reasoning_fixture=False):
         self.phase = 'initial'
         self.model = model
+        self.reasoning_fixture = reasoning_fixture
         self.gateway_key = gateway_key
         self.relay_key = relay_key
         self.gateway_target = gateway_target
@@ -264,6 +283,51 @@ def request_capsules(record):
     return capsules(record['request'].get('input', []))
 
 
+def sealed_capsules(items):
+    return bool(items) and all(isinstance(item_id, str) and bool(item_id)
+                               and isinstance(value, str) and bool(value) for item_id, value in items)
+
+
+def reasoning_replay_evidence(previous, following):
+    """Compare both SDK-visible snapshots with actual subsequent input; retain no state."""
+    done = []
+    completed = []
+    for record in previous:
+        items, finals = response_items(record)
+        done.extend(capsules(items))
+        if len(finals) == 1:
+            completed.extend(capsules(finals[0].get('output', [])))
+    replayed = request_capsules(following)
+    observed = bool(done or completed or replayed)
+    return {
+        'done_replay_exact': sealed_capsules(done) and sealed_capsules(replayed) and done == replayed if observed else None,
+        'completed_replay_exact': sealed_capsules(completed) and sealed_capsules(replayed) and completed == replayed if observed else None,
+        'replay_ids_exact': [item_id for item_id, _ in completed] == [item_id for item_id, _ in replayed] if observed else None,
+        'replay_state_exact': sealed_capsules(completed) and sealed_capsules(replayed)
+                              and [value for _, value in completed] == [value for _, value in replayed] if observed else None,
+    }
+
+
+def reasoning_fixture_answer_correct(records, phase):
+    if len(records) != 1 or phase not in REASONING_FIXTURE_EXPECTED:
+        return False
+    _, completed = response_items(records[0])
+    if len(completed) != 1:
+        return False
+    text = ''.join(block.get('text', '') for item in completed[0].get('output', []) if item.get('type') == 'message'
+                   for block in item.get('content', []) if isinstance(block, dict))
+    return text.strip() == REASONING_FIXTURE_EXPECTED[phase]
+
+
+def signed_replay_qualification(functional_pass, observed_reasoning_preserved, phases):
+    names = ['initial_reasoning_replay_exact', 'initial_reasoning_done_replay_exact',
+             'initial_reasoning_compaction_replay_exact', 'initial_reasoning_compaction_done_replay_exact',
+             'post_compaction_reasoning_replay_exact', 'post_compaction_reasoning_done_replay_exact']
+    replay = [phase.get(name) for phase in phases.values() for name in names if phase.get(name) is not None]
+    return bool(functional_pass and observed_reasoning_preserved is True
+                and any(value is True for value in replay) and all(value is True for value in replay))
+
+
 def usage_only(response):
     """Project only known numeric counters; missing values remain unknown."""
     def count(value):
@@ -308,14 +372,11 @@ def record_summary(record):
         output = completed[0].get('output', [])
         done_capsules = capsules(done)
         complete_capsules = capsules(output)
-        def sealed(items):
-            return bool(items) and all(isinstance(item_id, str) and bool(item_id)
-                                       and isinstance(value, str) and bool(value) for item_id, value in items)
         summary.update(reasoning_count=len(done_capsules), reasoning_present=bool(done_capsules or complete_capsules),
                        reasoning_done_completed_exact=done_capsules == complete_capsules if done_capsules or complete_capsules else None,
-                       encrypted_content_present=sealed(done_capsules),
-                       reasoning_done_encrypted_content_present=sealed(done_capsules),
-                       reasoning_completed_encrypted_content_present=sealed(complete_capsules),
+                       encrypted_content_present=sealed_capsules(done_capsules),
+                       reasoning_done_encrypted_content_present=sealed_capsules(done_capsules),
+                       reasoning_completed_encrypted_content_present=sealed_capsules(complete_capsules),
                        usage=usage_only(completed[0]))
         marker = MARKERS.get(record['phase'])
         summary['marker_present'] = marker is not None and any(
@@ -360,7 +421,9 @@ def phase_evidence(state, phase):
 
 def goal_evidence(initial):
     result = {'get_goal_call_count': 0, 'get_goal_tool_result_present': False,
-              'get_goal_tool_result_success': False, 'initial_reasoning_replay_exact': None}
+              'get_goal_tool_result_success': False, 'initial_reasoning_replay_exact': None,
+              'initial_reasoning_done_replay_exact': None, 'initial_reasoning_replay_ids_exact': None,
+              'initial_reasoning_replay_state_exact': None}
     if len(initial) != 2:
         return result
     try:
@@ -377,8 +440,10 @@ def goal_evidence(initial):
             content = results[0].get('output')
             result['get_goal_tool_result_success'] = not results[0].get('is_error', False) and isinstance(content, str) and json.loads(content) == {
                 'goal': None, 'remainingTokens': None, 'completionBudgetReport': None}
-        issued = capsules(output)
-        result['initial_reasoning_replay_exact'] = issued == request_capsules(initial[1]) if issued else None
+        replay = reasoning_replay_evidence(initial[:1], initial[1])
+        result['initial_reasoning_replay_exact'] = replay['completed_replay_exact']
+        for name in ['done_replay_exact', 'replay_ids_exact', 'replay_state_exact']:
+            result['initial_reasoning_' + name] = replay[name]
     except (ValueError, KeyError, TypeError, IndexError):
         pass
     return result
@@ -405,8 +470,10 @@ def check_phase(state, report, phase, terminal, rpc):
     elif phase == 'compact':
         compaction = phase_records(state, 'client', phase)
         initial = phase_records(state, 'client', 'initial')
-        emitted = [item for record in initial for item in response_items(record)[1][0].get('output', [])]
-        evidence['initial_reasoning_compaction_replay_exact'] = len(compaction) == 1 and capsules(emitted) == request_capsules(compaction[0]) if capsules(emitted) else None
+        replay = reasoning_replay_evidence(initial, compaction[0]) if len(compaction) == 1 else {}
+        evidence['initial_reasoning_compaction_replay_exact'] = replay.get('completed_replay_exact')
+        for name in ['done_replay_exact', 'replay_ids_exact', 'replay_state_exact']:
+            evidence['initial_reasoning_compaction_' + name] = replay.get(name)
         evidence['compact_current_tools_empty'] = len(compaction) == 1 and compaction[0]['request'].get('tools', []) == []
         for name, method in [('context_compaction_started', 'item/started'), ('context_compaction_completed', 'item/completed')]:
             evidence[name] = any(e.get('method') == method and e.get('params', {}).get('item', {}).get('type') == 'contextCompaction' for e in rpc.events)
@@ -416,8 +483,12 @@ def check_phase(state, report, phase, terminal, rpc):
     elif phase == 'followup_second':
         previous = phase_records(state, 'client', 'followup')
         current = phase_records(state, 'client', phase)
-        issued = capsules(response_items(previous[0])[1][0].get('output', [])) if len(previous) == 1 else []
-        evidence['post_compaction_reasoning_replay_exact'] = len(current) == 1 and issued == request_capsules(current[0]) if issued else None
+        replay = reasoning_replay_evidence(previous, current[0]) if len(previous) == len(current) == 1 else {}
+        evidence['post_compaction_reasoning_replay_exact'] = replay.get('completed_replay_exact')
+        for name in ['done_replay_exact', 'replay_ids_exact', 'replay_state_exact']:
+            evidence['post_compaction_reasoning_' + name] = replay.get(name)
+    if state.reasoning_fixture and phase in REASONING_FIXTURE_EXPECTED:
+        evidence['reasoning_fixture_answer_correct'] = reasoning_fixture_answer_correct(phase_records(state, 'client', phase), phase)
     report['phases'][phase] = evidence
     # Functional progress is distinct from reasoning coverage and byte-level
     # diagnostics. Real Haiku may emit text only on a successful continuation.
@@ -460,6 +531,20 @@ def native_model(value):
     return value
 
 
+def gateway_route_evidence(target, attempted, declared_kind='unspecified'):
+    contacted = bool(attempted and target is not None and target[1:3] == ('192.168.0.7', 4000))
+    return {
+        'actual_dot7_gateway_tested': contacted,
+        'gateway_responses_path': target[3] if target is not None and target[1] != REMOTE_HOST else None,
+        'gateway_standard_responses_endpoint_tested': contacted and target[3] == '/v1/responses',
+        'gateway_passthrough_endpoint_tested': contacted and target[3] == '/claude-responses/v1/responses',
+        'gateway_route_kind_declared': declared_kind,
+        # The observer sees the external wire, not LiteLLM's provider settings.
+        'gateway_route_configuration_observed': False,
+        'gateway_managed_conversion_tested': contacted if declared_kind == 'chat-conversion' else None,
+    }
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--live', action='store_true', help='Required explicit opt-in for at most five live outbound requests')
@@ -468,7 +553,10 @@ def main(argv=None):
     parser.add_argument('--relay-key-env', default='CODEX_LIVE_RELAY_KEY', help='Environment variable NAME only; never put a key in an argument')
     parser.add_argument('--gateway-base-url', help='Explicit gateway or validation-relay base ending in /v1; skips local LiteLLM')
     parser.add_argument('--gateway-key-env', default='CODEX_LIVE_GATEWAY_KEY', help='Existing gateway credential environment variable NAME only')
+    parser.add_argument('--gateway-route-kind', choices=['unspecified', 'native-responses', 'chat-conversion', 'pass-through'],
+                        default='unspecified', help='Operator-declared route under test; does not inspect gateway configuration')
     parser.add_argument('--cache-fixture', action='store_true', help='Add stable inert catalog reference text for a roughly 6k-input-token cache test; same five-call cap')
+    parser.add_argument('--reasoning-fixture', action='store_true', help='Use a deterministic CRT puzzle and result checksum on the two ordinary follow-ups; same five-call cap')
     parser.add_argument('--output', type=Path, required=True, help='NEW directory under system temp, outside the repository')
     args = parser.parse_args(argv)
     if not args.live:
@@ -510,6 +598,7 @@ def main(argv=None):
               'cache_fixture_utf8_bytes': len(cache_reference.encode('utf-8')),
               'cache_fixture_words': len(cache_reference.split()),
               'cache_fixture_reference_rows': CACHE_FIXTURE_ROWS if args.cache_fixture else 0,
+              'reasoning_fixture_requested': args.reasoning_fixture,
               'phases': {}, 'pass': False, 'failure_code': None, 'failure_phase': None}
     state = None
     rpc = None
@@ -532,9 +621,9 @@ def main(argv=None):
         if not selected_key or not selected_key.isascii() or not all(33 <= ord(c) <= 126 for c in selected_key) or len(selected_key) > 4096:
             raise HarnessFailure('gateway_key_environment_missing_or_invalid' if gateway_mode else 'relay_key_environment_missing_or_invalid')
         if gateway_mode:
-            state = State(selected_key, gateway_target=target, model=model)
+            state = State(selected_key, gateway_target=target, model=model, reasoning_fixture=args.reasoning_fixture)
         else:
-            state = State('sk-local-live-' + secrets.token_hex(24), selected_key, model=model)
+            state = State('sk-local-live-' + secrets.token_hex(24), selected_key, model=model, reasoning_fixture=args.reasoning_fixture)
             remote, remote_thread = start_observer(state, 'remote')
             servers.append((remote, remote_thread))
             config = {'litellm_settings': {'telemetry': False, 'num_retries': 0, 'callbacks': [], 'request_timeout': HTTP_TIMEOUT},
@@ -603,9 +692,7 @@ def main(argv=None):
             if phase == 'compact':
                 rpc.request(request_id, 'thread/compact/start', {'threadId': thread_id})
             else:
-                prompt = ('Call the built-in no-I/O get_goal tool exactly once with {}. After its result, do not call further tools. '
-                          if phase == 'initial' else 'Continue this same conversation without using any tools. ')
-                prompt += 'Never access files, commands, network, search or agents. Reply with exactly ' + MARKERS[phase] + '.'
+                prompt = turn_prompt(phase, args.reasoning_fixture)
                 rpc.request(request_id, 'turn/start', {'threadId': thread_id, 'input': [{'type': 'text', 'text': prompt}]})
             terminal = rpc.wait(lambda value: value.get('method') == 'turn/completed'
                                 and value.get('params', {}).get('threadId') == thread_id, TURN_TIMEOUT)
@@ -647,11 +734,7 @@ def main(argv=None):
         report['endpoint_request_attempts'] = state.gateway_attempts if state and gateway_mode else None
         report['gateway_request_attempts'] = state.gateway_attempts if state and gateway_mode and not direct_mode else None
         report['direct_relay_request_attempts'] = state.gateway_attempts if state and direct_mode else state.remote_attempts if state else 0
-        report['actual_dot7_gateway_tested'] = bool(state and state.gateway_attempts and target is not None
-                                                     and target[1:3] == ('192.168.0.7', 4000))
-        report['gateway_responses_path'] = target[3] if gateway_mode and not direct_mode else None
-        report['gateway_managed_conversion_tested'] = bool(report['actual_dot7_gateway_tested']
-                                                            and target[3] == '/v1/responses')
+        report.update(gateway_route_evidence(target, state.gateway_attempts if state else 0, args.gateway_route_kind))
         report['observer_failure_code'] = state.failure if state else None
         report['client_request_count'] = len(state.records['client']) if state else 0
         report['remote_request_count'] = None if gateway_mode else len(state.records['remote']) if state else 0
@@ -674,10 +757,19 @@ def main(argv=None):
         report['functional_pass'] = report['pass']
         reasoning_checks = [phase.get(name) for phase in report['phases'].values() for name in (
             'reasoning_done_completed_exact', 'initial_reasoning_replay_exact',
-            'initial_reasoning_compaction_replay_exact', 'post_compaction_reasoning_replay_exact')
+            'initial_reasoning_done_replay_exact', 'initial_reasoning_replay_ids_exact', 'initial_reasoning_replay_state_exact',
+            'initial_reasoning_compaction_replay_exact', 'initial_reasoning_compaction_done_replay_exact',
+            'initial_reasoning_compaction_replay_ids_exact', 'initial_reasoning_compaction_replay_state_exact',
+            'post_compaction_reasoning_replay_exact', 'post_compaction_reasoning_done_replay_exact',
+            'post_compaction_reasoning_replay_ids_exact', 'post_compaction_reasoning_replay_state_exact')
             if phase.get(name) is not None]
         report['reasoning_check_count'] = len(reasoning_checks)
         report['observed_reasoning_preserved'] = all(reasoning_checks) if reasoning_checks else None
+        report['signed_reasoning_replay_qualified'] = signed_replay_qualification(
+            report['functional_pass'], report['observed_reasoning_preserved'], report['phases'])
+        report['reasoning_fixture_answer_checks_passed'] = all(
+            report['phases'].get(phase, {}).get('reasoning_fixture_answer_correct') is True
+            for phase in REASONING_FIXTURE_EXPECTED) if args.reasoning_fixture else None
         report['post_compaction_reasoning_replay_observed'] = report['phases'].get('followup_second', {}).get('post_compaction_reasoning_replay_exact') is not None
         report.update(cache_observations([request.get('usage') for phase in report['phases'].values() for request in phase.get('requests', [])]))
         report_path = output / 'codex-live-smoke.json'

@@ -45,6 +45,31 @@ The existing `Rpc`, `clean_env`, `start`, `stop`, and `identities` helpers
 remain unchanged; stock-only helpers are not invoked in this mode.
 No Node runtime is required.
 
+### Configured native Responses model
+
+A separate model configured for supported native Responses forwarding can be
+tested through the normal gateway endpoint:
+
+```powershell
+& 'C:/path/to/existing/python.exe' -B `
+  integration/clients/codex_live_smoke.py --live `
+  --codex 'C:/Users/binary/.codex/packages/standalone/releases/0.160.0-x86_64-pc-windows-msvc/bin/codex.exe' `
+  --model claude-opus-5-5-responses-han `
+  --gateway-base-url 'http://192.168.0.7:4000/v1' `
+  --gateway-route-kind native-responses `
+  --gateway-key-env CODEX_LIVE_GATEWAY_KEY --cache-fixture `
+  --output 'C:/Users/binary/AppData/Local/Temp/codex-opus-native-responses-unique'
+```
+
+The gateway owner must prepare and verify the separate alias first. The route
+kind is an operator declaration recorded as `gateway_route_kind_declared`;
+the observer does not inspect provider configuration. `/v1/responses` by itself
+does not establish whether LiteLLM uses native forwarding or Chat conversion.
+`actual_dot7_gateway_tested` records observed contact with `.7`; the standard
+and old pass-through endpoints have separate booleans. Only a declared
+`chat-conversion` check sets `gateway_managed_conversion_tested`; otherwise it
+is unknown. No gateway or client source patch is performed by this harness.
+
 ## Temporary local stock diagnosis
 
 Omit `--gateway-base-url` to retain the original diagnostic chain:
@@ -100,14 +125,29 @@ replay, compaction input, and second-follow-up replay. Absent reasoning has
 and `post_compaction_reasoning_replay_observed` are separate from functional
 success. Missing usage stays `null`; cache-control presence is not a cache hit.
 
+`signed_reasoning_replay_qualified` additionally requires functional success,
+all observed reasoning comparisons passing, and at least one successful actual
+replay into a subsequent request. Equality between a compaction response's
+done/final snapshots alone cannot qualify replay.
+
+Replay checks compare **both** `response.output_item.done` and final
+`response.completed` snapshots with the subsequent input actually sent by Codex.
+Matching missing state is a failed replay observation, not successful signed
+state preservation. ID equality and encrypted-state equality are also recorded
+separately so an altered ID cannot be hidden by an equal payload. These checks
+retain only booleans; IDs, encrypted state and bodies stay in memory. A successful
+text/tool sequence with failed reasoning observations remains a functional
+success with incomplete protocol fidelity.
+
 In gateway mode, `remote_requests`, `remote_request_count`,
 `remote_request_attempts`, cross-gateway body/SSE equality, local stock
 identities and `no_hidden_retries` are **null/unobserved**.
 `gateway_request_attempts` and `observed_no_retries` describe only this harness's
 visible `.7` requests. `gateway_internals_observed` and
 `relay_ingress_observed` remain false; `direct_relay_request_attempts` stays zero.
-`actual_dot7_gateway_tested` becomes true only after an attempt to the exact
-documented `.7` route; it is not an acceptance result by itself.
+`actual_dot7_gateway_tested` becomes true only after an observed attempt to
+`.7:4000`; endpoint-path and declared route-kind fields distinguish the routes.
+It is not an acceptance or internal-configuration result by itself.
 
 The temporary catalog is a **limited test profile, not official Claude
 capability metadata**. Shell, apply_patch, search and agents are disabled.
@@ -146,6 +186,23 @@ when reported counters are zero and null when no relevant counter was observed.
 Neither changes `functional_pass`. Per-request `sse_failure_codes` contains
 only known adapter error codes or the fixed `unrecognized_sse_failure` label;
 free-form provider errors remain in memory.
+
+## Optional reasoning fixture
+
+Add `--reasoning-fixture` to replace only the two ordinary post-compaction
+follow-up prompts. The first asks for the unique integer `N` in `[0,215441)`
+whose remainders modulo `17,19,23,29` are `4,17,18,3`, and asks the model to
+solve and verify all congruences before its final marker and decimal answer.
+The next uses that answer to compute `(37*N + 11) mod 100000`. The expected
+answers are `173829` and `31684`. The original response markers remain present.
+
+This sends a genuine nontrivial task through Codex. It does not inject reasoning
+items, edit histories or change effort, model metadata or native headers.
+Thinking emission remains the model's decision. Per-phase
+`reasoning_fixture_answer_correct` and the aggregate
+`reasoning_fixture_answer_checks_passed` are separate observations; they do not
+change the existing functional pass/exit criteria. Default prompts and the
+five-request budget remain unchanged when this option is absent.
 
 Managed LiteLLM Responses may expose only `input_tokens_details.cached_tokens`
 and `cache_write_tokens`. Those counters are also observed, with native counters

@@ -1,0 +1,23 @@
+# Merge these entries into your existing separate LiteLLM configuration.
+# The proxy must enable Responses and persist its existing state key.
+# API bases differ: Messages uses the root; OpenAI Responses uses /v1.
+model_list:
+  - model_name: claude-opus-5-5-han
+    litellm_params:
+      model: anthropic/claude-opus-5-5
+      api_base: http://YOUR_PROXY_HOST:13458
+      api_key: os.environ/CLAUDE_PROXY_API_KEY
+  - model_name: claude-opus-5-5-responses-han
+    litellm_params:
+      model: openai/claude-opus-5-5
+      api_base: http://YOUR_PROXY_HOST:13458/v1
+      api_key: os.environ/CLAUDE_PROXY_API_KEY
+    model_info:
+      mode: responses
+      supported_endpoints: ["/v1/responses"]
+
+# Preserve existing router policy when integrating this example. For a bounded
+# replay qualification, explicitly disable retries and cross-model fallbacks.
+router_settings:
+  num_retries: 0
+  fallbacks: []

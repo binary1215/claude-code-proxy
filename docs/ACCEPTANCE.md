@@ -10,6 +10,36 @@ support-scope decisions. The November12 user decision explicitly restores genuin
 SDK/CLI inference as the default. Do not silently switch models/accounts/backends,
 spoof an official client, remove rejected thinking, or modify LiteLLM source/license flags.
 
+## Opus native Responses deployment — 2026-11-12
+
+The standard `/v1/responses` endpoint now offers the separate
+`claude-opus-5-5-responses-han` deployment, using `openai/claude-opus-5-5` and
+Han's `/v1` API base. Existing 36 models, keys, gateway/client sources and the
+Han image are unchanged; registration uses the supported dynamic model API
+without a gateway restart.
+
+Actual Codex passes five bounded calls covering a tool, local compaction and
+two follow-ups. A deterministic arithmetic task causes real reasoning to be
+emitted, then the next actual request replays its exact ID and encrypted state.
+Both item-done and final snapshots agree, both arithmetic answers pass, and
+post-compaction cache-read counts are 11283/12680. The previous simpler five-call
+Opus test passed functionality and stream consistency but emitted reasoning only
+during compaction, so its replay coverage is explicitly kept separate.
+
+Actual Claude Code on the existing `claude-opus-5-5-han` Messages alias also
+qualifies: six calls pass the client-owned MCP tool, arithmetic, manual
+compaction 6088→947, retained tool/calculation results, warm/post-compaction
+cache reads 5146/3139 and five exact signed-thinking replay observations. The
+first native attempt returned no report; its nonsecret fixture was found not
+readable by the container user, and stderr was not retained. That receipt is
+preserved with unknown call count. Its corrected simple run passed functionality but did not observe
+replay. Only the subsequent reasoning task establishes native signed replay.
+
+The current route qualifies this signed-replay case; it does not fix the older
+Anthropic-backed managed conversion or prove arbitrary coding workflows.
+See [routing contract](LITELLM-NATIVE-RESPONSES.md) and
+[full scoped results](evidence/20261112-native-responses-opus.json).
+
 ## CLI default deployed to Han — 2026-11-12
 
 Source `fc80fa3` is deployed with genuine CLI2.1.322/SDK0.3.322 inference.

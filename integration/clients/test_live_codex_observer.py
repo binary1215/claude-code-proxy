@@ -15,7 +15,19 @@ from codex_live_smoke import (
     safe_sse_failures,
     gateway_target,
     native_model,
+    gateway_route_evidence,
+    reasoning_replay_evidence,
+    REASONING_FIXTURE_EXPECTED,
+    turn_prompt,
+    reasoning_fixture_answer_correct,
+    signed_replay_qualification,
 )
+
+
+def reasoning_record(done, completed):
+    stream = [{'type': 'response.output_item.done', 'item': item} for item in done]
+    stream.append({'type': 'response.completed', 'response': {'output': completed}})
+    return {'wire': ''.join('data: ' + json.dumps(event) + '\n\n' for event in stream).encode()}
 
 
 class LiveCodexObserverTests(unittest.TestCase):
@@ -23,7 +35,7 @@ class LiveCodexObserverTests(unittest.TestCase):
         self.assertEqual(MODEL, 'claude-haiku-4-5-20251001')
         self.assertEqual(PHASE_LIMITS, {'initial': 2, 'compact': 1, 'followup': 1, 'followup_second': 1})
         self.assertEqual(sum(PHASE_LIMITS.values()), 5)
-        for model in ('claude-haiku-5-5', 'claude-opus-5-5', MODEL):
+        for model in ('claude-haiku-5-5', 'claude-opus-5-5', 'claude-opus-5-5-responses-han', MODEL):
             with self.subTest(model=model):
                 self.assertEqual(native_model(model), model)
                 self.assertEqual(State('synthetic-fixture-key', model=model).model, model)
@@ -45,6 +57,103 @@ class LiveCodexObserverTests(unittest.TestCase):
                     'http://192.168.0.64:13459/incorrect'):
             with self.subTest(url=url), self.assertRaises(ValueError):
                 gateway_target(url)
+
+    def test_standard_gateway_path_does_not_prove_chat_conversion_or_native_configuration(self):
+        target = gateway_target('http://192.168.0.7:4000/v1')
+        native = gateway_route_evidence(target, 5, 'native-responses')
+        self.assertTrue(native['actual_dot7_gateway_tested'])
+        self.assertTrue(native['gateway_standard_responses_endpoint_tested'])
+        self.assertFalse(native['gateway_passthrough_endpoint_tested'])
+        self.assertEqual(native['gateway_route_kind_declared'], 'native-responses')
+        self.assertFalse(native['gateway_route_configuration_observed'])
+        self.assertIsNone(native['gateway_managed_conversion_tested'])
+        self.assertIsNone(gateway_route_evidence(target, 5)['gateway_managed_conversion_tested'])
+        self.assertTrue(gateway_route_evidence(target, 5, 'chat-conversion')['gateway_managed_conversion_tested'])
+        self.assertFalse(gateway_route_evidence(target, 0, 'native-responses')['actual_dot7_gateway_tested'])
+        legacy = gateway_route_evidence(gateway_target('http://192.168.0.7:4000/claude-responses/v1'), 5, 'pass-through')
+        self.assertTrue(legacy['gateway_passthrough_endpoint_tested'])
+        self.assertFalse(legacy['gateway_standard_responses_endpoint_tested'])
+
+    def test_reasoning_replay_matches_done_completed_and_actual_next_input_without_exporting_state(self):
+        items = [{'id': 'rs_first', 'type': 'reasoning', 'encrypted_content': 'PRIVATE_STATE_FIRST'},
+                 {'id': 'rs_second', 'type': 'reasoning', 'encrypted_content': 'PRIVATE_STATE_SECOND'}]
+        evidence = reasoning_replay_evidence([reasoning_record(items, items)], {'request': {'input': items}})
+        self.assertTrue(all(evidence.values()))
+        self.assertNotIn('PRIVATE_STATE', json.dumps(evidence))
+        self.assertNotIn('rs_first', json.dumps(evidence))
+        reversed_state = reasoning_replay_evidence([reasoning_record(items, items)], {'request': {'input': items[::-1]}})
+        self.assertFalse(reversed_state['done_replay_exact'])
+        self.assertFalse(reversed_state['replay_state_exact'])
+
+    def test_matching_missing_done_state_is_not_successful_state_replay(self):
+        item = {'id': 'rs_first', 'type': 'reasoning'}
+        final = {**item, 'encrypted_content': 'PRIVATE_FINAL_STATE'}
+        evidence = reasoning_replay_evidence([reasoning_record([item], [final])], {'request': {'input': [item]}})
+        self.assertFalse(evidence['done_replay_exact'])
+        self.assertFalse(evidence['completed_replay_exact'])
+        self.assertTrue(evidence['replay_ids_exact'])
+        self.assertFalse(evidence['replay_state_exact'])
+        final_replay = reasoning_replay_evidence([reasoning_record([item], [final])], {'request': {'input': [final]}})
+        self.assertFalse(final_replay['done_replay_exact'])
+        self.assertTrue(final_replay['completed_replay_exact'])
+        self.assertNotIn('PRIVATE_FINAL_STATE', json.dumps(final_replay))
+
+    def test_replayed_reasoning_state_and_identity_are_reported_separately(self):
+        item = {'id': 'rs_original', 'type': 'reasoning', 'encrypted_content': 'PRIVATE_SAME_STATE'}
+        different_id = {**item, 'id': 'rs_replaced'}
+        evidence = reasoning_replay_evidence([reasoning_record([item], [item])], {'request': {'input': [different_id]}})
+        self.assertFalse(evidence['done_replay_exact'])
+        self.assertFalse(evidence['completed_replay_exact'])
+        self.assertFalse(evidence['replay_ids_exact'])
+        self.assertTrue(evidence['replay_state_exact'])
+        text_only = {'type': 'message', 'role': 'assistant', 'content': [{'type': 'output_text', 'text': 'ok'}]}
+        self.assertTrue(all(value is None for value in reasoning_replay_evidence(
+            [reasoning_record([text_only], [text_only])], {'request': {'input': [text_only]}}).values()))
+
+    def test_unexpected_replayed_state_after_text_only_output_is_not_unobserved(self):
+        text_only = {'type': 'message', 'role': 'assistant', 'content': [{'type': 'output_text', 'text': 'ok'}]}
+        unexpected = {'id': 'rs_foreign', 'type': 'reasoning', 'encrypted_content': 'PRIVATE_UNEXPECTED_STATE'}
+        evidence = reasoning_replay_evidence([reasoning_record([text_only], [text_only])],
+                                           {'request': {'input': [text_only, unexpected]}})
+        self.assertTrue(all(value is False for value in evidence.values()))
+        self.assertNotIn('PRIVATE_UNEXPECTED_STATE', json.dumps(evidence))
+
+    def test_reasoning_fixture_preserves_default_prompts_and_has_unique_verified_answer(self):
+        self.assertEqual(turn_prompt('initial', True), turn_prompt('initial'))
+        for phase in ('initial', 'followup', 'followup_second'):
+            prefix = ('Call the built-in no-I/O get_goal tool exactly once with {}. After its result, do not call further tools. '
+                      if phase == 'initial' else 'Continue this same conversation without using any tools. ')
+            marker = {'initial': 'CODEX_LIVE_INITIAL_OK', 'followup': 'CODEX_LIVE_FOLLOWUP_OK',
+                      'followup_second': 'CODEX_LIVE_SECOND_FOLLOWUP_OK'}[phase]
+            self.assertEqual(turn_prompt(phase), prefix + 'Never access files, commands, network, search or agents. Reply with exactly ' + marker + '.')
+        constraints = [(17, 4), (19, 17), (23, 18), (29, 3)]
+        solutions = [number for number in range(215441) if all(number % modulus == remainder for modulus, remainder in constraints)]
+        self.assertEqual(solutions, [173829])
+        self.assertEqual((37 * solutions[0] + 11) % 100000, 31684)
+        self.assertIn('Solve and verify all four congruences', turn_prompt('followup', True))
+        self.assertIn('immediately preceding answer', turn_prompt('followup_second', True))
+        self.assertEqual(sum(PHASE_LIMITS.values()), 5)
+
+    def test_reasoning_fixture_answers_are_observed_without_changing_markers(self):
+        for phase, answer in REASONING_FIXTURE_EXPECTED.items():
+            item = {'type': 'message', 'role': 'assistant', 'content': [{'type': 'output_text', 'text': answer}]}
+            record = reasoning_record([item], [item])
+            self.assertTrue(reasoning_fixture_answer_correct([record], phase))
+            wrong = {**item, 'content': [{'type': 'output_text', 'text': answer.split(':')[0] + ':0'}]}
+            self.assertFalse(reasoning_fixture_answer_correct([reasoning_record([wrong], [wrong])], phase))
+        self.assertFalse(reasoning_fixture_answer_correct([], 'followup'))
+
+    def test_signed_replay_qualification_requires_an_actual_successful_replay(self):
+        compact_only = {'compact': {'reasoning_done_completed_exact': True}}
+        self.assertFalse(signed_replay_qualification(True, True, compact_only))
+        replayed = {**compact_only, 'followup_second': {'post_compaction_reasoning_replay_exact': True,
+                                                      'post_compaction_reasoning_done_replay_exact': True}}
+        self.assertTrue(signed_replay_qualification(True, True, replayed))
+        self.assertFalse(signed_replay_qualification(False, True, replayed))
+        self.assertFalse(signed_replay_qualification(True, False, replayed))
+        self.assertFalse(signed_replay_qualification(True, None, replayed))
+        broken = {**replayed, 'initial': {'initial_reasoning_done_replay_exact': False}}
+        self.assertFalse(signed_replay_qualification(True, True, broken))
 
     def test_cache_fixture_is_deterministic_bounded_reference_text(self):
         text = cache_fixture_text()

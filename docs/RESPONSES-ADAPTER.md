@@ -1,21 +1,24 @@
 # Opt-in Responses adapter, stock LiteLLM
 
-This is a **new, bounded protocol adapter**, not the removed SDK backend or legacy
-Chat translator. LiteLLM's source is unchanged. It does not run Claude Code,
-execute tools, impersonate an official client, retry a provider request, strip
-rejected signatures, or switch models/accounts.
+This is a **bounded protocol adapter**. It converts Responses requests to native
+Messages and invokes the configured inference backend. The current default is
+[genuine CLI inference](CLI-INFERENCE.md); explicit HTTP inference remains
+available. The adapter does not execute client tools, retry a provider request,
+strip rejected signatures, or switch models/accounts. LiteLLM's source is unchanged.
 
 ```text
-Claude Code / native client → LiteLLM /claude-native → native /v1/messages
-Codex / Responses client   → LiteLLM /claude-responses → new /v1/responses
+Claude Code / native client → LiteLLM Messages model  → /v1/messages
+Codex / Responses client   → LiteLLM Responses model → /v1/responses
                                                        ↓
-                                            authorized Anthropic upstream
+                                           configured inference backend
 ```
 
-Use two non-colliding pass-through namespaces. Do not send the Codex path through
-LiteLLM's normal Responses-to-Chat-to-Anthropic conversion: the pinned audit
-detects signed-history loss there. The default native deployment stays unchanged;
-the new endpoint requires explicit enablement and a dedicated state key.
+Prefer separate Messages and [native Responses model deployments](LITELLM-NATIVE-RESPONSES.md)
+on the current gateway. Do not route Codex through the Anthropic-backed
+Responses-to-Chat conversion: its stream has an observed signed-state mismatch.
+Earlier custom pass-through namespaces are documented below as a separate
+configuration. The Responses endpoint requires explicit enablement and a
+dedicated persistent state key.
 
 ## Protocol and state contract
 
@@ -185,6 +188,11 @@ boundary, not universal long-session compatibility. Synthetic tests cannot prove
 real Anthropic acceptance, costs or answer quality.
 
 ## Configure the unmodified gateway
+
+For standard model routing on the current gateway, use
+[native Responses configuration](LITELLM-NATIVE-RESPONSES.md). The remaining
+example in this section describes the earlier custom pass-through namespace;
+its authentication and model restrictions differ from standard model routing.
 
 An owner-applied YAML change and reload are required for dynamic header forwarding
 on the pinned stock version. This example is **not applied to the shared server**:
