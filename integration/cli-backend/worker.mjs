@@ -2,12 +2,12 @@ import { createInterface } from 'node:readline';
 import { isAbsolute, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { query } from '@anthropic-ai/claude-agent-sdk';
+import { query, getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import {
   AsyncQueue, MCP_SERVER, NativeEventTransformer, ToolBroker, WorkerError,
-  createToolRegistry, isRecord, nativeThinkingToSdk, sdkEnvironment, validateEffort,
+  createToolRegistry, isRecord, nativeThinkingToSdk, nativeToolName, sdkEnvironment, validateEffort,
 } from './helpers.mjs';
 import { nativeHistoryEntries, nativeHistoryStore } from './history.mjs';
 
@@ -35,6 +35,7 @@ const ERROR_MESSAGES = {
   startup_failed: 'The CLI worker could not initialize.',
   inference_failed: 'The CLI inference turn failed.',
   options_failed: 'The CLI could not apply the requested session options.',
+  compact_snapshot_failed: 'The CLI did not return a complete compacted conversation.',
 };
 
 function validateStart(start) {
@@ -129,8 +130,14 @@ export class CliWorker {
     this.started = true;
     validateStart(start);
     const registry = createToolRegistry(start.tools);
+    this.registry = registry;
     const env = sdkEnvironment(start);
-    const imported = start.history === undefined ? undefined : nativeHistoryEntries(start.history, { model: start.model, cwd: start.cwd, systemCarriers: start.systemCarriers });
+    const imported = start.history === undefined ? undefined : nativeHistoryEntries(start.history, { model: start.model, cwd: start.cwd, systemCarriers: start.systemCarriers, compactOnly: start.compactOnly === true });
+    this.compactOnly = start.compactOnly === true;
+    this.sessionStore = imported ? nativeHistoryStore(imported, { capture: this.compactOnly }) : undefined;
+    this.imported = imported;
+    this.historicalTools = new Map((start.history ?? []).flatMap(message => Array.isArray(message.content) ? message.content : [])
+      .filter(block => block.type === 'tool_use' && typeof block.name === 'string').map(block => [nativeToolName(block.name), block.name]));
     this.broker = new ToolBroker(registry, message => this.emitUnlessClosed(message), error => this.fail(error));
     this.transformer = new NativeEventTransformer(registry, this.broker);
     this.mcpServer = createCallerMcpServer(registry, this.broker);
@@ -155,7 +162,8 @@ export class CliWorker {
           settingSources: [],
           strictMcpConfig: true,
           persistSession: Boolean(imported),
-          ...(imported ? { resume: imported.sessionId, sessionStore: nativeHistoryStore(imported) } : {}),
+          ...(imported ? { resume: imported.sessionId, sessionStore: this.sessionStore,
+            ...(this.compactOnly ? { sessionStoreFlush: 'eager' } : {}) } : {}),
           enableFileCheckpointing: false,
           includePartialMessages: true,
           // Per-message guards protect every external prompt and allow only
@@ -181,7 +189,10 @@ export class CliWorker {
           hooks: {
             PreToolUse: [{ hooks: [preToolUse], timeout: 30, onFailure: 'block' }],
             PreCompact: [{ hooks: [async () => { await this.compactPhase(true); return {}; }], timeout: 30, onFailure: 'block' }],
-            PostCompact: [{ hooks: [async () => { await this.compactPhase(false); return {}; }], timeout: 30, onFailure: 'block' }],
+            PostCompact: [{ hooks: [async input => {
+              if (typeof input.compact_summary === 'string') this.compactSummary = input.compact_summary;
+              await this.compactPhase(false); return {};
+            }], timeout: 30, onFailure: 'block' }],
           },
           // A supported allow hook normally resolves permission first. If the CLI still asks,
           // use the exact native ID once more, never name/order association.
@@ -223,7 +234,9 @@ export class CliWorker {
           this.turnInProgress = false;
           const compact = this.compactCommandInProgress || message.local_command === 'compact';
           this.compactCommandInProgress = false;
-          this.emitUnlessClosed({ type: compact ? 'compact_result' : 'turn_result', success, session_id: message.session_id });
+          const snapshot = compact && success && this.compactOnly ? await this.compactedHistory(message.session_id) : undefined;
+          this.emitUnlessClosed({ type: compact ? 'compact_result' : 'turn_result', success, session_id: message.session_id,
+            ...(snapshot ? { messages: snapshot, summary: this.compactSummary } : {}) });
           if (!success) { this.fail(new WorkerError('inference_failed')); break; }
         } else if (message.type === 'system' && message.subtype === 'compact_boundary') {
           const source = message.compact_metadata ?? {};
@@ -251,6 +264,42 @@ export class CliWorker {
     } catch (error) {
       if (!this.closed) this.fail(error instanceof WorkerError ? error : new WorkerError('inference_failed'));
     }
+  }
+  async compactedHistory(sessionId) {
+    if (!this.sessionStore || !this.compactSummary) throw new WorkerError('compact_snapshot_failed');
+    const rows = await getSessionMessages(sessionId, { sessionStore: this.sessionStore });
+    const summaryIndex = rows.findLastIndex(row => row.isCompactSummary === true);
+    if (summaryIndex < 0) throw new WorkerError('compact_snapshot_failed');
+    const importedIds = new Set(this.imported.entries.map(entry => entry.uuid));
+    return rows.slice(summaryIndex).filter(row => {
+      if (row.isCompletedLocalCommand) return false;
+      // The CLI manufactures this inert assistant only for user-ended resume.
+      // It is not caller history and must not mark their latest task finished.
+      const content = row.message?.content;
+      return !(row.type === 'assistant' && !importedIds.has(row.uuid) &&
+        (content === 'No response requested.' || Array.isArray(content) && content.length === 1 &&
+          content[0]?.type === 'text' && content[0].text === 'No response requested.'));
+    }).map(row => {
+      const source = row.message;
+      if (!isRecord(source) || !['user', 'assistant'].includes(source.role)) throw new WorkerError('compact_snapshot_failed');
+      const content = typeof source.content === 'string' ? [{ type: 'text', text: source.content }] : structuredClone(source.content);
+      if (!Array.isArray(content)) throw new WorkerError('compact_snapshot_failed');
+      if (row.isCompactSummary === true) {
+        // The persisted CLI wrapper points at its ephemeral local transcript.
+        // Export the exact genuine model summary, not instructions to read a
+        // deleted file. The remaining rows below still preserve the CLI tail.
+        if (!content.filter(block => block.type === 'text').map(block => block.text).join('\n').includes(this.compactSummary)) {
+          throw new WorkerError('compact_snapshot_failed');
+        }
+        return { role: 'user', content: [{ type: 'text', text: this.compactSummary }] };
+      }
+      return { role: source.role, content: content.map(block => {
+        if (block.type !== 'tool_use') return block;
+        const name = this.registry.byNative.get(block.name)?.original ?? this.historicalTools.get(block.name);
+        if (!name || !isRecord(block.input?.input)) throw new WorkerError('compact_snapshot_failed');
+        return { ...block, name, input: block.input.input };
+      }) };
+    });
   }
   emitUnlessClosed(message) { if (!this.closed) this.emit(message); }
   fail(error) {

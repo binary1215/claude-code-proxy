@@ -28,6 +28,15 @@ Imported transcripts are temporary, with a default runtime under `/tmp`.
 See the [CLI backend contract and limits](docs/CLI-INFERENCE.md),
 [optional Compose file](compose.cli.yml) and [private-env template](.env.cli.example).
 
+The enabled Responses adapter also implements **`POST /v1/responses/compact`**
+with the CLI backend. It returns a stateless, authenticated compaction item
+containing the genuine CLI's reduced native context and retained tail. Send the
+entire returned `output` plus the next input to `/v1/responses`; no stored response
+ID is required. Existing system/developer input items remain visible, and any
+top-level `instructions` must be supplied unchanged on replay. This endpoint is
+separate from CLI automatic compaction and Codex's client-local summarization.
+See [the compaction contract, examples and verification status](docs/RESPONSES-COMPACTION.md).
+
 The earlier optional-stage Linux image passed **248/248** tests. Three real Haiku5.5
 requests passed: tool intent, caller-result continuation and Responses SSE;
 the continuation reported **2772 cache-read tokens**. Those historical results
@@ -402,7 +411,7 @@ Client requirements:
 
 - Messages clients must replay original assistant content blocks and tool results, including signatures, in order.
 - Chat clients must retain and replay LiteLLM's `thinking_blocks`; `reasoning_content` alone is not signed thinking state.
-- Responses clients must retain and replay reasoning items including `encrypted_content`, not just visible output text. The new adapter is stateless and rejects `previous_response_id` persistence.
+- Responses clients must retain and replay reasoning items including `encrypted_content`, not just visible output text. After `/v1/responses/compact`, replace the conversational window with its entire returned `output` before appending new input. The adapter is stateless and rejects `previous_response_id` persistence.
 - Do not silently switch the backend/account/model for a signed-history conversation. The relay has one configured upstream credential, but it cannot enforce the gateway's routing choices.
 - Disable gateway/client retries or lossy fallbacks if testing exact-once upstream behavior. A relay's no-retry guarantee does not control a caller's retries.
 
@@ -417,6 +426,7 @@ Endpoints here:
 | `GET /health` | Local DB/config/task/Ollama diagnostic, **not** a provider-auth probe |
 | `/api/admin/*` | Separate admin-authenticated management |
 | `POST /v1/responses` | New opt-in stateless adapter with authenticated signed-state replay |
+| `POST /v1/responses/compact` | Opt-in, CLI-backed stateless compaction; returns replayable reduced context |
 | `/v1/chat/completions` | Removed/unsupported here; normal LiteLLM conversion is not fidelity-certified |
 
 ## Historical migration from the original SDK branch

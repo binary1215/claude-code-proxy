@@ -3,11 +3,10 @@ import https from "node:https";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
 import type { Request, Response } from "express";
-import { ANTHROPIC_BASE_URL, UPSTREAM_TIMEOUT_MS, RESPONSES_ENABLED, RESPONSES_STATE_KEY,
-  RESPONSES_STATE_TTL_SECONDS, RESPONSES_MAX_OUTPUT_TOKENS, RESPONSES_THINKING_BUDGET_TOKENS, RESPONSES_APPLY_PATCH_MODE, RESPONSES_DEVELOPER_MESSAGE_MODE } from "../config.js";
+import { UPSTREAM_TIMEOUT_MS } from "../config.js";
 import { resolveUpstreamCredential, missingCredentialMessage } from "./settingsService.js";
-import { upstreamHeaders, upstreamUrl } from "./nativeRelay.js";
-import { ResponsesStateCodec, upstreamStateScope } from "./responsesState.js";
+import { upstreamHeaders } from "./nativeRelay.js";
+import { responsesCodec as codec, responsesContext } from "./responsesContext.js";
 import { prepareResponsesRequest } from "./responsesRequest.js";
 import { ResponsesStream, NativeSseDecoder, convertNativeMessage } from "./responsesStream.js";
 import { ResponsesError, type JsonObject, type PreparedResponsesRequest, type ResponseTranslationOptions } from "./responsesTypes.js";
@@ -20,8 +19,6 @@ import { CLAUDE_INFERENCE_BACKEND } from "../config.js";
 import { relayCli } from "./cliRelay.js";
 import { logOperationalError } from "./operationalLogger.js";
 
-// Configuration is validated at startup only when explicitly opted in.
-const codec = RESPONSES_ENABLED ? new ResponsesStateCodec(RESPONSES_STATE_KEY, RESPONSES_STATE_TTL_SECONDS) : null;
 const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 
 function sendError(res: Response, status: number, code: string, message: string): void {
@@ -40,35 +37,10 @@ export async function relayResponses(req: Request, res: Response): Promise<void>
   let url: URL;
   let options: ResponseTranslationOptions;
   try {
-    if (req.originalUrl.includes("?")) throw new ResponsesError("unsupported_parameter", "Query parameters are not supported on the Responses adapter.");
-    const model = req.body?.model;
-    if (typeof model !== "string" || !model.trim() || model.length > 256) {
-      throw new ResponsesError("invalid_model", "A native model ID is required.");
-    }
-    if (req.allowedModels?.length && !req.allowedModels.includes(model)) {
-      throw new ResponsesError("model_not_allowed", "Model is not permitted for this key.", 403);
-    }
-    url = upstreamUrl(ANTHROPIC_BASE_URL, "/messages");
-    const context = { model, principal: `proxy-key:${req.apiKeyFingerprint ?? "anonymous-development"}`,
-      upstream: upstreamStateScope(url.href + (CLAUDE_INFERENCE_BACKEND === "cli" ? "|cli" : ""), credential) };
-    // Explicit per-request native policy for clients that can set HTTP headers but
-    // cannot add JSON extension fields. Never mix two conflicting policy sources.
-    let input = req.body;
-    const nativeOptions = req.headers["x-claude-proxy-native-options"];
-    if (nativeOptions !== undefined) {
-      if (typeof nativeOptions !== "string" || Buffer.byteLength(nativeOptions) > 4096 ||
-          !input || typeof input !== "object" || Array.isArray(input) || Object.hasOwn(input, "anthropic")) {
-        throw new ResponsesError("invalid_native_options", "Supply native options once, as a bounded JSON body extension or header.");
-      }
-      let extension: unknown;
-      try { extension = JSON.parse(nativeOptions); }
-      catch { throw new ResponsesError("invalid_native_options", "Native options header must be a JSON object."); }
-      input = { ...input, anthropic: extension };
-    }
-    prepared = prepareResponsesRequest(input, { codec, context, defaultMaxTokens: RESPONSES_MAX_OUTPUT_TOKENS,
-      defaultThinkingBudget: RESPONSES_THINKING_BUDGET_TOKENS, applyPatchMode: RESPONSES_APPLY_PATCH_MODE,
-      developerMessageMode: RESPONSES_DEVELOPER_MESSAGE_MODE });
-    options = { model, tools: prepared.tools, seal: (block, id) => codec.seal(block, prepared.stateContext, id) };
+    const request = responsesContext(req, credential);
+    url = request.url;
+    prepared = prepareResponsesRequest(request.input, request.options);
+    options = { model: prepared.model, tools: prepared.tools, seal: (block, id) => request.options.codec.seal(block, prepared.stateContext, id) };
   } catch (error) {
     if (error instanceof ResponsesError) sendError(res, error.status, error.code, error.message);
     else sendError(res, 503, "adapter_configuration_error", "Responses adapter configuration is invalid.");

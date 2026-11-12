@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { resolve, sep, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { ANTHROPIC_BASE_URL, CLAUDE_CLI_MAX_SESSIONS, CLAUDE_CLI_RUNTIME_DIR, CLAUDE_CLI_AUTO_COMPACT_WINDOW,
-  CLAUDE_CLI_SESSION_TTL_SECONDS, CLAUDE_CLI_WORKER_PATH } from "../config.js";
+  CLAUDE_CLI_SESSION_TTL_SECONDS, CLAUDE_CLI_WORKER_PATH, UPSTREAM_TIMEOUT_MS } from "../config.js";
 import { upstreamStateScope } from "./responsesState.js";
 import { registerCliUpstream, closeCliUpstream, cliTurnUsage, type CliUpstreamTurn } from "./cliUpstream.js";
 import type { ObservedUsage } from "./usageObserver.js";
@@ -12,6 +12,31 @@ import { CliBackendError, CliMessageAccumulator, cliHash, cliMessages, cliSystem
 import type { JsonObject } from "./responsesTypes.js";
 
 type Credential = { token: string; kind: "oauth" | "api_key"; stateIdentity?: string };
+export type CliCompactionResult = { compacted: boolean; messages: JsonObject[]; summary: string;
+  metadata?: JsonObject; usage?: ObservedUsage; providerCalls: number };
+export class CliCompactionError extends CliBackendError {
+  constructor(error: unknown, public readonly usage: ObservedUsage | undefined, public readonly providerCalls: number,
+    public readonly failure?: CliUpstreamTurn["failure"]) {
+    super(error instanceof CliBackendError ? error.code : "cli_compaction_failed",
+      error instanceof CliBackendError ? error.message : "CLI compaction failed.", error instanceof CliBackendError ? error.status : 502);
+  }
+}
+function validateCliControls(body: JsonObject): void {
+  if (body.tool_choice && !["auto", "none"].includes(body.tool_choice.type)) {
+    throw new CliBackendError("unsupported_cli_control", "CLI tool choice supports auto or none.");
+  }
+  if (body.tool_choice?.disable_parallel_tool_use === true) {
+    throw new CliBackendError("unsupported_cli_control", "The CLI SDK does not expose serial-only model tool choice. Use the HTTP backend for this control.");
+  }
+  if (body.temperature !== undefined || body.top_p !== undefined || body.top_k !== undefined || body.stop_sequences?.length) {
+    throw new CliBackendError("unsupported_cli_control", "Sampling and stop-sequence overrides require the HTTP backend.");
+  }
+  if (body.output_config !== undefined && (!body.output_config || typeof body.output_config !== "object" ||
+      Object.keys(body.output_config).some(key => key !== "effort") ||
+      body.output_config.effort !== undefined && !["low", "medium", "high", "xhigh", "max"].includes(body.output_config.effort))) {
+    throw new CliBackendError("unsupported_cli_control", "CLI output configuration supports the documented effort labels.");
+  }
+}
 function validateNextInput(messages: JsonObject[], pending: Set<string>): void {
   const content = messages.flatMap(message => message.content);
   const results = content.filter(block => block.type === "tool_result");
@@ -75,7 +100,7 @@ class Session {
   private completedReject?: (error: Error) => void;
   private completed: Promise<void> = Promise.resolve();
   private options = new Map<string, { resolve: () => void; reject: (error: Error) => void }>();
-  private compactWaiter?: { resolve: () => void; reject: (error: Error) => void };
+  private compactWaiter?: { resolve: (result: JsonObject) => void; reject: (error: Error) => void };
   private forwarding?: { close: () => void };
   private effort: unknown;
   private exitResolve!: () => void;
@@ -83,7 +108,7 @@ class Session {
 
   constructor(readonly scope: string, readonly model: string, readonly body: JsonObject, readonly owner: Registry,
     readonly importedHistory?: JsonObject[], readonly origin = "",
-    readonly retired: { session: Session; historyHash: string; pending: string[] }[] = []) {
+    readonly retired: { session: Session; historyHash: string; pending: string[] }[] = [], readonly compactOnly = false) {
     this.effort = body.output_config?.effort;
     this.upstream = { active: false, calls: 0, scope: "", model };
     if (importedHistory) this.upstream.importContinuation = `[claude-proxy-resume:${randomUUID()}]`;
@@ -127,7 +152,7 @@ class Session {
         } else if (message.type === "compact_boundary") {
           this.compactions++; this.lastCompaction = message.compact_metadata;
         } else if (message.type === "compact_result") {
-          if (message.success) this.compactWaiter?.resolve();
+          if (message.success) this.compactWaiter?.resolve(message);
           else this.compactWaiter?.reject(new CliBackendError("cli_compaction_failed", "CLI compaction failed.", 502));
         }
         else if (message.type === "turn_result") {
@@ -152,6 +177,7 @@ class Session {
       effort: this.effort, cwd, configDir, authMode: "proxy", upstream: forwarding.base,
       ...(CLAUDE_CLI_AUTO_COMPACT_WINDOW ? { autoCompactWindow: CLAUDE_CLI_AUTO_COMPACT_WINDOW } : {}),
       ...(this.importedHistory ? { history: this.importedHistory } : {}),
+      ...(this.compactOnly ? { compactOnly: true } : {}),
       ...(this.upstream.nativeSystems?.length ? { systemCarriers: this.upstream.nativeSystems.map(({ index, marker }) => ({ index, marker })) } : {}),
       credential: { kind: "api_key", token: forwarding.token },
       ...(process.env.CLAUDE_CLI_EXECUTABLE ? { cliPath: resolve(process.env.CLAUDE_CLI_EXECUTABLE) } : {}) });
@@ -211,7 +237,7 @@ class Session {
   }
   /** Trusted operator/test control, not a user-message slash-command parser. */
   async compact(instructions?: string): Promise<{ compacted: boolean; metadata?: JsonObject;
-    usage?: ObservedUsage; providerCalls: number }> {
+    messages?: JsonObject[]; summary?: string; usage?: ObservedUsage; providerCalls: number }> {
     if (this.closed || this.busy || this.pending.size) {
       throw new CliBackendError("cli_session_busy", "Finish the active caller/tool turn before compaction.", 409);
     }
@@ -219,13 +245,14 @@ class Session {
     this.upstream.inferenceCalls = 0; this.upstream.compacting = false; this.upstream.requests = [];
     this.upstream.failure = undefined; this.upstream.observer = undefined;
     const before = this.compactions;
-    const done = new Promise<void>((resolve, reject) => { this.compactWaiter = { resolve, reject }; });
+    const done = new Promise<JsonObject>((resolve, reject) => { this.compactWaiter = { resolve, reject }; });
     void done.catch(() => {});
     try {
       await this.send({ type: "compact", ...(instructions ? { instructions } : {}) });
-      await done;
+      const snapshot = await done;
       const usage = await cliTurnUsage(this.upstream);
-      return { compacted: this.compactions > before, metadata: this.lastCompaction, usage, providerCalls: this.upstream.calls };
+      return { compacted: this.compactions > before, metadata: this.lastCompaction, usage, providerCalls: this.upstream.calls,
+        ...(snapshot.messages ? { messages: snapshot.messages, summary: snapshot.summary } : {}) };
     } catch (error) {
       this.fail(error instanceof Error ? error : new Error()); throw error;
     } finally {
@@ -296,6 +323,68 @@ class Registry {
   readonly sessions = new Map<string, Session>();
   readonly index = new Map<string, Set<Session>>();
   private timer?: NodeJS.Timeout;
+  /** Stateless compaction owns a fresh worker and never submits an inference prompt. */
+  async compact(body: JsonObject, principal: string, credential: Credential, signal?: AbortSignal): Promise<CliCompactionResult> {
+    if (signal?.aborted) throw new CliCompactionError(new CliBackendError("request_cancelled", "Request cancelled.", 499), undefined, 0);
+    body = cliInferenceRequest(body);
+    validateCliControls(body);
+    const messages = cliMessages(body.messages), system = cliSystem(body.system), tools = cliTools(body.tools);
+    // A dangling caller tool must remain outside the resumed CLI transcript:
+    // resume otherwise synthesizes an interrupted-tool result. Compact the
+    // completed prefix and replay the entire pending suffix byte-for-byte.
+    const pending = new Map<string, number>();
+    let completedThrough = 0;
+    for (let index = 0; index < messages.length; index++) {
+      for (const block of messages[index].content) {
+        if (block.type === "tool_use") {
+          if (messages[index].role !== "assistant" || typeof block.id !== "string" || !block.id || pending.has(block.id)) {
+            throw new CliBackendError("invalid_cli_tool_history", "Compaction requires well-formed caller tool history.");
+          }
+          pending.set(block.id, index);
+        } else if (block.type === "tool_result" && (messages[index].role !== "user" || !pending.delete(block.tool_use_id))) {
+          throw new CliBackendError("invalid_cli_tool_history", "Compaction requires matching caller tool results.");
+        }
+      }
+      if (messages[index].role === "assistant" && !pending.size) completedThrough = index + 1;
+    }
+    // Also retain an unanswered user/tool-result suffix. CLI resume otherwise
+    // adds "No response requested" after it and compact preserves that helper
+    // instead of the caller's latest unfinished task.
+    const pivot = completedThrough || (pending.size ? Math.min(...pending.values()) : messages.length);
+    const history = messages.slice(0, pivot), tail = messages.slice(pivot);
+    if (!history.length) throw new CliBackendError("invalid_cli_tool_history", "Include the conversation before the outstanding tool call.");
+    if (this.sessions.size >= CLAUDE_CLI_MAX_SESSIONS) {
+      const idle = [...this.sessions.values()].filter(value => !value.closed && !value.busy && !value.upstream.active)
+        .sort((a, b) => a.lastUsed - b.lastUsed)[0];
+      if (idle) idle.close();
+      else throw new CliBackendError("cli_capacity", "All CLI sessions currently have active requests.", 503);
+    }
+    const scope = cliHash([principal, upstreamStateScope(ANTHROPIC_BASE_URL, credential), body.model, system.blocks, tools]);
+    const session = new Session(scope, body.model, { ...body, system: system.blocks, tools: body.tool_choice?.type === "none" ? [] : tools }, this, history, "", [], true);
+    this.sessions.set(session.id, session);
+    session.busy = true; // Capacity protects startup as well as the actual compact call.
+    const abort = () => session.fail(new CliBackendError("request_cancelled", "Request cancelled.", 499));
+    signal?.addEventListener("abort", abort, { once: true });
+    const timeout = setTimeout(() => session.fail(new CliBackendError("cli_compaction_timeout", "CLI compaction timed out.", 504)), UPSTREAM_TIMEOUT_MS);
+    timeout.unref();
+    try {
+      if (signal?.aborted) { abort(); throw new CliBackendError("request_cancelled", "Request cancelled.", 499); }
+      await session.start(credential);
+      session.busy = false;
+      const result = await session.compact();
+      if (!result.compacted || !Array.isArray(result.messages) || !result.messages.length || typeof result.summary !== "string") {
+        throw new CliBackendError("cli_compaction_failed", "The CLI did not produce a complete compacted conversation.", 502);
+      }
+      return { ...result, messages: [...result.messages, ...tail], summary: result.summary };
+    } catch (error) {
+      session.close();
+      const usage = await cliTurnUsage(session.upstream);
+      throw new CliCompactionError(error, usage, session.upstream.calls, session.upstream.failure);
+    } finally {
+      clearTimeout(timeout); signal?.removeEventListener("abort", abort); session.close();
+      await session.exited;
+    }
+  }
   async acquire(body: JsonObject, principal: string, credential: Credential, signal?: AbortSignal): Promise<{
     session: Session; messages: JsonObject[]; detach: () => void;
   }> {
@@ -305,20 +394,7 @@ class Registry {
     if ([...messages].reverse().find(message => message.role !== "system")?.role !== "user") {
       throw new CliBackendError("unsupported_cli_prefill", "A CLI caller turn must end in user input, optionally followed by native system context.");
     }
-    if (body.tool_choice && !["auto", "none"].includes(body.tool_choice.type)) {
-      throw new CliBackendError("unsupported_cli_control", "CLI tool choice supports auto or none.");
-    }
-    if (body.tool_choice?.disable_parallel_tool_use === true) {
-      throw new CliBackendError("unsupported_cli_control", "The CLI SDK does not expose serial-only model tool choice. Use the HTTP backend for this control.");
-    }
-    if (body.temperature !== undefined || body.top_p !== undefined || body.top_k !== undefined || body.stop_sequences?.length) {
-      throw new CliBackendError("unsupported_cli_control", "Sampling and stop-sequence overrides require the HTTP backend.");
-    }
-    if (body.output_config !== undefined && (!body.output_config || typeof body.output_config !== "object" ||
-        Object.keys(body.output_config).some(key => key !== "effort") ||
-        body.output_config.effort !== undefined && !["low", "medium", "high", "xhigh", "max"].includes(body.output_config.effort))) {
-      throw new CliBackendError("unsupported_cli_control", "CLI output configuration supports the documented effort labels.");
-    }
+    validateCliControls(body);
     const scope = cliHash([principal, upstreamStateScope(ANTHROPIC_BASE_URL, credential), body.model,
       system.blocks, tools, body.max_tokens, body.thinking ?? null, body.tool_choice ?? null]);
     const origin = cliHash([principal, upstreamStateScope(ANTHROPIC_BASE_URL, credential)]);
@@ -410,5 +486,6 @@ class Registry {
 }
 const registry = new Registry();
 export const acquireCliSession = (body: JsonObject, principal: string, credential: Credential, signal?: AbortSignal) => registry.acquire(body, principal, credential, signal);
+export const compactCliHistory = (body: JsonObject, principal: string, credential: Credential, signal?: AbortSignal) => registry.compact(body, principal, credential, signal);
 export const cliSessionCount = (): number => registry.sessions.size;
 export async function closeCliSessions(): Promise<void> { await registry.close(); await closeCliUpstream(); }

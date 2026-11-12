@@ -249,7 +249,7 @@ test('auth, model ACL, unsupported state/features and query parameters fail befo
   assert.equal((await request(body('seed',{model:'not-allowed'}))).status,403);
   for(const extra of [{previous_response_id:'resp_old'},{store:true},{background:true},{tools:[{type:'web_search'}]}]) assert.equal((await request(body('seed',extra))).status,400);
   assert.equal((await request(body(),key.key,'/v1/responses?unknown=1')).status,400);
-  assert.equal((await request(body(),key.key,'/v1/responses/compact')).status,404);
+  assert.equal((await request(body('seed',{stream:false}),key.key,'/v1/responses/compact')).status,501);
   assert.equal(calls.length,n);
 });
 test('explicit request-native cache/thinking header works without global TTL settings or forwarding the header',async()=>{

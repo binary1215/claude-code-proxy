@@ -10,7 +10,7 @@ export const HISTORY_CLI_VERSION = '2.1.322';
  * replacing signed thinking. Completed calls must be loaded WITH their results:
  * resuming a dangling call makes the CLI synthesize an interrupted-tool result.
  */
-export function nativeHistoryEntries(history, { model, cwd, systemCarriers = [], sessionId = randomUUID(), timestamp = new Date().toISOString() }) {
+export function nativeHistoryEntries(history, { model, cwd, systemCarriers = [], compactOnly = false, sessionId = randomUUID(), timestamp = new Date().toISOString() }) {
   if (!Array.isArray(history) || !history.length || typeof model !== 'string' || !model || typeof cwd !== 'string' || !cwd) {
     throw new WorkerError('invalid_history');
   }
@@ -71,15 +71,24 @@ export function nativeHistoryEntries(history, { model, cwd, systemCarriers = [],
     previous = uuid;
     return entry;
   });
-  if (pending.size || !['user', 'system'].includes(history.at(-1).role)) throw new WorkerError('invalid_history');
+  if (pending.size || (!compactOnly && !['user', 'system'].includes(history.at(-1).role))) throw new WorkerError('invalid_history');
   return { sessionId, entries };
 }
 
-/** An import-only adapter; no remote persistence, logs or retained mirror. */
-export function nativeHistoryStore(snapshot) {
+/** Request-local adapter. Compaction can capture its live transcript in memory;
+ * ordinary inference remains import-only. Neither mode adds remote persistence. */
+export function nativeHistoryStore(snapshot, { capture = false } = {}) {
+  const entries = structuredClone(snapshot.entries);
   return {
-    append: async () => {},
-    load: async key => key.sessionId === snapshot.sessionId ? structuredClone(snapshot.entries) : null,
+    append: async (key, batch) => {
+      if (!capture || key.sessionId !== snapshot.sessionId || key.subpath) return;
+      for (const source of batch) {
+        const entry = structuredClone(source);
+        const index = entry.uuid ? entries.findIndex(value => value.uuid === entry.uuid) : -1;
+        if (index < 0) entries.push(entry); else entries[index] = entry;
+      }
+    },
+    load: async key => key.sessionId === snapshot.sessionId && !key.subpath ? structuredClone(entries) : null,
     listSubkeys: async () => [],
   };
 }

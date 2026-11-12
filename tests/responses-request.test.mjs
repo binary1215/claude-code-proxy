@@ -290,7 +290,7 @@ test('images are pure URL/base64 translation, not file access or fetch/detail em
 
 test('unsupported semantic parameters and state/storage capabilities never silently degrade', () => {
   for (const extra of [{ store: true }, { previous_response_id: 'resp_private' }, { background: true }, { truncation: 'auto' }, { unknown_semantic_parameter: 'PRIVATE' }, { text: { format: { type: 'json_schema', schema: {} } } }, { text: { verbosity: 'low' } }, { include: ['message.output_text.logprobs'] }, { reasoning: { generate_summary: 'auto' } }, { metadata: { provider_state: 'private' } }, { anthropic: { unknown: true } }, { stream: 'true' }, { tools: [{ type: 'function', name: 'lookup', parameters: { type: 'array' } }] }]) bad(request(extra));
-  bad(request({ input: [{ type: 'compaction', encrypted_content: 'opaque' }] }));
+  bad(request({ input: [{ type: 'compaction', encrypted_content: 'opaque' }] }), 'invalid_compaction_state', 409);
   bad(request({ input: [{ role: 'assistant', content: [{ type: 'refusal', refusal: 'No' }] }] }));
 });
 

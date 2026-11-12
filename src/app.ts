@@ -28,7 +28,7 @@ app.use("/v1", responsesRoutes);
 // Embeddings: POST /v1/embeddings (proxied to Ollama)
 app.use("/v1", embeddingsRoutes);
 app.use("/v1", (_req, res) => {
-    res.status(404).json({ type: "error", error: { type: "not_found_error", message: "Unsupported endpoint. This proxy supports Messages and enabled Responses; Chat, stored responses and /responses/compact are not supported." } });
+    res.status(404).json({ type: "error", error: { type: "not_found_error", message: "Unsupported endpoint. This proxy supports Messages and enabled Responses (including compact with the CLI backend); Chat and stored responses are not supported." } });
 });
 
 // Centralized error handler

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { claudeModelPolicy, type ClaudeModelPolicy } from "./claudeModelPolicy.js";
 import { patchInputDescription, recognizePatchGrammar, validPatchInput, type PatchGrammar } from "./responsesPatchGrammar.js";
-import { MAX_TOOL_CALL_ID_LENGTH, ResponsesError, type JsonObject, type PreparedResponsesRequest, type RequestTranslationOptions, type ToolBinding } from "./responsesTypes.js";
+import { MAX_TOOL_CALL_ID_LENGTH, ResponsesError, type JsonObject, type PreparedResponsesCompactionRequest, type PreparedResponsesRequest, type RequestTranslationOptions, type ToolBinding } from "./responsesTypes.js";
 
 const LEGACY_MAX_OUTPUT_TOKENS = 65_536;
 const MAX_MANUAL_THINKING_BUDGET = 65_535;
@@ -189,6 +189,16 @@ function thinkingPolicy(request: JsonObject, extension: JsonObject, options: Req
  * authorize new tool calls. Client IDs/cache keys/summary hints are never prompt text.
  */
 export function prepareResponsesRequest(input: unknown, options: RequestTranslationOptions): PreparedResponsesRequest {
+  return prepareRequest(input, options, false);
+}
+
+/** Compaction consumes history without starting the next model turn. In
+ * particular an assistant response or outstanding caller tool calls can end it. */
+export function prepareResponsesCompactionRequest(input: unknown, options: RequestTranslationOptions): PreparedResponsesCompactionRequest {
+  return prepareRequest(input, options, true);
+}
+
+function prepareRequest(input: unknown, options: RequestTranslationOptions, compact: boolean): PreparedResponsesCompactionRequest {
   const developerMessageMode = options.developerMessageMode ?? "reject";
   if (developerMessageMode !== "reject" && developerMessageMode !== "hoist") fail("unsupported_parameter");
   const request = object(input);
@@ -197,6 +207,7 @@ export function prepareResponsesRequest(input: unknown, options: RequestTranslat
   if (model !== options.context.model) fail("invalid_reasoning_state", "The state context model does not match the requested native model.", 409);
   if ((own(request, "store") && request.store !== false) || (own(request, "previous_response_id") && request.previous_response_id !== null) || (own(request, "background") && request.background !== false) || (own(request, "truncation") && request.truncation !== "disabled")) fail("unsupported_parameter", "Only stateless foreground requests with disabled truncation are supported.");
   if (own(request, "stream") && typeof request.stream !== "boolean") fail();
+  if (compact && request.stream === true) fail("unsupported_parameter", "Compaction returns one non-streaming response.");
   if (own(request, "include") && (!Array.isArray(request.include) || request.include.some((item: unknown) => item !== "reasoning.encrypted_content"))) fail("unsupported_parameter");
   if (own(request, "client_metadata")) json(object(request.client_metadata));
   if (own(request, "prompt_cache_key")) string(request.prompt_cache_key);
@@ -334,6 +345,7 @@ export function prepareResponsesRequest(input: unknown, options: RequestTranslat
   }
 
   const system: JsonObject[] = [];
+  const instructionItems: JsonObject[] = [];
   if (own(request, "instructions") && request.instructions !== null) system.push({ type: "text", text: string(request.instructions) });
   const items = typeof request.input === "string" ? [{ type: "message", role: "user", content: request.input }] : request.input;
   if (!Array.isArray(items) || !items.length) fail();
@@ -352,6 +364,7 @@ export function prepareResponsesRequest(input: unknown, options: RequestTranslat
         fail("unsupported_parameter", "System and developer messages are allowed only in the initial prefix unless developer hoisting is explicitly enabled.");
       }
       system.push(...content(item.content, false));
+      instructionItems.push(json(item) as JsonObject);
     } else begun = true;
   }
   // This prevents silently replaying old signatures under a newly hoisted
@@ -367,7 +380,78 @@ export function prepareResponsesRequest(input: unknown, options: RequestTranslat
     if (previous?.role === role) previous.content.push(...blocks);
     else messages.push({ role, content: blocks });
   };
-  for (const value of items) {
+  // A compaction item represents the entire prior conversational window. The
+  // newest capsule supersedes earlier messages/capsules, including expired old
+  // reasoning states; instruction items remain explicit and were checked above.
+  let latestCompaction = -1;
+  for (let i = 0; i < items.length; i++) if (object(items[i]).type === "compaction") latestCompaction = i;
+  if (latestCompaction >= 0) {
+    const item = object(items[latestCompaction]);
+    keys(item, ["type", "id", "encrypted_content", "status"]);
+    if (own(item, "status") && item.status !== "completed") fail("invalid_compaction_state", "Compaction state must be complete.", 409);
+    if (!options.compactionCodec || typeof item.encrypted_content !== "string" || !item.encrypted_content.length ||
+        own(item, "id") && (typeof item.id !== "string" || !item.id.length || item.id.length > 256)) {
+      fail("invalid_compaction_state", "Compaction replay requires this proxy's encrypted state and a valid item ID when supplied.", 409);
+    }
+    let restored;
+    try { restored = options.compactionCodec.open(item.encrypted_content, stateContext, item.id); }
+    catch { fail("invalid_compaction_state", "The encrypted compaction state is invalid or bound to another request context.", 409); }
+    if (!restored || typeof restored.itemId !== "string" || !restored.itemId.length || restored.itemId.length > 256 ||
+        item.id !== undefined && item.id !== restored.itemId || !Array.isArray(restored.state?.messages) || !restored.state.messages.length) {
+      fail("invalid_compaction_state", "The compacted native context is malformed.", 409);
+    }
+    for (const source of restored.state.historyTools ?? []) {
+      const binding = object(source);
+      if (!["function", "custom"].includes(binding.kind)) fail("invalid_compaction_state", "A compacted tool identity is malformed.", 409);
+      const resolved = resolveHistoryTool(binding.kind, binding.name, binding.namespace);
+      if (resolved.nativeName !== binding.nativeName) fail("invalid_compaction_state", "A compacted tool identity has changed.", 409);
+    }
+    for (const source of restored.state.messages) {
+      const message = object(source);
+      if (!["user", "assistant"].includes(message.role) || !Array.isArray(message.content) || !message.content.length) {
+        fail("invalid_compaction_state", "Compacted history must contain native user or assistant content.", 409);
+      }
+      for (const sourceBlock of message.content) {
+        const block = object(sourceBlock);
+        if (block.type === "tool_use") {
+          if (message.role !== "assistant") fail("invalid_tool_history");
+          const callId = string(block.id, true, MAX_TOOL_CALL_ID_LENGTH);
+          const binding = historyBindings.get(string(block.name, true));
+          if (!binding || calls.has(callId) || pending.size && nativeBody.messages.at(-1)?.role !== "assistant") fail("invalid_tool_history", "Compacted tool identifiers or ordering are invalid.");
+          object(block.input);
+          if (binding.kind === "custom") {
+            string(block.input.input);
+            if (binding.grammar && !validPatchInput(block.input.input, binding.grammar)) fail("invalid_tool_history");
+          }
+          calls.add(callId);
+          pending.set(callId, binding.kind);
+        } else if (block.type === "tool_result") {
+          if (message.role !== "user") fail("invalid_tool_history");
+          const callId = string(block.tool_use_id, true, MAX_TOOL_CALL_ID_LENGTH);
+          if (!pending.has(callId)) fail("invalid_tool_history", "Compacted tool output must match an unanswered call.");
+          if (own(block, "is_error") && typeof block.is_error !== "boolean") fail("invalid_tool_history");
+          if (typeof block.content !== "string" && !Array.isArray(block.content)) fail("invalid_tool_history");
+          pending.delete(callId);
+        } else {
+          if (pending.size && (message.role === "user" || nativeBody.messages.at(-1)?.role !== "assistant")) fail("invalid_tool_history", "Compacted pending calls must be answered before another message turn.");
+          if (block.type === "text") string(block.text);
+          else if (block.type === "thinking") {
+            if (message.role !== "assistant") fail("invalid_compaction_state", "Thinking must remain assistant content.", 409);
+            string(block.thinking);
+            string(block.signature, true);
+          } else if (block.type === "redacted_thinking") {
+            if (message.role !== "assistant") fail("invalid_compaction_state", "Thinking must remain assistant content.", 409);
+            string(block.data, true);
+          } else if (block.type === "image") {
+            if (message.role !== "user") fail("invalid_compaction_state", "An image must remain user content.", 409);
+            object(block.source);
+          } else fail("invalid_compaction_state", "A compacted content type is not supported.", 409);
+        }
+        append(message.role, [json(block) as JsonObject]);
+      }
+    }
+  }
+  for (const value of items.slice(latestCompaction + 1)) {
     const item = object(value);
     const type = item.type ?? (own(item, "role") ? "message" : undefined);
     if (type === "message") {
@@ -448,8 +532,8 @@ export function prepareResponsesRequest(input: unknown, options: RequestTranslat
       pending.delete(callId);
     } else fail("unsupported_parameter", "This Responses input item type is not supported.");
   }
-  if (pending.size) fail("invalid_tool_history", "Unanswered tool calls cannot be sent for another model turn.");
+  if (pending.size && !compact) fail("invalid_tool_history", "Unanswered tool calls cannot be sent for another model turn.");
   if (!nativeBody.messages.length) fail();
   if (system.length) nativeBody.system = system;
-  return { nativeBody, tools, stream: request.stream ?? false, model, stateContext };
+  return { nativeBody, tools, historyTools: [...historyBindings.values()], instructionItems, stream: request.stream ?? false, model, stateContext };
 }

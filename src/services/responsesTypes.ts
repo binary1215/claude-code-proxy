@@ -32,16 +32,35 @@ export interface ReasoningCodec {
   open(value: string, context: StateContext, itemId?: string): { itemId: string; block: JsonObject };
 }
 
+/** Native compacted context, not a public reasoning summary or an instruction. */
+export interface CompactionState {
+  messages: JsonObject[];
+  /** Replay identities only. These never authorize new provider tool calls. */
+  historyTools?: ToolBinding[];
+}
+
+export interface CompactionCodec {
+  seal(state: CompactionState, context: StateContext, itemId: string): string;
+  open(value: string, context: StateContext, itemId?: string): { itemId: string; state: CompactionState };
+}
+
 export interface PreparedResponsesRequest {
   nativeBody: JsonObject;
   tools: Map<string, ToolBinding>;
   stream: boolean;
   model: string;
   stateContext: StateContext;
+  historyTools: ToolBinding[];
+}
+
+export interface PreparedResponsesCompactionRequest extends PreparedResponsesRequest {
+  /** Keep input instructions visible in the canonical returned window. */
+  instructionItems: JsonObject[];
 }
 
 export interface RequestTranslationOptions {
   codec: ReasoningCodec;
+  compactionCodec?: CompactionCodec;
   context: StateContext;
   defaultMaxTokens: number;
   defaultThinkingBudget: number;
