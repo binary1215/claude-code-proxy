@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { createCipheriv, randomBytes } from 'node:crypto';
 import { test } from 'node:test';
-import { prepareResponsesRequest } from '../dist/services/responsesRequest.js';
+import { prepareResponsesCompactionRequest, prepareResponsesRequest } from '../dist/services/responsesRequest.js';
 import { ResponsesError } from '../dist/services/responsesTypes.js';
 import { convertNativeMessage } from '../dist/services/responsesStream.js';
 import { ResponsesStateCodec } from '../dist/services/responsesState.js';
+import { ResponsesCompactionStateCodec } from '../dist/services/responsesCompactionState.js';
 
 const model = 'native-model-no-alias';
 const context = { model, principal: 'synthetic-principal', upstream: 'synthetic-upstream' };
@@ -34,6 +35,50 @@ const reasoning = (id, block) => ({ type: 'reasoning', id, encrypted_content: co
 function bad(value, code, status = 400) {
   assert.throws(() => prepare(value), error => error instanceof ResponsesError && error.status === status && (!code || error.code === code));
 }
+
+test('nullable SDK tool namespaces equal omitted namespaces for current choices, history and compact replay', () => {
+  const compactionCodec = new ResponsesCompactionStateCodec(randomBytes(32).toString('base64'), 600);
+  const bound = { ...options, compactionCodec };
+  for (const kind of ['function', 'custom']) {
+    const toolName = kind === 'function' ? 'lookup' : 'write_note';
+    const tool = kind === 'function' ? fn(toolName) : { type: 'custom', name: toolName };
+    const historicalCall = kind === 'function'
+      ? call('call_nullable', toolName, { id: 'fc_nullable', status: 'completed' })
+      : { type: 'custom_tool_call', id: 'ctc_nullable', call_id: 'call_nullable', name: toolName, input: 'Fixture note', status: 'completed' };
+    const result = { type: kind === 'function' ? 'function_call_output' : 'custom_tool_call_output', call_id: 'call_nullable', output: 'Recorded' };
+    const history = [message('user', 'Record fixture'), historicalCall, result, message('assistant', 'Done')];
+    const nullableHistory = [history[0], { ...historicalCall, namespace: null }, ...history.slice(2)];
+
+    const choice = request({ tools: [tool], anthropic: { thinking: { type: 'disabled' } }, tool_choice: { type: kind, name: toolName } });
+    assert.deepEqual(prepare({ ...choice, tool_choice: { ...choice.tool_choice, namespace: null } }).nativeBody,
+      prepare(choice).nativeBody);
+    for (const definitions of [undefined, [tool]]) {
+      const body = { model, input: [...history, message('user', 'Continue')], ...(definitions ? { tools: definitions } : {}) };
+      const plain = prepareResponsesRequest(body, bound);
+      const nullable = prepareResponsesRequest({ ...body, input: [...nullableHistory, message('user', 'Continue')] }, bound);
+      assert.deepEqual(nullable.nativeBody, plain.nativeBody);
+      assert.deepEqual(nullable.historyTools, plain.historyTools);
+      assert.equal(nullable.historyTools[0].nativeName, toolName);
+      assert.equal(Object.hasOwn(nullable.historyTools[0], 'namespace'), false);
+    }
+
+    const plain = prepareResponsesCompactionRequest({ model, input: history }, bound);
+    const nullable = prepareResponsesCompactionRequest({ model, input: nullableHistory }, bound);
+    assert.deepEqual(nullable.nativeBody, plain.nativeBody);
+    assert.deepEqual(nullable.historyTools, plain.historyTools);
+    const state = { messages: nullable.nativeBody.messages, historyTools: nullable.historyTools };
+    const capsule = { type: 'compaction', id: `cmp_nullable_${kind}`,
+      encrypted_content: compactionCodec.seal(state, nullable.stateContext, `cmp_nullable_${kind}`) };
+    const replay = prepareResponsesRequest({ model, input: [capsule, message('user', 'Continue')] }, bound);
+    assert.deepEqual(replay.nativeBody.messages, [...plain.nativeBody.messages, { role: 'user', content: [{ type: 'text', text: 'Continue' }] }]);
+    assert.equal(replay.tools.size, 0);
+
+    for (const namespace of ['', false, 1, {}, []]) {
+      assert.throws(() => prepareResponsesRequest({ model, input: [history[0], { ...historicalCall, namespace }, result] }, bound),
+        error => error instanceof ResponsesError && error.status === 400);
+    }
+  }
+});
 
 test('native model, string input, default bounded thinking; no persistence or metadata in prompt', () => {
   const prepared = prepare(request({ client_metadata: { opaque_session_id: 'DO_NOT_PROMPT_ID' }, prompt_cache_key: 'DO_NOT_PROMPT_CACHE_KEY', include: ['reasoning.encrypted_content'], text: { format: { type: 'text' } }, reasoning: { summary: 'auto' }, stream: true }));

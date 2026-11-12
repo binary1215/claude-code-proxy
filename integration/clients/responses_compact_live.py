@@ -143,6 +143,14 @@ class Gateway:
             if len(raw) > MAX_RESPONSE_BYTES:
                 raise Failure('response_size_limit')
             if response.status != 200:
+                # Fixed protocol classifications only; never persist arbitrary
+                # upstream error messages, original prompts or credentials.
+                for code in ('invalid_request', 'invalid_tool_history', 'unsupported_parameter',
+                             'invalid_compaction_state', 'compaction_failed', 'cli_compaction_failed',
+                             'compaction_backend_unavailable', 'cli_timeout', 'model_not_allowed'):
+                    if ('"code": "' + code + '"').encode() in raw or ('"code":"' + code + '"').encode() in raw:
+                        row['recognized_error_code'] = code
+                        break
                 raise Failure('gateway_http_error')
             try:
                 value = json.loads(raw)
@@ -154,6 +162,9 @@ class Gateway:
             row.update(output_items=len(output), output_counts=item_counts(output),
                        returned_reasoning_capsules=reasoning_capsules(output), usage=usage_only(value.get('usage')),
                        input_window_bytes=len(json_bytes(body['input'])), output_window_bytes=len(json_bytes(output)))
+            row['null_tool_fields'] = {field: sum(item.get('type') in {'function_call', 'custom_tool_call'}
+                                                 and field in item and item[field] is None for item in output)
+                                      for field in ('namespace', 'id', 'status', 'phase', 'created_by')}
             print(json.dumps({'event': 'request_complete', **row}), flush=True)
             return value
         except (OSError, http.client.HTTPException):

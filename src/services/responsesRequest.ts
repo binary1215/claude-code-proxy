@@ -298,8 +298,8 @@ function prepareRequest(input: unknown, options: RequestTranslationOptions, comp
   }
   if (definitions.length) nativeBody.tools = definitions;
   const resolveTool = (kind: string, toolName: unknown, namespace: unknown): ToolBinding => {
-    const sourceName = name(toolName, namespace === undefined ? 64 : 128);
-    const sourceNamespace = namespace === undefined ? undefined : name(namespace, 128);
+    const sourceNamespace = namespace === undefined || namespace === null ? undefined : name(namespace, 128);
+    const sourceName = name(toolName, sourceNamespace === undefined ? 64 : 128);
     const result = identities.get(identity(kind, sourceName, sourceNamespace));
     if (!result) fail("invalid_tool_history", "A tool reference has no matching current definition.");
     return result;
@@ -309,8 +309,8 @@ function prepareRequest(input: unknown, options: RequestTranslationOptions, comp
   // Keep this registry separate from `tools`, which authorizes provider output.
   const historyBindings = new Map(tools);
   const resolveHistoryTool = (kind: "function" | "custom", toolName: unknown, namespace: unknown): ToolBinding => {
-    const sourceName = name(toolName, namespace === undefined ? 64 : 128);
-    const sourceNamespace = namespace === undefined ? undefined : name(namespace, 128);
+    const sourceNamespace = namespace === undefined || namespace === null ? undefined : name(namespace, 128);
+    const sourceName = name(toolName, sourceNamespace === undefined ? 64 : 128);
     const flattened = nativeName(sourceName, sourceNamespace);
     const existing = historyBindings.get(flattened);
     if (existing) {
