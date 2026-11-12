@@ -455,7 +455,10 @@ function prepareRequest(input: unknown, options: RequestTranslationOptions, comp
     const item = object(value);
     const type = item.type ?? (own(item, "role") ? "message" : undefined);
     if (type === "message") {
-      keys(item, ["type", "role", "content", "id", "status"]);
+      // OpenAI SDK/LiteLLM materializes absent assistant phases as null.
+      // A non-null phase has semantics this adapter does not translate.
+      keys(item, ["type", "role", "content", "id", "status",
+        ...(item.role === "assistant" && item.phase === null ? ["phase"] : [])]);
       if (own(item, "id")) string(item.id, true);
       if (own(item, "status") && item.status !== "completed") fail();
       if (["system", "developer"].includes(item.role)) {

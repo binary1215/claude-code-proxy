@@ -80,6 +80,44 @@ test('nullable SDK tool namespaces equal omitted namespaces for current choices,
   }
 });
 
+test('nullable SDK assistant phase equals omitted phase for request and compact prelude replay', () => {
+  const compactionCodec = new ResponsesCompactionStateCodec(randomBytes(32).toString('base64'), 600);
+  const bound = { ...options, compactionCodec, developerMessageMode: 'hoist' };
+  const prefix = message('developer', 'Preserve the ledger facts');
+  const reply = { type: 'message', role: 'assistant', id: 'msg_nullable_phase', status: 'completed',
+    content: [{ type: 'output_text', text: 'Recorded', annotations: [], logprobs: [] }] };
+  const sdkReply = { ...reply, phase: null, content: [{ ...reply.content[0], logprobs: null }] };
+  const history = [prefix, message('user', 'Record fixture'), reply];
+  const sdkHistory = [prefix, history[1], sdkReply];
+  const base = { model, instructions: 'Fixture instruction' };
+  const next = message('user', 'Continue');
+  const plain = prepareResponsesRequest({ ...base, input: [...history, next] }, bound);
+  const sdk = prepareResponsesRequest({ ...base, input: [...sdkHistory, next] }, bound);
+  assert.deepEqual(sdk.nativeBody, plain.nativeBody);
+  assert.deepEqual(sdk.stateContext, plain.stateContext);
+  const compact = prepareResponsesCompactionRequest({ ...base, input: sdkHistory }, bound);
+  const plainCompact = prepareResponsesCompactionRequest({ ...base, input: history }, bound);
+  assert.deepEqual(compact.nativeBody, plainCompact.nativeBody);
+  assert.deepEqual(compact.instructionItems, plainCompact.instructionItems);
+  assert.deepEqual(compact.stateContext, plainCompact.stateContext);
+  const state = { messages: compact.nativeBody.messages, historyTools: compact.historyTools };
+  const capsule = { type: 'compaction', id: 'cmp_nullable_phase',
+    encrypted_content: compactionCodec.seal(state, compact.stateContext, 'cmp_nullable_phase') };
+  const replay = prepareResponsesRequest({ ...base, input: [...compact.instructionItems, capsule, next] }, bound);
+  assert.deepEqual(replay.nativeBody, plain.nativeBody);
+
+  for (const phase of ['commentary', 'final_answer', '', false, 0, {}]) {
+    for (const convert of [prepareResponsesRequest, prepareResponsesCompactionRequest]) {
+      assert.throws(() => convert({ ...base, input: [history[1], { ...reply, phase }, next] }, bound),
+        { code: 'unsupported_parameter' });
+    }
+  }
+  for (const role of ['user', 'system', 'developer']) {
+    assert.throws(() => prepareResponsesCompactionRequest({ ...base, input: [{ role, content: 'Fixture', phase: null }, reply] }, bound),
+      { code: 'unsupported_parameter' });
+  }
+});
+
 test('native model, string input, default bounded thinking; no persistence or metadata in prompt', () => {
   const prepared = prepare(request({ client_metadata: { opaque_session_id: 'DO_NOT_PROMPT_ID' }, prompt_cache_key: 'DO_NOT_PROMPT_CACHE_KEY', include: ['reasoning.encrypted_content'], text: { format: { type: 'text' } }, reasoning: { summary: 'auto' }, stream: true }));
   assert.equal(prepared.model, model);

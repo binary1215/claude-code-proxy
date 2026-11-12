@@ -129,8 +129,11 @@ window (100000–1000000 tokens); unset keeps the model's own setting.
 Client-side local compaction is also supported: its summary request may retain
 the previous signed/tool history while removing current tools. The resulting
 summary starts a fresh context, and subsequent assistant/thinking/tool history
-continues from it. Codex local compaction uses ordinary Responses calls; this
-does not implement the separate OpenAI `/responses/compact` endpoint.
+continues from it. Codex local compaction uses ordinary Responses calls. The
+separate [stateless `/responses/compact` endpoint](RESPONSES-COMPACTION.md) now
+invokes a compact-only worker and returns its genuine summary plus retained
+tail in an authenticated capsule. Its next request can restore without that
+worker. Adding this endpoint does not change Codex's compaction selection.
 
 Compaction can make multiple real model requests. Client response usage describes
 the **current inference context** so client context estimates are not inflated.
