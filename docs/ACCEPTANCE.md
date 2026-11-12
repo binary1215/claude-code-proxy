@@ -10,6 +10,28 @@ support-scope decisions. The November12 user decision explicitly restores genuin
 SDK/CLI inference as the default. Do not silently switch models/accounts/backends,
 spoof an official client, remove rejected thinking, or modify LiteLLM source/license flags.
 
+## Real Opus project work and automatic compaction — 2026-11-12
+
+The requested bounded acceptance cases now pass. Genuine Codex completes two
+automatic compactions and subsequent real file editing/tests through native
+Responses in nine HTTP200 requests. Genuine Claude Code completes both project
+repair and follow-up feature phases in seven HTTP200 requests. Both preserve
+the supplied tests, pass independent oracles, and show real signed replay/cache
+use. A separate Claude Code client test automatically compresses 24,472→1,656
+tokens and retains selected tool/source/calculation state.
+
+An isolated real backend test also passes automatic compaction 24,032→1,383
+within one live session, with correct internal usage aggregation. These are
+controlled lowered-threshold tests; default full-window longevity and arbitrary
+project/client/model behavior remain unqualified.
+
+The live project trial found `cli_capacity`503 from idle pending-tool workers
+occupying all slots. The deployed `a6a70ae` fix permits LRU eviction of idle
+workers and complete-history restoration, while protecting active requests.
+Linux checks pass 276 unique tests. Earlier provider-independent fixture and
+observation failures are preserved in the [full report](OPUS-PROJECT-AUTO-COMPACTION.md)
+and [evidence](evidence/20261112-opus-project-long-session.json).
+
 ## Opus native Responses deployment — 2026-11-12
 
 The standard `/v1/responses` endpoint now offers the separate
@@ -40,9 +62,9 @@ Anthropic-backed managed conversion or prove arbitrary coding workflows.
 See [routing contract](LITELLM-NATIVE-RESPONSES.md) and
 [full scoped results](evidence/20261112-native-responses-opus.json).
 
-## CLI default deployed to Han — 2026-11-12
+## Initial CLI-default rollout to Han — 2026-11-12
 
-Source `fc80fa3` is deployed with genuine CLI2.1.322/SDK0.3.322 inference.
+The initial rollout deployed `fc80fa3` with genuine CLI2.1.322/SDK0.3.322 inference.
 All four current models return the expected reply, operating Haiku reuses its
 session and reads5142 cached tokens, and existing keys/auth/data/state are kept.
 The final Linux image passes274/274 isolated regressions.
@@ -51,8 +73,9 @@ Unmodified real Claude Code passes cache reuse, manual compaction5876→973,
 target retention and post-compaction cache reuse. Real Codex passes tool
 execution, local compaction and two follow-ups in five requests, preserving
 opaque reasoning. Both client qualifications directly target the validation
-proxy. Genuine automatic compaction passes with a scripted provider; a real
-automatic threshold crossing and an invoice/quality comparison remain untested.
+proxy. At that stage automatic compaction passed with a scripted provider;
+a real threshold crossing had not been tested. The later Opus qualification
+above verifies real automatic compaction. Invoice/quality comparison remains untested.
 
 Separately, the unchanged LiteLLM managed Messages path passes two real Haiku
 turns with6311 upstream cache-read tokens. Its managed Responses path completes

@@ -1,0 +1,381 @@
+{
+  "date": "2026-11-12",
+  "baseline_model": "claude-opus-5-5",
+  "scope": "Actual isolated proxy CLI backend automatic compaction; no LiteLLM or external coding client transport",
+  "runtime": {
+    "source": "fc80fa3fbfa5e274806647a214afc24b8866792e",
+    "image": "sha256:34b5f1b91a24f1d2148b4d52ec37550eccf100e7567fd968931502e14a88b870",
+    "agent_sdk": "0.3.322",
+    "claude_code": "2.1.322"
+  },
+  "harness": {
+    "executed_driver_sha256": "d17f368ef3f05de513a7fe30ca208b87e6c703d503c84dd9597947b370dd3664",
+    "executed_worker_sha256": "d0164cc3dcf868cecfc0ed14eec4004bb5b836e58636bae62c28ac5f5555b088",
+    "published_driver_sha256": "d17f368ef3f05de513a7fe30ca208b87e6c703d503c84dd9597947b370dd3664",
+    "published_worker_sha256": "ba5e1e2b017a4ca9a5901a99f697cd8125a45b02665f3ffeb1ecb6d79eee7131",
+    "published_driver_byte_identical": true,
+    "published_worker_delta": "Three import paths only, from the cli-backend directory to clients directory; runtime logic unchanged",
+    "published_layout_live_retested": false,
+    "no_model_checks": {
+      "backend_auto_compact_live.mjs_syntax": true,
+      "backend_auto_compact_worker.mjs_syntax": true,
+      "operator_disabled_exit_one": true,
+      "operator_disabled_zero_calls": true,
+      "published_worker_import_and_close": true,
+      "published_worker_no_start_command": true
+    }
+  },
+  "initial_preparation_failure": {
+    "cause": "Context file layout mismatch: expected nested paths, mounted flat basenames",
+    "provider_calls": 0,
+    "backend_sessions": 0,
+    "source_files_read": 0,
+    "credential_read": false,
+    "corrected_separate_attempt": true
+  },
+  "requested_threshold": {
+    "autoCompactWindow": 100000,
+    "official_percent_override": 10
+  },
+  "threshold_note": "SDK-reported display is recorded separately; it may omit the percentage override. Actual compact boundary pre/post counts are not invented.",
+  "default_full_window_verified": false,
+  "source_context": {
+    "files": [
+      {
+        "path": "integration/cli-backend/worker.mjs",
+        "bytes": 16902,
+        "sha256": "a3faf11d5116ec8c9407bbedd36e42fa91065bfaf2c991c92bef997ddf4ef72d"
+      },
+      {
+        "path": "integration/cli-backend/history.mjs",
+        "bytes": 4849,
+        "sha256": "cef06deb131927ae970dd0b94eeb4fca4b13498b0921bb91dfcacd5552cc272b"
+      },
+      {
+        "path": "src/services/cliSessions.ts",
+        "bytes": 26071,
+        "sha256": "db43c893d0372ace3cc7309f2ce8b451700bc25f250bf1f086b353f18717327f"
+      }
+    ],
+    "bytes": 47822
+  },
+  "result": {
+    "ok": true,
+    "functional_pass": true,
+    "automatic_compaction_pass": true,
+    "cache_qualified": true,
+    "provider_calls": 6,
+    "distinct_backend_sessions": 1,
+    "checks": {
+      "actual_caller_tool_result": true,
+      "warm_cache_read": true,
+      "retained_source_tool_reasoning_state": true,
+      "after_cache_read": true,
+      "automatic_boundary": true,
+      "automatic_pre_post_hooks": true,
+      "no_manual_compaction": true,
+      "main_wire_usage_not_aggregated": true,
+      "all_internal_usage_accounted": true,
+      "same_live_backend_session": true
+    }
+  },
+  "boundaries": [
+    {
+      "trigger": "auto",
+      "pre_tokens": 24032,
+      "post_tokens": 1383,
+      "duration_ms": 21789,
+      "cumulative_dropped_tokens": 22649
+    }
+  ],
+  "hooks": [
+    {
+      "phase": "pre",
+      "trigger": "auto"
+    },
+    {
+      "phase": "pre",
+      "trigger": "auto"
+    },
+    {
+      "phase": "post",
+      "trigger": "auto"
+    }
+  ],
+  "context_snapshots": [
+    {
+      "label": "after-initial-tool",
+      "totalTokens": 23358,
+      "maxTokens": 100000,
+      "rawMaxTokens": 100000,
+      "autoCompactThreshold": 82904,
+      "isAutoCompactEnabled": true,
+      "source": "official SDK summary: actual last usage plus local estimates"
+    },
+    {
+      "label": "warm_cache",
+      "totalTokens": 3769,
+      "maxTokens": 100000,
+      "rawMaxTokens": 100000,
+      "autoCompactThreshold": 82904,
+      "isAutoCompactEnabled": true,
+      "source": "official SDK summary: actual last usage plus local estimates"
+    },
+    {
+      "label": "retained_source_tool_state",
+      "totalTokens": 3942,
+      "maxTokens": 100000,
+      "rawMaxTokens": 100000,
+      "autoCompactThreshold": 82904,
+      "isAutoCompactEnabled": true,
+      "source": "official SDK summary: actual last usage plus local estimates"
+    },
+    {
+      "label": "post_compact_cache",
+      "totalTokens": 4067,
+      "maxTokens": 100000,
+      "rawMaxTokens": 100000,
+      "autoCompactThreshold": 82904,
+      "isAutoCompactEnabled": true,
+      "source": "official SDK summary: actual last usage plus local estimates"
+    }
+  ],
+  "native_block_roundtrip": {
+    "scope": "returned native blocks -> caller history -> registry input, not a second provider wire observer",
+    "returned": 2,
+    "replayed": 4,
+    "mismatches": 0
+  },
+  "rounds": [
+    {
+      "name": "initial_tool_request",
+      "provider_calls": 1,
+      "requests": [
+        {
+          "kind": "inference",
+          "usage": {
+            "inputTokens": 2,
+            "outputTokens": 83,
+            "cacheCreationInputTokens": 2177,
+            "cacheReadInputTokens": 0,
+            "cacheCreation5mTokens": 2177,
+            "cacheCreation1hTokens": 0
+          }
+        }
+      ],
+      "turn_usage": {
+        "inputTokens": 2,
+        "outputTokens": 83,
+        "cacheCreationInputTokens": 2177,
+        "cacheReadInputTokens": 0,
+        "cacheCreation5mTokens": 2177,
+        "cacheCreation1hTokens": 0
+      },
+      "wire_usage": {
+        "input_tokens": 2,
+        "output_tokens": 83,
+        "cache_creation_input_tokens": 2177,
+        "cache_read_input_tokens": 0
+      },
+      "stop_reason": "tool_use",
+      "native_blocks": [
+        "tool_use"
+      ],
+      "backend_compactions": 0,
+      "boundary": null
+    },
+    {
+      "name": "initial_tool_result",
+      "provider_calls": 1,
+      "requests": [
+        {
+          "kind": "inference",
+          "usage": {
+            "inputTokens": 2,
+            "outputTokens": 647,
+            "cacheCreationInputTokens": 21171,
+            "cacheReadInputTokens": 2177,
+            "cacheCreation5mTokens": 21171,
+            "cacheCreation1hTokens": 0
+          }
+        }
+      ],
+      "turn_usage": {
+        "inputTokens": 2,
+        "outputTokens": 647,
+        "cacheCreationInputTokens": 21171,
+        "cacheReadInputTokens": 2177,
+        "cacheCreation5mTokens": 21171,
+        "cacheCreation1hTokens": 0
+      },
+      "wire_usage": {
+        "input_tokens": 2,
+        "output_tokens": 647,
+        "cache_creation_input_tokens": 21171,
+        "cache_read_input_tokens": 2177
+      },
+      "stop_reason": "end_turn",
+      "native_blocks": [
+        "thinking",
+        "text"
+      ],
+      "backend_compactions": 0,
+      "boundary": null
+    },
+    {
+      "name": "warm_cache",
+      "provider_calls": 2,
+      "requests": [
+        {
+          "kind": "compaction",
+          "usage": {
+            "inputTokens": 23084,
+            "outputTokens": 2407,
+            "cacheCreationInputTokens": 85,
+            "cacheReadInputTokens": 2177,
+            "cacheCreation5mTokens": 85,
+            "cacheCreation1hTokens": 0
+          }
+        },
+        {
+          "kind": "inference",
+          "usage": {
+            "inputTokens": 2,
+            "outputTokens": 14,
+            "cacheCreationInputTokens": 2169,
+            "cacheReadInputTokens": 1598,
+            "cacheCreation5mTokens": 2169,
+            "cacheCreation1hTokens": 0
+          }
+        }
+      ],
+      "turn_usage": {
+        "inputTokens": 23086,
+        "outputTokens": 2421,
+        "cacheCreationInputTokens": 2254,
+        "cacheReadInputTokens": 3775,
+        "cacheCreation5mTokens": 2254,
+        "cacheCreation1hTokens": 0
+      },
+      "wire_usage": {
+        "input_tokens": 2,
+        "output_tokens": 14,
+        "cache_creation_input_tokens": 2169,
+        "cache_read_input_tokens": 1598
+      },
+      "stop_reason": "end_turn",
+      "native_blocks": [
+        "text"
+      ],
+      "backend_compactions": 1,
+      "boundary": {
+        "trigger": "auto",
+        "pre_tokens": 24032,
+        "post_tokens": 1383,
+        "duration_ms": 21789,
+        "cumulative_dropped_tokens": 22649
+      }
+    },
+    {
+      "name": "retained_source_tool_state",
+      "provider_calls": 1,
+      "requests": [
+        {
+          "kind": "inference",
+          "usage": {
+            "inputTokens": 4,
+            "outputTokens": 119,
+            "cacheCreationInputTokens": 450,
+            "cacheReadInputTokens": 3464,
+            "cacheCreation5mTokens": 450,
+            "cacheCreation1hTokens": 0
+          }
+        }
+      ],
+      "turn_usage": {
+        "inputTokens": 4,
+        "outputTokens": 119,
+        "cacheCreationInputTokens": 450,
+        "cacheReadInputTokens": 3464,
+        "cacheCreation5mTokens": 450,
+        "cacheCreation1hTokens": 0
+      },
+      "wire_usage": {
+        "input_tokens": 4,
+        "output_tokens": 119,
+        "cache_creation_input_tokens": 450,
+        "cache_read_input_tokens": 3464
+      },
+      "stop_reason": "end_turn",
+      "native_blocks": [
+        "thinking",
+        "text"
+      ],
+      "backend_compactions": 1,
+      "boundary": {
+        "trigger": "auto",
+        "pre_tokens": 24032,
+        "post_tokens": 1383,
+        "duration_ms": 21789,
+        "cumulative_dropped_tokens": 22649
+      }
+    },
+    {
+      "name": "post_compact_cache",
+      "provider_calls": 1,
+      "requests": [
+        {
+          "kind": "inference",
+          "usage": {
+            "inputTokens": 4,
+            "outputTokens": 20,
+            "cacheCreationInputTokens": 149,
+            "cacheReadInputTokens": 3914,
+            "cacheCreation5mTokens": 149,
+            "cacheCreation1hTokens": 0
+          }
+        }
+      ],
+      "turn_usage": {
+        "inputTokens": 4,
+        "outputTokens": 20,
+        "cacheCreationInputTokens": 149,
+        "cacheReadInputTokens": 3914,
+        "cacheCreation5mTokens": 149,
+        "cacheCreation1hTokens": 0
+      },
+      "wire_usage": {
+        "input_tokens": 4,
+        "output_tokens": 20,
+        "cache_creation_input_tokens": 149,
+        "cache_read_input_tokens": 3914
+      },
+      "stop_reason": "end_turn",
+      "native_blocks": [
+        "text"
+      ],
+      "backend_compactions": 1,
+      "boundary": {
+        "trigger": "auto",
+        "pre_tokens": 24032,
+        "post_tokens": 1383,
+        "duration_ms": 21789,
+        "cumulative_dropped_tokens": 22649
+      }
+    }
+  ],
+  "isolation": {
+    "production_config_changed": false,
+    "production_database_mounted": false,
+    "production_session_runtime_mounted": false,
+    "auth_store_read_only": true,
+    "auth_refresh_enabled": false,
+    "secrets_exported": false,
+    "owned_test_containers_remaining": false
+  },
+  "limits": [
+    "Controlled lowered threshold; unchanged full-window longevity not established",
+    "Thinking observation covers caller histories submitted to the registry, not a second provider-wire observer",
+    "No gateway or external coding-client qualification from this isolated backend test"
+  ]
+}

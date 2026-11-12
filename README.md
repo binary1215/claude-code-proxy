@@ -33,9 +33,33 @@ requests passed: tool intent, caller-result continuation and Responses SSE;
 the continuation reported **2772 cache-read tokens**. Those historical results
 precede the default/compaction work. [Historical receipt](docs/evidence/20261112-cli-inference.json).
 
+## Actual Opus project editing and automatic compaction — 2026-11-12
+
+Both required clients now pass real project work through the existing LiteLLM
+gateway using **Opus 5.5**. Each repairs two source files, runs the failing and
+passing tests, implements a same-conversation follow-up, and passes independent
+tests without changing the supplied acceptance tests.
+
+| Boundary | Observed result |
+| --- | --- |
+| Codex 0.160.0 / Responses | Nine HTTP200 requests; two genuine automatic compactions, subsequent file edits/tests, exact signed-state replay and cache reads |
+| Claude Code 2.1.322 / Messages | Seven HTTP200 project requests; both editing phases pass, 16 exact signed-thinking replays and cache reads. A separate six-request automatic test compresses 24,472→1,656 tokens and retains selected state |
+| Proxy CLI backend | Six real provider calls in one session; automatic compaction 24,032→1,383, retained state and correct separate wire/internal usage accounting |
+
+The live tests exposed an idle-session `cli_capacity`503 defect. Han now runs
+the fix from `a6a70ae`: idle workers awaiting client-owned tools can be evicted
+and later restored from complete history; active requests remain protected.
+Linux verification passes **276 tests**. Existing keys, auth/data volumes and
+automatic refresh are preserved; LiteLLM and client sources are unchanged.
+
+Automatic tests use explicitly lowered, isolated thresholds. Default full-window
+longevity, arbitrary coding quality and invoice accuracy remain unverified.
+See the [complete results and earlier failed attempts](docs/OPUS-PROJECT-AUTO-COMPACTION.md)
+and [machine-readable evidence](docs/evidence/20261112-opus-project-long-session.json).
+
 ## Verified CLI default — 2026-11-12
 
-Operating Han now uses the default CLI backend, source `fc80fa3`, official
+The initial Han CLI-default rollout used source `fc80fa3`, official
 CLI2.1.322 and SDK0.3.322. Opus5.5, Sonnet5.5, Fable5.2 and Haiku5.5 all returned
 the expected reply with HTTP200. A second operating Haiku request reused its
 CLI session and reported **5142 cache-read tokens**. Existing proxy keys, auth
@@ -48,8 +72,9 @@ Unmodified Codex passed its tool round trip, local compaction and two follow-ups
 over five Responses requests, including exact reasoning replay. These client
 tests directly reached the validation proxy; they are not full client tests
 through LiteLLM. Genuine SDK automatic compaction and multi-call usage accounting
-pass against a scripted provider; a real-account automatic threshold crossing
-was not induced. See the [release evidence](docs/evidence/20261112-cli-default-compaction.json)
+pass against a scripted provider; that initial release did not induce a
+real-account automatic threshold crossing. The later Opus checks above do.
+See the [release evidence](docs/evidence/20261112-cli-default-compaction.json)
 and [context contract](docs/CLI-INFERENCE.md).
 
 Separately, existing LiteLLM managed Messages passed two real Haiku turns with

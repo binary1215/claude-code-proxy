@@ -82,6 +82,13 @@ native IDs, including identical parallel calls and caller errors. A successfully
 imported continuation retires a matching old pending worker whose calls were
 already completed, so scope changes do not accumulate abandoned tool waits.
 
+At the worker limit, the least-recently used idle worker can be evicted even if
+it is waiting for a caller-owned tool. That tool runs in the client; its pending
+worker is a history cache, not an active inference request. The next complete
+history imports the actual result and original signed blocks. Busy workers and
+active upstream calls are never evicted. `cli_capacity`503 therefore means all
+slots have active requests, rather than idle tool waits filling the pool.
+
 Native per-message `role:system` text stays at its conversation position; it is
 not moved to top-level system or demoted to user content. The pinned importer
 uses system-role attachment carriers and the private HTTP forwarder restores
@@ -191,6 +198,14 @@ Codex passes item-done/final equality and exact signed-state replay in a genuine
 post-compaction follow-up, with positive cache reads. This changes gateway model
 routing, not the CLI backend image or LiteLLM/client source. See
 [deployment instructions](LITELLM-NATIVE-RESPONSES.md).
+
+The later [real Opus project and automatic-compaction qualification](OPUS-PROJECT-AUTO-COMPACTION.md)
+passes actual file editing and follow-up tests in both required clients through
+LiteLLM. It separately observes native-client auto compaction, two Codex auto
+compactions with successful editing afterward, and same-session backend auto
+compaction with real usage accounting. Test-only lowered thresholds make these
+bounded cases reproducible; unchanged full-window longevity remains untested.
+That trial also found and fixed idle pending-tool capacity exhaustion.
 
 Primary interfaces: [Agent SDK](https://code.claude.com/docs/en/agent-sdk/typescript),
 [sessions](https://code.claude.com/docs/en/agent-sdk/sessions),

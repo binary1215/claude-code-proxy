@@ -1,0 +1,1806 @@
+{
+  "date": "2026-11-12",
+  "status": "Requested bounded Opus project and automatic-compaction verification complete",
+  "overall_goal_complete": false,
+  "baseline_model": "claude-opus-5-5",
+  "master_merge": {
+    "commit": "98f6885587552930beb11b88ca3b099b98a3f937",
+    "merged_and_pushed": true
+  },
+  "runtime": {
+    "baseline": {
+      "source": "fc80fa3fbfa5e274806647a214afc24b8866792e",
+      "image": "sha256:34b5f1b91a24f1d2148b4d52ec37550eccf100e7567fd968931502e14a88b870"
+    },
+    "capacity_fix": {
+      "source": "a6a70ae111a31211374286ad62578b3f0490942f",
+      "image": "sha256:dfa5968a86351e5d7c0892adcf9db1a684f9495035a1dd326ec9143b49258a31",
+      "compiled_cli_sessions_sha256": "7a734d4d6473b6da447feaa54abeba3c9ab592bf4139d0e209f40f19482127bb",
+      "running_compiled_hash_matched": true
+    },
+    "test_only_followup_commit": "2ff8a8e4211455dc1a1a2d726cae7f4421c1600d",
+    "agent_sdk": "0.3.322",
+    "claude_code": "2.1.322",
+    "codex": "0.160.0",
+    "litellm": "1.109.0"
+  },
+  "changes": {
+    "litellm_source": false,
+    "codex_source": false,
+    "proxy_session_capacity_fix": true,
+    "new_live_harnesses": true
+  },
+  "capacity_fix": {
+    "confirmed_live_error_code": "cli_capacity",
+    "confirmed_http_status": 503,
+    "classification_source": "LiteLLM owner read-only inspection",
+    "observed_proxy_active_tasks": 0,
+    "observed_cached_cli_sessions": 8,
+    "cause": "Idle workers waiting for client-owned tool results were excluded from capacity eviction",
+    "behavior": "Evict the least-recently used nonclosed, nonbusy worker with no active upstream request, even if caller tools remain pending; import complete caller history when that conversation returns",
+    "active_requests_preserved": true,
+    "genuine_active_overload_remains_503": true,
+    "offline_regression_reproduced_before_fix": true
+  },
+  "offline_validation": {
+    "linux_final_serial": {
+      "cli_backend_passed": 49,
+      "http_passed": 222,
+      "admin_ui_passed": 5,
+      "unique_passed": 276,
+      "failed": 0
+    },
+    "initial_parallel_run": {
+      "failed": 3,
+      "cancelled": 1,
+      "known_fixture_issue": "Capacity regression awaited a client event buffered by the pinned transport; revised to observe the actual held provider socket",
+      "http_timeout_cause_confirmed": false,
+      "host_pressure_is_hypothesis_only": true
+    },
+    "admin_initial_missing_test_dependency": "TypeScript absent in the test image; supplied only to the isolated test harness",
+    "local_cli_backend_passed": 49,
+    "native_project_fixture_selftest_passed": true,
+    "native_shell_preflight": {
+      "ok": true,
+      "model": "offline-scripted-provider",
+      "real_provider_requests": 0,
+      "fake_requests": 2,
+      "container_network": "none",
+      "readonly_root": true,
+      "capabilities_dropped": "ALL",
+      "shell_env_set": false,
+      "private_tmp_home_config": true,
+      "actual_builtin_bash": true,
+      "command_families": [
+        "pwd",
+        "cat",
+        "node_test"
+      ],
+      "source_read_verified": true,
+      "tests_passed": 1,
+      "tests_failed": 0,
+      "hook": "PostToolUse",
+      "sdk_result": {
+        "subtype": "success",
+        "is_error": false
+      },
+      "prior_attempt": {
+        "result": "script_syntax_error_before_sdk_execution",
+        "real_provider_requests": 0
+      },
+      "limitations": [
+        "Scripted model output; no model coding quality claim",
+        "Cannot diagnose prior live Bash calls whose output was not retained"
+      ]
+    },
+    "codex_namespace_patch_preflight": {
+      "genuine_client": true,
+      "scripted_provider": true,
+      "real_provider_requests": 0,
+      "file_create_and_update_verified": true,
+      "sandbox": "workspace-write",
+      "sandbox_bypass": false
+    },
+    "codex_pure_tests_passed_before_observer_fix": 10,
+    "codex_pure_tests_passed_after_observer_fix": 12
+  },
+  "claude_client_auto_compaction": {
+    "runtime": "baseline",
+    "tested_driver_sha256": "c1469323cd2b830662d8a228b3bf964d87c2d8b2911a9e44ef4b7f96020cd75e",
+    "functional_pass": true,
+    "qualification_pass": true,
+    "automatic_compaction_pass": true,
+    "client": "official-agent-sdk-0.3.322-cli-2.1.322",
+    "model_alias": "claude-opus-5-5-han",
+    "expected_model": "claude-opus-5-5",
+    "threshold": {
+      "layer": "native-Claude-Code-client",
+      "window": 100000,
+      "percent": 10,
+      "source": "documented SDK settings and official CLI environment; actual provider usage is not changed",
+      "default_full_window_verified": false,
+      "context_snapshots": [
+        {
+          "label": "initial-ready",
+          "source": "official SDK summary: last real usage plus local estimates",
+          "totalTokens": 1297,
+          "maxTokens": 100000,
+          "rawMaxTokens": 100000,
+          "autoCompactThreshold": 82904,
+          "isAutoCompactEnabled": true
+        },
+        {
+          "label": "after-initial",
+          "source": "official SDK summary: last real usage plus local estimates",
+          "totalTokens": 23752,
+          "maxTokens": 100000,
+          "rawMaxTokens": 100000,
+          "autoCompactThreshold": 82904,
+          "isAutoCompactEnabled": true
+        },
+        {
+          "label": "after-warm",
+          "source": "official SDK summary: last real usage plus local estimates",
+          "totalTokens": 4568,
+          "maxTokens": 100000,
+          "rawMaxTokens": 100000,
+          "autoCompactThreshold": 82904,
+          "isAutoCompactEnabled": true
+        },
+        {
+          "label": "after-retention-and-cache",
+          "source": "official SDK summary: last real usage plus local estimates",
+          "totalTokens": 4847,
+          "maxTokens": 100000,
+          "rawMaxTokens": 100000,
+          "autoCompactThreshold": 82904,
+          "isAutoCompactEnabled": true
+        }
+      ]
+    },
+    "source_context": {
+      "files": 3,
+      "bytes": 47822,
+      "artifacts": [
+        {
+          "path": "worker.mjs",
+          "bytes": 16902,
+          "sha256": "a3faf11d5116ec8c9407bbedd36e42fa91065bfaf2c991c92bef997ddf4ef72d"
+        },
+        {
+          "path": "history.mjs",
+          "bytes": 4849,
+          "sha256": "cef06deb131927ae970dd0b94eeb4fca4b13498b0921bb91dfcacd5552cc272b"
+        },
+        {
+          "path": "cliSessions.ts",
+          "bytes": 26071,
+          "sha256": "db43c893d0372ace3cc7309f2ce8b451700bc25f250bf1f086b353f18717327f"
+        }
+      ]
+    },
+    "alias_mapping": {
+      "requested": "claude-opus-5-5-han",
+      "configured_canonical": "claude-opus-5-5",
+      "accepted_sse_models": [
+        "claude-opus-5-5-han",
+        "claude-opus-5-5"
+      ],
+      "configuration_source": "LiteLLM owner confirmed static Han route; no fallback",
+      "observation_scope": "client response model may be public alias; gateway-to-Han model is not visible to this observer",
+      "public_alias_seen": true,
+      "canonical_id_seen": false
+    },
+    "compaction": {
+      "boundaries": [
+        {
+          "trigger": "auto",
+          "pre_tokens": 24472,
+          "post_tokens": 1656,
+          "duration_ms": 29381,
+          "cumulative_dropped_tokens": 22816
+        }
+      ],
+      "pre": [
+        {
+          "trigger": "auto"
+        },
+        {
+          "trigger": "auto"
+        }
+      ],
+      "post": [
+        {
+          "trigger": "auto",
+          "retained_target": true
+        }
+      ],
+      "skipped": 1
+    },
+    "observer": {
+      "scope": "client-to-gateway only; gateway-to-Han is opaque",
+      "requests": 6,
+      "statuses": [
+        {
+          "request": 1,
+          "action": "initial_client_tool",
+          "status": 200,
+          "kind": "ordinary-client-inference"
+        },
+        {
+          "request": 2,
+          "action": "initial_client_tool",
+          "status": 200,
+          "kind": "ordinary-client-inference"
+        },
+        {
+          "request": 3,
+          "action": "warm_cache",
+          "status": 200,
+          "kind": "client-auto-compaction"
+        },
+        {
+          "request": 4,
+          "action": "warm_cache",
+          "status": 200,
+          "kind": "ordinary-client-inference"
+        },
+        {
+          "request": 5,
+          "action": "retained_tool_result",
+          "status": 200,
+          "kind": "ordinary-client-inference"
+        },
+        {
+          "request": 6,
+          "action": "after_compaction_cache",
+          "status": 200,
+          "kind": "ordinary-client-inference"
+        }
+      ],
+      "models": [
+        "claude-opus-5-5-han"
+      ],
+      "native_usage": [
+        {
+          "request": 1,
+          "usage": {
+            "input_tokens": 2,
+            "output_tokens": 78,
+            "cache_creation_input_tokens": 2597,
+            "cache_read_input_tokens": 0
+          }
+        },
+        {
+          "request": 2,
+          "usage": {
+            "input_tokens": 2,
+            "output_tokens": 671,
+            "cache_creation_input_tokens": 21461,
+            "cache_read_input_tokens": 2281
+          }
+        },
+        {
+          "request": 3,
+          "usage": {
+            "input_tokens": 2,
+            "output_tokens": 3426,
+            "cache_creation_input_tokens": 2311,
+            "cache_read_input_tokens": 23425
+          }
+        },
+        {
+          "request": 4,
+          "usage": {
+            "input_tokens": 2,
+            "output_tokens": 14,
+            "cache_creation_input_tokens": 2929,
+            "cache_read_input_tokens": 1637
+          }
+        },
+        {
+          "request": 5,
+          "usage": {
+            "input_tokens": 2,
+            "output_tokens": 113,
+            "cache_creation_input_tokens": 817,
+            "cache_read_input_tokens": 3952
+          }
+        },
+        {
+          "request": 6,
+          "usage": {
+            "input_tokens": 2,
+            "output_tokens": 65,
+            "cache_creation_input_tokens": 386,
+            "cache_read_input_tokens": 4452
+          }
+        }
+      ],
+      "returned_thinking": 4,
+      "returned_signed_thinking": 4,
+      "returned_redacted": 0,
+      "replayed_thinking": 4,
+      "replayed_signed_thinking": 4,
+      "replayed_redacted": 0,
+      "signature_content_mismatches": 0,
+      "unrecognized_replayed_blocks": 0
+    },
+    "checks": {
+      "client_owned_tool": true,
+      "initial_reasoning_solution": true,
+      "warm_cache_read": true,
+      "automatic_compaction_boundary": true,
+      "automatic_compaction_hooks": true,
+      "no_manual_compaction": true,
+      "retained_tool_result": true,
+      "retained_reasoning_checksum": true,
+      "retained_source_identifiers": true,
+      "after_compaction_cache_read": true,
+      "thinking_emitted": true,
+      "signed_thinking_replayed": true,
+      "actual_returned_blocks_preserved": true,
+      "configured_model_ids_only": true,
+      "no_retry_or_fallback": true
+    },
+    "controller_exit_code": 0
+  },
+  "codex_project_baseline": {
+    "runtime": "baseline",
+    "tested_driver_sha256": "c104becefda6df69bb7f37b549b2550c482d8a26c9ce65d16cdb17a55b54e87a",
+    "harness_delta": "First reviewed revision had four diagnostic-only changes after baseline: require integer exit codes in two success checks, catch AttributeError in wire parsing, and retain null when all cache counters are absent; prompts and request flow unchanged",
+    "model": "claude-opus-5-5-responses-han",
+    "functional_pass": true,
+    "request_limit": 18,
+    "phase_request_limits": {
+      "initial": 12,
+      "followup": 6
+    },
+    "sandbox_requested": "workspace-write",
+    "sandbox_bypass": false,
+    "approval_policy": "never",
+    "client_source_modified": false,
+    "gateway_source_modified": false,
+    "gateway_internals_observed": false,
+    "manual_compaction_rpc_calls": 0,
+    "auto_compact_token_limit_requested": null,
+    "stock_prompt_sha256": "ac8ae107a0d72fe3476b430afb161ea4e67da2e446d778aefc44828160559807",
+    "failure_code": null,
+    "failure_phase": null,
+    "initial_independent_baseline": {
+      "exit_code": 1,
+      "unittest_ran": true,
+      "passed": false
+    },
+    "followup_independent_baseline": {
+      "exit_code": 1,
+      "unittest_ran": true,
+      "passed": false
+    },
+    "automatic_compaction_started_count": 0,
+    "automatic_compaction_completed_count": 0,
+    "successful_test_after_automatic_compaction": false,
+    "gateway_request_attempts": 6,
+    "gateway_responses_path": "/v1/responses",
+    "observer_failure_code": null,
+    "requests": [
+      {
+        "ordinal": 1,
+        "phase": "initial",
+        "http_status": 200,
+        "finished": true,
+        "reasoning_done_completed_exact": null,
+        "replayed_reasoning_known_exact": null,
+        "usage": {
+          "native_input_tokens": 2,
+          "native_output_tokens": 125,
+          "cache_creation_input_tokens": 13558,
+          "cache_read_input_tokens": 0,
+          "input_tokens": 13560,
+          "output_tokens": 125,
+          "total_tokens": 13685,
+          "cached_tokens": 0,
+          "cache_write_tokens": 13558
+        },
+        "completed_count": 1,
+        "marker_present": false,
+        "reasoning_count": 0,
+        "shell_and_patch_offered": true
+      },
+      {
+        "ordinal": 2,
+        "phase": "initial",
+        "http_status": 200,
+        "finished": true,
+        "reasoning_done_completed_exact": true,
+        "replayed_reasoning_known_exact": null,
+        "usage": {
+          "native_input_tokens": 2,
+          "native_output_tokens": 446,
+          "cache_creation_input_tokens": 1198,
+          "cache_read_input_tokens": 13558,
+          "input_tokens": 14758,
+          "output_tokens": 446,
+          "total_tokens": 15204,
+          "cached_tokens": 13558,
+          "cache_write_tokens": 1198
+        },
+        "completed_count": 1,
+        "marker_present": false,
+        "reasoning_count": 1,
+        "shell_and_patch_offered": true
+      },
+      {
+        "ordinal": 3,
+        "phase": "initial",
+        "http_status": 200,
+        "finished": true,
+        "reasoning_done_completed_exact": null,
+        "replayed_reasoning_known_exact": true,
+        "usage": {
+          "native_input_tokens": 2,
+          "native_output_tokens": 17,
+          "cache_creation_input_tokens": 823,
+          "cache_read_input_tokens": 14756,
+          "input_tokens": 15581,
+          "output_tokens": 17,
+          "total_tokens": 15598,
+          "cached_tokens": 14756,
+          "cache_write_tokens": 823
+        },
+        "completed_count": 1,
+        "marker_present": true,
+        "reasoning_count": 0,
+        "shell_and_patch_offered": true
+      },
+      {
+        "ordinal": 4,
+        "phase": "followup",
+        "http_status": 200,
+        "finished": true,
+        "reasoning_done_completed_exact": null,
+        "replayed_reasoning_known_exact": true,
+        "usage": {
+          "native_input_tokens": 4,
+          "native_output_tokens": 103,
+          "cache_creation_input_tokens": 215,
+          "cache_read_input_tokens": 15579,
+          "input_tokens": 15798,
+          "output_tokens": 103,
+          "total_tokens": 15901,
+          "cached_tokens": 15579,
+          "cache_write_tokens": 215
+        },
+        "completed_count": 1,
+        "marker_present": false,
+        "reasoning_count": 0,
+        "shell_and_patch_offered": true
+      },
+      {
+        "ordinal": 5,
+        "phase": "followup",
+        "http_status": 200,
+        "finished": true,
+        "reasoning_done_completed_exact": null,
+        "replayed_reasoning_known_exact": true,
+        "usage": {
+          "native_input_tokens": 2,
+          "native_output_tokens": 461,
+          "cache_creation_input_tokens": 503,
+          "cache_read_input_tokens": 15794,
+          "input_tokens": 16299,
+          "output_tokens": 461,
+          "total_tokens": 16760,
+          "cached_tokens": 15794,
+          "cache_write_tokens": 503
+        },
+        "completed_count": 1,
+        "marker_present": false,
+        "reasoning_count": 0,
+        "shell_and_patch_offered": true
+      },
+      {
+        "ordinal": 6,
+        "phase": "followup",
+        "http_status": 200,
+        "finished": true,
+        "reasoning_done_completed_exact": null,
+        "replayed_reasoning_known_exact": true,
+        "usage": {
+          "native_input_tokens": 2,
+          "native_output_tokens": 19,
+          "cache_creation_input_tokens": 937,
+          "cache_read_input_tokens": 16297,
+          "input_tokens": 17236,
+          "output_tokens": 19,
+          "total_tokens": 17255,
+          "cached_tokens": 16297,
+          "cache_write_tokens": 937
+        },
+        "completed_count": 1,
+        "marker_present": true,
+        "reasoning_count": 0,
+        "shell_and_patch_offered": true
+      }
+    ],
+    "cache_read_observed": true,
+    "cache_write_observed": true,
+    "observed_reasoning_preserved": true,
+    "signed_reasoning_replay_qualified": true,
+    "automatic_compaction_qualified": false,
+    "controller_exit_code": 0,
+    "phases": {
+      "initial": {
+        "command_count": 2,
+        "source_read_observed": true,
+        "model_test_failure_observed": true,
+        "model_test_success_observed": true,
+        "file_change_completed_count": 1,
+        "file_change_failed_count": 0,
+        "failed_test_before_file_change": true,
+        "passed_test_after_file_change": true,
+        "terminal_status": "completed",
+        "request_count": 3,
+        "changed_source_file_count": 2,
+        "supplied_tests_unchanged": true,
+        "independent_test": {
+          "exit_code": 0,
+          "unittest_ran": true,
+          "passed": true
+        },
+        "marker_present": true,
+        "functional_pass": true
+      },
+      "followup": {
+        "command_count": 2,
+        "source_read_observed": false,
+        "model_test_failure_observed": false,
+        "model_test_success_observed": true,
+        "file_change_completed_count": 1,
+        "file_change_failed_count": 0,
+        "failed_test_before_file_change": null,
+        "passed_test_after_file_change": true,
+        "terminal_status": "completed",
+        "request_count": 3,
+        "changed_source_file_count": 2,
+        "supplied_tests_unchanged": true,
+        "independent_test": {
+          "exit_code": 0,
+          "unittest_ran": true,
+          "passed": true
+        },
+        "marker_present": true,
+        "functional_pass": true
+      }
+    },
+    "first_reviewed_driver_sha256": "abf1209733771510abfba4871ca27c69599b79d3d5ef3cc10a055449b73cf264",
+    "current_driver_sha256": "47115a9b094a3b065e833866edd993e136050df9ca5302f2cfec41a70fbc831c",
+    "later_observer_fix": "Current revision recognizes anchored unittest failure summaries independently of later successful commands; this change follows the documented live false negative"
+  },
+  "claude_project_first_attempt": {
+    "runtime": "baseline",
+    "tested_driver_sha256": "d6a4553aea1921bf3b31a911de71cea359ec3d4474a5980b73bf72de5fb012e1",
+    "functional_pass": false,
+    "completed_project_phases": 0,
+    "error": "gateway_http_error",
+    "confirmed_upstream_category": "cli_capacity",
+    "observer": {
+      "requests": 6,
+      "statuses": [
+        {
+          "request": 1,
+          "phase": "initial_project_repair",
+          "status": 200
+        },
+        {
+          "request": 2,
+          "phase": "initial_project_repair",
+          "status": 200
+        },
+        {
+          "request": 3,
+          "phase": "initial_project_repair",
+          "status": 200
+        },
+        {
+          "request": 4,
+          "phase": "initial_project_repair",
+          "status": 200
+        },
+        {
+          "request": 5,
+          "phase": "initial_project_repair",
+          "status": 200
+        },
+        {
+          "request": 6,
+          "phase": "initial_project_repair",
+          "status": 503
+        }
+      ],
+      "models": [
+        "claude-opus-5-5-han"
+      ],
+      "cache_read_input_tokens": [
+        0,
+        4657,
+        4820,
+        4983,
+        5146
+      ],
+      "returned_signed_thinking": 5,
+      "replayed_signed_thinking": 15,
+      "unrecognized_replayed_thinking": 0,
+      "signature_content_mismatches": 0
+    },
+    "incomplete_phase": {
+      "phase": "initial_project_repair",
+      "tool_calls": {
+        "Read": 0,
+        "Edit": 0,
+        "Bash": 5
+      },
+      "source_files_read": [],
+      "source_files_edited": [],
+      "failed_test_runs": 0,
+      "failed_before_first_edit": false,
+      "passing_test_runs": 0
+    },
+    "controller_exit_code": 1,
+    "interpretation": "Partial successful HTTP exchanges are not a completed project-edit test; original Bash outputs were not retained, so their behavior cannot be diagnosed retrospectively"
+  },
+  "proxy_backend_auto_compaction": {
+    "runtime": "baseline",
+    "evidence": "20261112-opus-auto-backend.json",
+    "ok": true,
+    "functional_pass": true,
+    "automatic_compaction_pass": true,
+    "cache_qualified": true,
+    "provider_calls": 6,
+    "distinct_backend_sessions": 1,
+    "checks": {
+      "actual_caller_tool_result": true,
+      "warm_cache_read": true,
+      "retained_source_tool_reasoning_state": true,
+      "after_cache_read": true,
+      "automatic_boundary": true,
+      "automatic_pre_post_hooks": true,
+      "no_manual_compaction": true,
+      "main_wire_usage_not_aggregated": true,
+      "all_internal_usage_accounted": true,
+      "same_live_backend_session": true
+    },
+    "boundaries": [
+      {
+        "trigger": "auto",
+        "pre_tokens": 24032,
+        "post_tokens": 1383,
+        "duration_ms": 21789,
+        "cumulative_dropped_tokens": 22649
+      }
+    ],
+    "requested_threshold": {
+      "autoCompactWindow": 100000,
+      "official_percent_override": 10
+    },
+    "default_full_window_verified": false
+  },
+  "codex_auto_compaction_attempt": {
+    "runtime": "capacity_fix",
+    "tested_driver_sha256": "abf1209733771510abfba4871ca27c69599b79d3d5ef3cc10a055449b73cf264",
+    "model": "claude-opus-5-5-responses-han",
+    "functional_pass": false,
+    "request_limit": 18,
+    "phase_request_limits": {
+      "initial": 12,
+      "followup": 6
+    },
+    "sandbox_requested": "workspace-write",
+    "sandbox_bypass": false,
+    "approval_policy": "never",
+    "client_source_modified": false,
+    "gateway_source_modified": false,
+    "gateway_internals_observed": false,
+    "manual_compaction_rpc_calls": 0,
+    "auto_compact_token_limit_requested": 15500,
+    "stock_prompt_sha256": "ac8ae107a0d72fe3476b430afb161ea4e67da2e446d778aefc44828160559807",
+    "failure_code": "project_phase_failed",
+    "failure_phase": "initial",
+    "initial_independent_baseline": {
+      "exit_code": 1,
+      "unittest_ran": true,
+      "passed": false
+    },
+    "automatic_compaction_started_count": 0,
+    "automatic_compaction_completed_count": 0,
+    "successful_test_after_automatic_compaction": false,
+    "gateway_request_attempts": 3,
+    "gateway_responses_path": "/v1/responses",
+    "observer_failure_code": null,
+    "requests": [
+      {
+        "ordinal": 1,
+        "phase": "initial",
+        "http_status": 200,
+        "finished": true,
+        "reasoning_done_completed_exact": null,
+        "replayed_reasoning_known_exact": null,
+        "usage": {
+          "native_input_tokens": 2,
+          "native_output_tokens": 117,
+          "cache_creation_input_tokens": 13568,
+          "cache_read_input_tokens": 0,
+          "input_tokens": 13570,
+          "output_tokens": 117,
+          "total_tokens": 13687,
+          "cached_tokens": 0,
+          "cache_write_tokens": 13568
+        },
+        "completed_count": 1,
+        "marker_present": false,
+        "reasoning_count": 0,
+        "shell_and_patch_offered": true
+      },
+      {
+        "ordinal": 2,
+        "phase": "initial",
+        "http_status": 200,
+        "finished": true,
+        "reasoning_done_completed_exact": null,
+        "replayed_reasoning_known_exact": null,
+        "usage": {
+          "native_input_tokens": 2,
+          "native_output_tokens": 408,
+          "cache_creation_input_tokens": 1194,
+          "cache_read_input_tokens": 13568,
+          "input_tokens": 14764,
+          "output_tokens": 408,
+          "total_tokens": 15172,
+          "cached_tokens": 13568,
+          "cache_write_tokens": 1194
+        },
+        "completed_count": 1,
+        "marker_present": false,
+        "reasoning_count": 0,
+        "shell_and_patch_offered": true
+      },
+      {
+        "ordinal": 3,
+        "phase": "initial",
+        "http_status": 200,
+        "finished": true,
+        "reasoning_done_completed_exact": null,
+        "replayed_reasoning_known_exact": null,
+        "usage": {
+          "native_input_tokens": 2,
+          "native_output_tokens": 17,
+          "cache_creation_input_tokens": 635,
+          "cache_read_input_tokens": 14762,
+          "input_tokens": 15399,
+          "output_tokens": 17,
+          "total_tokens": 15416,
+          "cached_tokens": 14762,
+          "cache_write_tokens": 635
+        },
+        "completed_count": 1,
+        "marker_present": true,
+        "reasoning_count": 0,
+        "shell_and_patch_offered": true
+      }
+    ],
+    "cache_read_observed": true,
+    "cache_write_observed": true,
+    "observed_reasoning_preserved": null,
+    "signed_reasoning_replay_qualified": false,
+    "automatic_compaction_qualified": false,
+    "controller_exit_code": 1,
+    "phases": {
+      "initial": {
+        "command_count": 2,
+        "source_read_observed": true,
+        "model_test_failure_observed": false,
+        "model_test_success_observed": true,
+        "file_change_completed_count": 1,
+        "file_change_failed_count": 0,
+        "failed_test_before_file_change": null,
+        "passed_test_after_file_change": true,
+        "terminal_status": "completed",
+        "request_count": 3,
+        "changed_source_file_count": 2,
+        "supplied_tests_unchanged": true,
+        "independent_test": {
+          "exit_code": 0,
+          "unittest_ran": true,
+          "passed": true
+        },
+        "marker_present": true,
+        "functional_pass": false
+      }
+    },
+    "interpretation": "All three requests returned 200 and both source files were repaired with the independent test passing. The genuine private history confirms three initial tests with two failures, but the observer missed them because the same command ended with successful cat. The harness stopped before follow-up; no automatic compaction occurred.",
+    "diagnosis": {
+      "source": "Root inspection of the genuine private Codex history",
+      "actual_initial_client_test_ran": 3,
+      "actual_initial_client_test_failures": 2,
+      "later_cat_command_exit_code": 0,
+      "harness_false_negative": true,
+      "cause": "A semicolon-separated command ran failing unittest then cat; the final cat exit code was zero, and the observer incorrectly required a nonzero aggregate command exit to recognize the test failure"
+    }
+  },
+  "claude_project_after_capacity_fix": {
+    "status": "failed_after_initial_repair",
+    "functional_pass": false,
+    "attempt_label": "claude-project-02",
+    "runtime": "capacity_fix",
+    "tested_driver_sha256": "749a4ae89cf10b33517053b52d27935d2cbe55faddcc42c6ef1dcfd32cbc6114",
+    "client": "official-agent-sdk-0.3.322-cli-2.1.322",
+    "model_alias": "claude-opus-5-5-han",
+    "completed_project_phases": 1,
+    "phases": [
+      {
+        "phase": "initial_project_repair",
+        "baseline": {
+          "exit_code": 1,
+          "tests_failed": 4,
+          "passed": false
+        },
+        "final_oracle": {
+          "exit_code": 0,
+          "tests_failed": 0,
+          "passed": true
+        },
+        "tool_calls": {
+          "Read": 3,
+          "Edit": 2,
+          "Bash": 5
+        },
+        "tool_results": [
+          {
+            "tool": "Bash",
+            "completed": true,
+            "error_category": null,
+            "command_families": [
+              "pwd",
+              "ls"
+            ],
+            "source_reads_verified": []
+          },
+          {
+            "tool": "Bash",
+            "completed": true,
+            "error_category": null,
+            "command_families": [
+              "pwd",
+              "ls"
+            ],
+            "source_reads_verified": []
+          },
+          {
+            "tool": "Read",
+            "completed": true,
+            "error_category": null
+          },
+          {
+            "tool": "Read",
+            "completed": true,
+            "error_category": null
+          },
+          {
+            "tool": "Read",
+            "completed": true,
+            "error_category": null
+          },
+          {
+            "tool": "Bash",
+            "completed": false,
+            "error_category": "test_failure",
+            "command_families": [
+              "node_test"
+            ],
+            "source_reads_verified": []
+          },
+          {
+            "tool": "Bash",
+            "completed": true,
+            "error_category": null,
+            "command_families": [
+              "pwd",
+              "ls"
+            ],
+            "source_reads_verified": []
+          },
+          {
+            "tool": "Edit",
+            "completed": true,
+            "error_category": null
+          },
+          {
+            "tool": "Edit",
+            "completed": true,
+            "error_category": null
+          },
+          {
+            "tool": "Bash",
+            "completed": true,
+            "error_category": null,
+            "command_families": [
+              "node_test"
+            ],
+            "source_reads_verified": []
+          }
+        ],
+        "source_files_read": [
+          "src/amounts.mjs",
+          "src/order.mjs",
+          "tests/order.test.mjs"
+        ],
+        "source_files_edited": [
+          "src/amounts.mjs",
+          "src/order.mjs"
+        ],
+        "failed_test_runs": 1,
+        "failed_before_first_edit": true,
+        "passing_test_runs": 1
+      }
+    ],
+    "observer": {
+      "requests": 10,
+      "statuses": [
+        {
+          "request": 1,
+          "phase": "initial_project_repair",
+          "status": 200
+        },
+        {
+          "request": 2,
+          "phase": "initial_project_repair",
+          "status": 200
+        },
+        {
+          "request": 3,
+          "phase": "initial_project_repair",
+          "status": 200
+        },
+        {
+          "request": 4,
+          "phase": "initial_project_repair",
+          "status": 200
+        },
+        {
+          "request": 5,
+          "phase": "initial_project_repair",
+          "status": 200
+        },
+        {
+          "request": 6,
+          "phase": "initial_project_repair",
+          "status": 200
+        },
+        {
+          "request": 7,
+          "phase": "initial_project_repair",
+          "status": 200
+        },
+        {
+          "request": 8,
+          "phase": "followup_project_feature",
+          "status": 200
+        },
+        {
+          "request": 9,
+          "phase": "followup_project_feature",
+          "status": 200
+        }
+      ],
+      "models": [
+        "claude-opus-5-5-han"
+      ],
+      "cache_read_input_tokens": [
+        0,
+        4657,
+        4819,
+        4981,
+        8533,
+        8838,
+        9870,
+        4343,
+        10979
+      ],
+      "returned_signed_thinking": 10,
+      "replayed_signed_thinking": 50,
+      "unrecognized_replayed_thinking": 0,
+      "signature_content_mismatches": 0
+    },
+    "attempts_without_recorded_http_status": 1,
+    "error": "bash_outside_fixture",
+    "incomplete_phase": {
+      "phase": "followup_project_feature",
+      "tool_calls": {
+        "Read": 1,
+        "Edit": 0,
+        "Bash": 1
+      },
+      "source_files_read": [
+        "tests/order.test.mjs"
+      ],
+      "tool_results": [
+        {
+          "tool": "Bash",
+          "completed": true,
+          "error_category": null,
+          "command_families": [
+            "pwd",
+            "ls"
+          ],
+          "source_reads_verified": []
+        },
+        {
+          "tool": "Read",
+          "completed": true,
+          "error_category": null
+        }
+      ],
+      "source_files_edited": [],
+      "failed_test_runs": 0,
+      "failed_before_first_edit": false,
+      "passing_test_runs": 0
+    },
+    "controller_exit_code": 1,
+    "interpretation": "Initial project source reads, failing tests, two-file edit and independent passing test succeeded. Follow-up stopped when the harness treated an ordinary denied Bash tool as a fatal whole-test error. Ten request attempts, nine recorded HTTP 200 statuses; the tenth outcome is unknown.",
+    "next_step": "Correct the test-only recoverable tool-denial behavior and qualify a uniquely recorded new run; actual host approval policy is unchanged"
+  },
+  "remaining": [
+    "Default full-window longevity",
+    "Arbitrary project/client/model coverage",
+    "Invoice accuracy and general semantic quality equivalence"
+  ],
+  "interpretation_limits": [
+    "Client observers measure client-to-gateway traffic, not every internal gateway/provider attempt",
+    "Positive cache counters establish observed cache use, not invoice accuracy or a fixed cost multiplier",
+    "State retention checks cover selected tool/source/calculation facts, not universal coding quality",
+    "Backend auto-compaction evidence is separate from client-owned compaction and gateway transport"
+  ],
+  "pending_corrected_runs": [],
+  "codex_auto_compaction_qualified": {
+    "harness_sha256": "47115a9b094a3b065e833866edd993e136050df9ca5302f2cfec41a70fbc831c",
+    "runtime": "capacity_fix",
+    "case": "codex-auto-02",
+    "default_full_window_verified": false,
+    "model": "claude-opus-5-5-responses-han",
+    "functional_pass": true,
+    "request_limit": 18,
+    "phase_request_limits": {
+      "initial": 12,
+      "followup": 6
+    },
+    "sandbox_requested": "workspace-write",
+    "sandbox_bypass": false,
+    "approval_policy": "never",
+    "manual_compaction_rpc_calls": 0,
+    "auto_compact_token_limit_requested": 15500,
+    "stock_prompt_sha256": "ac8ae107a0d72fe3476b430afb161ea4e67da2e446d778aefc44828160559807",
+    "phases": {
+      "initial": {
+        "command_count": 2,
+        "source_read_observed": true,
+        "model_test_failure_observed": true,
+        "model_test_success_observed": true,
+        "file_change_completed_count": 1,
+        "file_change_failed_count": 0,
+        "failed_test_before_file_change": true,
+        "passed_test_after_file_change": true,
+        "terminal_status": "completed",
+        "request_count": 3,
+        "changed_source_file_count": 2,
+        "supplied_tests_unchanged": true,
+        "independent_test": {
+          "exit_code": 0,
+          "unittest_ran": true,
+          "passed": true
+        },
+        "marker_present": true,
+        "requests": [
+          {
+            "ordinal": 1,
+            "phase": "initial",
+            "http_status": 200,
+            "finished": true,
+            "reasoning_done_completed_exact": null,
+            "replayed_reasoning_known_exact": null,
+            "usage": {
+              "native_input_tokens": 2,
+              "native_output_tokens": 135,
+              "cache_creation_input_tokens": 13568,
+              "cache_read_input_tokens": 0,
+              "input_tokens": 13570,
+              "output_tokens": 135,
+              "total_tokens": 13705,
+              "cached_tokens": 0,
+              "cache_write_tokens": 13568
+            },
+            "completed_count": 1,
+            "marker_present": false,
+            "reasoning_count": 0,
+            "shell_and_patch_offered": true
+          },
+          {
+            "ordinal": 2,
+            "phase": "initial",
+            "http_status": 200,
+            "finished": true,
+            "reasoning_done_completed_exact": true,
+            "replayed_reasoning_known_exact": null,
+            "usage": {
+              "native_input_tokens": 2,
+              "native_output_tokens": 482,
+              "cache_creation_input_tokens": 1213,
+              "cache_read_input_tokens": 13568,
+              "input_tokens": 14783,
+              "output_tokens": 482,
+              "total_tokens": 15265,
+              "cached_tokens": 13568,
+              "cache_write_tokens": 1213
+            },
+            "completed_count": 1,
+            "marker_present": false,
+            "reasoning_count": 1,
+            "shell_and_patch_offered": true
+          },
+          {
+            "ordinal": 3,
+            "phase": "initial",
+            "http_status": 200,
+            "finished": true,
+            "reasoning_done_completed_exact": null,
+            "replayed_reasoning_known_exact": true,
+            "usage": {
+              "native_input_tokens": 2,
+              "native_output_tokens": 17,
+              "cache_creation_input_tokens": 834,
+              "cache_read_input_tokens": 14781,
+              "input_tokens": 15617,
+              "output_tokens": 17,
+              "total_tokens": 15634,
+              "cached_tokens": 14781,
+              "cache_write_tokens": 834
+            },
+            "completed_count": 1,
+            "marker_present": true,
+            "reasoning_count": 0,
+            "shell_and_patch_offered": true
+          }
+        ],
+        "functional_pass": true
+      },
+      "followup": {
+        "command_count": 3,
+        "source_read_observed": true,
+        "model_test_failure_observed": false,
+        "model_test_success_observed": true,
+        "file_change_completed_count": 1,
+        "file_change_failed_count": 0,
+        "failed_test_before_file_change": null,
+        "passed_test_after_file_change": true,
+        "terminal_status": "completed",
+        "request_count": 6,
+        "changed_source_file_count": 2,
+        "supplied_tests_unchanged": true,
+        "independent_test": {
+          "exit_code": 0,
+          "unittest_ran": true,
+          "passed": true
+        },
+        "marker_present": true,
+        "requests": [
+          {
+            "ordinal": 4,
+            "phase": "followup",
+            "http_status": 200,
+            "finished": true,
+            "reasoning_done_completed_exact": true,
+            "replayed_reasoning_known_exact": true,
+            "usage": {
+              "native_input_tokens": 2,
+              "native_output_tokens": 603,
+              "cache_creation_input_tokens": 11606,
+              "cache_read_input_tokens": 0,
+              "input_tokens": 11608,
+              "output_tokens": 603,
+              "total_tokens": 12211,
+              "cached_tokens": 0,
+              "cache_write_tokens": 11606
+            },
+            "completed_count": 1,
+            "marker_present": false,
+            "reasoning_count": 1,
+            "shell_and_patch_offered": false
+          },
+          {
+            "ordinal": 5,
+            "phase": "followup",
+            "http_status": 200,
+            "finished": true,
+            "reasoning_done_completed_exact": null,
+            "replayed_reasoning_known_exact": null,
+            "usage": {
+              "native_input_tokens": 2,
+              "native_output_tokens": 111,
+              "cache_creation_input_tokens": 1752,
+              "cache_read_input_tokens": 12693,
+              "input_tokens": 14447,
+              "output_tokens": 111,
+              "total_tokens": 14558,
+              "cached_tokens": 12693,
+              "cache_write_tokens": 1752
+            },
+            "completed_count": 1,
+            "marker_present": false,
+            "reasoning_count": 0,
+            "shell_and_patch_offered": true
+          },
+          {
+            "ordinal": 6,
+            "phase": "followup",
+            "http_status": 200,
+            "finished": true,
+            "reasoning_done_completed_exact": null,
+            "replayed_reasoning_known_exact": null,
+            "usage": {
+              "native_input_tokens": 2,
+              "native_output_tokens": 464,
+              "cache_creation_input_tokens": 613,
+              "cache_read_input_tokens": 14445,
+              "input_tokens": 15060,
+              "output_tokens": 464,
+              "total_tokens": 15524,
+              "cached_tokens": 14445,
+              "cache_write_tokens": 613
+            },
+            "completed_count": 1,
+            "marker_present": false,
+            "reasoning_count": 0,
+            "shell_and_patch_offered": true
+          },
+          {
+            "ordinal": 7,
+            "phase": "followup",
+            "http_status": 200,
+            "finished": true,
+            "reasoning_done_completed_exact": true,
+            "replayed_reasoning_known_exact": null,
+            "usage": {
+              "native_input_tokens": 2,
+              "native_output_tokens": 584,
+              "cache_creation_input_tokens": 3383,
+              "cache_read_input_tokens": 8692,
+              "input_tokens": 12077,
+              "output_tokens": 584,
+              "total_tokens": 12661,
+              "cached_tokens": 8692,
+              "cache_write_tokens": 3383
+            },
+            "completed_count": 1,
+            "marker_present": true,
+            "reasoning_count": 1,
+            "shell_and_patch_offered": false
+          },
+          {
+            "ordinal": 8,
+            "phase": "followup",
+            "http_status": 200,
+            "finished": true,
+            "reasoning_done_completed_exact": true,
+            "replayed_reasoning_known_exact": null,
+            "usage": {
+              "native_input_tokens": 2,
+              "native_output_tokens": 164,
+              "cache_creation_input_tokens": 1713,
+              "cache_read_input_tokens": 12693,
+              "input_tokens": 14408,
+              "output_tokens": 164,
+              "total_tokens": 14572,
+              "cached_tokens": 12693,
+              "cache_write_tokens": 1713
+            },
+            "completed_count": 1,
+            "marker_present": false,
+            "reasoning_count": 1,
+            "shell_and_patch_offered": true
+          },
+          {
+            "ordinal": 9,
+            "phase": "followup",
+            "http_status": 200,
+            "finished": true,
+            "reasoning_done_completed_exact": null,
+            "replayed_reasoning_known_exact": true,
+            "usage": {
+              "native_input_tokens": 2,
+              "native_output_tokens": 19,
+              "cache_creation_input_tokens": 393,
+              "cache_read_input_tokens": 14406,
+              "input_tokens": 14801,
+              "output_tokens": 19,
+              "total_tokens": 14820,
+              "cached_tokens": 14406,
+              "cache_write_tokens": 393
+            },
+            "completed_count": 1,
+            "marker_present": true,
+            "reasoning_count": 0,
+            "shell_and_patch_offered": true
+          }
+        ],
+        "functional_pass": true
+      }
+    },
+    "automatic_compaction_started_count": 2,
+    "automatic_compaction_completed_count": 2,
+    "successful_test_after_automatic_compaction": true,
+    "gateway_request_attempts": 9,
+    "actual_dot7_gateway_tested": true,
+    "requests": [
+      {
+        "ordinal": 1,
+        "phase": "initial",
+        "http_status": 200,
+        "finished": true,
+        "reasoning_done_completed_exact": null,
+        "replayed_reasoning_known_exact": null,
+        "usage": {
+          "native_input_tokens": 2,
+          "native_output_tokens": 135,
+          "cache_creation_input_tokens": 13568,
+          "cache_read_input_tokens": 0,
+          "input_tokens": 13570,
+          "output_tokens": 135,
+          "total_tokens": 13705,
+          "cached_tokens": 0,
+          "cache_write_tokens": 13568
+        },
+        "completed_count": 1,
+        "marker_present": false,
+        "reasoning_count": 0,
+        "shell_and_patch_offered": true
+      },
+      {
+        "ordinal": 2,
+        "phase": "initial",
+        "http_status": 200,
+        "finished": true,
+        "reasoning_done_completed_exact": true,
+        "replayed_reasoning_known_exact": null,
+        "usage": {
+          "native_input_tokens": 2,
+          "native_output_tokens": 482,
+          "cache_creation_input_tokens": 1213,
+          "cache_read_input_tokens": 13568,
+          "input_tokens": 14783,
+          "output_tokens": 482,
+          "total_tokens": 15265,
+          "cached_tokens": 13568,
+          "cache_write_tokens": 1213
+        },
+        "completed_count": 1,
+        "marker_present": false,
+        "reasoning_count": 1,
+        "shell_and_patch_offered": true
+      },
+      {
+        "ordinal": 3,
+        "phase": "initial",
+        "http_status": 200,
+        "finished": true,
+        "reasoning_done_completed_exact": null,
+        "replayed_reasoning_known_exact": true,
+        "usage": {
+          "native_input_tokens": 2,
+          "native_output_tokens": 17,
+          "cache_creation_input_tokens": 834,
+          "cache_read_input_tokens": 14781,
+          "input_tokens": 15617,
+          "output_tokens": 17,
+          "total_tokens": 15634,
+          "cached_tokens": 14781,
+          "cache_write_tokens": 834
+        },
+        "completed_count": 1,
+        "marker_present": true,
+        "reasoning_count": 0,
+        "shell_and_patch_offered": true
+      },
+      {
+        "ordinal": 4,
+        "phase": "followup",
+        "http_status": 200,
+        "finished": true,
+        "reasoning_done_completed_exact": true,
+        "replayed_reasoning_known_exact": true,
+        "usage": {
+          "native_input_tokens": 2,
+          "native_output_tokens": 603,
+          "cache_creation_input_tokens": 11606,
+          "cache_read_input_tokens": 0,
+          "input_tokens": 11608,
+          "output_tokens": 603,
+          "total_tokens": 12211,
+          "cached_tokens": 0,
+          "cache_write_tokens": 11606
+        },
+        "completed_count": 1,
+        "marker_present": false,
+        "reasoning_count": 1,
+        "shell_and_patch_offered": false
+      },
+      {
+        "ordinal": 5,
+        "phase": "followup",
+        "http_status": 200,
+        "finished": true,
+        "reasoning_done_completed_exact": null,
+        "replayed_reasoning_known_exact": null,
+        "usage": {
+          "native_input_tokens": 2,
+          "native_output_tokens": 111,
+          "cache_creation_input_tokens": 1752,
+          "cache_read_input_tokens": 12693,
+          "input_tokens": 14447,
+          "output_tokens": 111,
+          "total_tokens": 14558,
+          "cached_tokens": 12693,
+          "cache_write_tokens": 1752
+        },
+        "completed_count": 1,
+        "marker_present": false,
+        "reasoning_count": 0,
+        "shell_and_patch_offered": true
+      },
+      {
+        "ordinal": 6,
+        "phase": "followup",
+        "http_status": 200,
+        "finished": true,
+        "reasoning_done_completed_exact": null,
+        "replayed_reasoning_known_exact": null,
+        "usage": {
+          "native_input_tokens": 2,
+          "native_output_tokens": 464,
+          "cache_creation_input_tokens": 613,
+          "cache_read_input_tokens": 14445,
+          "input_tokens": 15060,
+          "output_tokens": 464,
+          "total_tokens": 15524,
+          "cached_tokens": 14445,
+          "cache_write_tokens": 613
+        },
+        "completed_count": 1,
+        "marker_present": false,
+        "reasoning_count": 0,
+        "shell_and_patch_offered": true
+      },
+      {
+        "ordinal": 7,
+        "phase": "followup",
+        "http_status": 200,
+        "finished": true,
+        "reasoning_done_completed_exact": true,
+        "replayed_reasoning_known_exact": null,
+        "usage": {
+          "native_input_tokens": 2,
+          "native_output_tokens": 584,
+          "cache_creation_input_tokens": 3383,
+          "cache_read_input_tokens": 8692,
+          "input_tokens": 12077,
+          "output_tokens": 584,
+          "total_tokens": 12661,
+          "cached_tokens": 8692,
+          "cache_write_tokens": 3383
+        },
+        "completed_count": 1,
+        "marker_present": true,
+        "reasoning_count": 1,
+        "shell_and_patch_offered": false
+      },
+      {
+        "ordinal": 8,
+        "phase": "followup",
+        "http_status": 200,
+        "finished": true,
+        "reasoning_done_completed_exact": true,
+        "replayed_reasoning_known_exact": null,
+        "usage": {
+          "native_input_tokens": 2,
+          "native_output_tokens": 164,
+          "cache_creation_input_tokens": 1713,
+          "cache_read_input_tokens": 12693,
+          "input_tokens": 14408,
+          "output_tokens": 164,
+          "total_tokens": 14572,
+          "cached_tokens": 12693,
+          "cache_write_tokens": 1713
+        },
+        "completed_count": 1,
+        "marker_present": false,
+        "reasoning_count": 1,
+        "shell_and_patch_offered": true
+      },
+      {
+        "ordinal": 9,
+        "phase": "followup",
+        "http_status": 200,
+        "finished": true,
+        "reasoning_done_completed_exact": null,
+        "replayed_reasoning_known_exact": true,
+        "usage": {
+          "native_input_tokens": 2,
+          "native_output_tokens": 19,
+          "cache_creation_input_tokens": 393,
+          "cache_read_input_tokens": 14406,
+          "input_tokens": 14801,
+          "output_tokens": 19,
+          "total_tokens": 14820,
+          "cached_tokens": 14406,
+          "cache_write_tokens": 393
+        },
+        "completed_count": 1,
+        "marker_present": true,
+        "reasoning_count": 0,
+        "shell_and_patch_offered": true
+      }
+    ],
+    "cache_read_observed": true,
+    "cache_write_observed": true,
+    "observed_reasoning_preserved": true,
+    "signed_reasoning_replay_qualified": true,
+    "automatic_compaction_qualified": true,
+    "controller_exit_code": 0
+  },
+  "claude_project_qualified": {
+    "functional_pass": true,
+    "client": "official-agent-sdk-0.3.322-cli-2.1.322",
+    "model_alias": "claude-opus-5-5-han",
+    "phases": [
+      {
+        "phase": "initial_project_repair",
+        "baseline": {
+          "exit_code": 1,
+          "tests_failed": 4,
+          "passed": false
+        },
+        "final_oracle": {
+          "exit_code": 0,
+          "tests_failed": 0,
+          "passed": true
+        },
+        "tool_calls": {
+          "Read": 2,
+          "Edit": 2,
+          "Bash": 2
+        },
+        "tool_results": [
+          {
+            "tool": "Bash",
+            "completed": false,
+            "error_category": "test_failure",
+            "command_families": [
+              "pwd",
+              "ls",
+              "cat",
+              "node_test"
+            ],
+            "source_reads_verified": []
+          },
+          {
+            "tool": "Read",
+            "completed": true,
+            "error_category": null
+          },
+          {
+            "tool": "Read",
+            "completed": true,
+            "error_category": null
+          },
+          {
+            "tool": "Edit",
+            "completed": true,
+            "error_category": null
+          },
+          {
+            "tool": "Edit",
+            "completed": true,
+            "error_category": null
+          },
+          {
+            "tool": "Bash",
+            "completed": true,
+            "error_category": null,
+            "command_families": [
+              "node_test",
+              "grep"
+            ],
+            "source_reads_verified": []
+          }
+        ],
+        "source_files_read": [
+          "src/amounts.mjs",
+          "src/order.mjs"
+        ],
+        "source_files_edited": [
+          "src/amounts.mjs",
+          "src/order.mjs"
+        ],
+        "failed_test_runs": 1,
+        "failed_before_first_edit": true,
+        "passing_test_runs": 1
+      },
+      {
+        "phase": "followup_project_feature",
+        "baseline": {
+          "exit_code": 1,
+          "tests_failed": 1,
+          "passed": false
+        },
+        "final_oracle": {
+          "exit_code": 0,
+          "tests_failed": 0,
+          "passed": true
+        },
+        "tool_calls": {
+          "Read": 0,
+          "Edit": 3,
+          "Bash": 2
+        },
+        "tool_results": [
+          {
+            "tool": "Bash",
+            "completed": true,
+            "error_category": null,
+            "command_families": [
+              "pwd",
+              "ls",
+              "cat",
+              "node_test",
+              "grep"
+            ],
+            "source_reads_verified": [
+              "src/amounts.mjs",
+              "src/order.mjs"
+            ]
+          },
+          {
+            "tool": "Edit",
+            "completed": true,
+            "error_category": null
+          },
+          {
+            "tool": "Edit",
+            "completed": true,
+            "error_category": null
+          },
+          {
+            "tool": "Edit",
+            "completed": true,
+            "error_category": null
+          },
+          {
+            "tool": "Bash",
+            "completed": true,
+            "error_category": null,
+            "command_families": [
+              "node_test",
+              "grep"
+            ],
+            "source_reads_verified": []
+          }
+        ],
+        "source_files_edited": [
+          "src/amounts.mjs",
+          "src/order.mjs"
+        ],
+        "failed_test_runs": 1,
+        "failed_before_first_edit": true,
+        "passing_test_runs": 1
+      }
+    ],
+    "checks": {
+      "actual_source_read_edit_and_test": true,
+      "initial_failing_tests_observed": true,
+      "two_source_files_repaired": true,
+      "same_session_followup": true,
+      "two_source_files_edited_again": true,
+      "unchanged_acceptance_tests": true,
+      "independent_final_tests_passed": true,
+      "observed_signed_thinking_preserved": true,
+      "signed_thinking_replayed": true
+    },
+    "source_hashes": {
+      "initial": {
+        "src/amounts.mjs": "377a47499d61bf9b1cd8b7726ebcf0ea81dc1514e51bdd6445627f01db613457",
+        "src/order.mjs": "b6ac7c2267066b61f5c957bb9561fe15cd1b9b5390bf657a62d2c4d7e3ce8029"
+      },
+      "after_repair": {
+        "src/amounts.mjs": "c86bdddee1398ba6240c2ff0ae58c1066758e4db9f6085b3a6d544e64294b062",
+        "src/order.mjs": "d6edba0160d63dc8bfe1006647e244974dbb34dba5706d6fbd5bc6be8bb9837d"
+      },
+      "after_followup": {
+        "src/amounts.mjs": "9b4dabdc129aee69710090bf1eef0d44fa45aeec47e65f025b050711e0340798",
+        "src/order.mjs": "f2c6e76f8fd1a7a7ac77ea04688f064112a83dfb498f5607eb4bb1622d5bb5d6"
+      }
+    },
+    "rejected_tools": [],
+    "controller_exit_code": 0,
+    "observer": {
+      "requests": 7,
+      "statuses": [
+        {
+          "request": 1,
+          "phase": "initial_project_repair",
+          "status": 200
+        },
+        {
+          "request": 2,
+          "phase": "initial_project_repair",
+          "status": 200
+        },
+        {
+          "request": 3,
+          "phase": "initial_project_repair",
+          "status": 200
+        },
+        {
+          "request": 4,
+          "phase": "initial_project_repair",
+          "status": 200
+        },
+        {
+          "request": 5,
+          "phase": "followup_project_feature",
+          "status": 200
+        },
+        {
+          "request": 6,
+          "phase": "followup_project_feature",
+          "status": 200
+        },
+        {
+          "request": 7,
+          "phase": "followup_project_feature",
+          "status": 200
+        }
+      ],
+      "cache_read_input_tokens": [
+        0,
+        4760,
+        7814,
+        8456,
+        4446,
+        10527,
+        12341
+      ],
+      "returned_signed_thinking": 7,
+      "replayed_signed_thinking": 16,
+      "unrecognized_replayed_thinking": 0,
+      "signature_content_mismatches": 0
+    },
+    "case": "claude-project-03",
+    "runtime": "capacity_fix",
+    "harness_sha256": "9733a81984ab8a610545b1effa8497ce248880656d149b8e1fe928b709de41fa"
+  },
+  "requested_verification_complete": true,
+  "overall_goal_note": "This completes the requested bounded acceptance cases, not arbitrary-client or default full-window longevity qualification.",
+  "cleanup": {
+    "owned_test_containers_remaining": [],
+    "test_apparmor_profile_removed": true,
+    "test_profile_absent": true,
+    "production_health": {
+      "status": "ok",
+      "inference_backend": "cli",
+      "db_status": "ok",
+      "active_tasks": 0,
+      "cli_sessions": 8,
+      "token_configured": true,
+      "automatic_token_refresh": true
+    }
+  },
+  "harness_commit": "5244977"
+}
