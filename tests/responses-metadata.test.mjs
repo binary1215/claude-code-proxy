@@ -43,7 +43,7 @@ function complete(stream, metadata = {}, finalUsage) {
 
 test('explicit null metadata survives start and final response, absent metadata stays absent initially', () => {
   const stream = fixture();
-  const metadata = { container: null, diagnostics: null, stop_details: null };
+  const metadata = { container: null, diagnostics: null, stop_details: null, context_management: null };
   const initial = stream.push(start(metadata));
   assert.deepEqual(initial[0].response.anthropic_metadata, metadata);
   assert.deepEqual(initial[1].response.anthropic_metadata, metadata);
@@ -66,6 +66,31 @@ test('non-null start metadata and delta container update preserve values and imm
   assert.deepEqual(initial[0].response.anthropic_metadata.container, container);
   response.anthropic_metadata.container.id = 'returned-copy-mutation';
   assert.equal(stream.response.anthropic_metadata.container.id, 'container_later');
+});
+
+test('documented context management response survives nonstream and top-level message_delta without editing history', () => {
+  const metadata = { applied_edits: [
+    { type: 'clear_thinking_20251015', cleared_input_tokens: 21, cleared_thinking_turns: 2 },
+    { type: 'clear_tool_uses_20250919', cleared_input_tokens: 9, cleared_tool_uses: 1 },
+  ] };
+  const stream = fixture(); stream.push(start({ context_management: null })); addText(stream);
+  stream.push({ ...delta(), context_management: metadata });
+  const terminal = stream.push(end);
+  assert.equal(terminal[0].response.status, 'completed');
+  assert.deepEqual(terminal[0].response.anthropic_metadata.context_management, metadata);
+  const result = convertNativeMessage({ id: 'msg_context', type: 'message', role: 'assistant', model,
+    content: [{ type: 'text', text: 'Synthetic reply' }], stop_reason: 'end_turn', stop_sequence: null,
+    usage: { ...usage, output_tokens: 7 }, context_management: metadata }, options());
+  assert.deepEqual(result.anthropic_metadata.context_management, metadata);
+});
+
+test('invalid or unknown context edits remain explicit errors rather than guessed history changes', () => {
+  for (const value of [{ applied_edits: [{ type: 'future_edit' }] },
+    { applied_edits: [{ type: 'clear_thinking_20251015', cleared_input_tokens: -1, cleared_thinking_turns: 1 }] },
+    { applied_edits: 'invalid' }]) {
+    const stream = fixture();
+    failed(stream.push(start({ context_management: value })));
+  }
 });
 
 test('null or omitted delta container retains prior non-null container and diagnostics', () => {
@@ -141,7 +166,7 @@ test('start cannot contain final refusal and delta cannot move diagnostics to an
     const stream = fixture(); stream.push(start());
     failed(stream.push(delta({ diagnostics: value })), 'unsupported_upstream_event');
   }
-  for (const metadata of [{ container: null, unknown: null }, { context_management: null }]) {
+  for (const metadata of [{ container: null, unknown: null }, { future_context_metadata: null }]) {
     failed(fixture().push(start(metadata)), 'unsupported_upstream_event');
   }
 });

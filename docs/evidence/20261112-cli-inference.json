@@ -1,0 +1,88 @@
+{
+  "date": "2026-11-12",
+  "scope": "Optional genuine CLI inference while retaining the default native HTTP relay",
+  "source_base": "8bd3da42f5c1a09ca34991481ba0e1474096160e",
+  "built_working_tree_archive_sha256": "533b83a616c3a9e31fdcf2844fd8ebb36214ae9bbdf1ec24a831c30f41f00de8",
+  "runtime_files_equal_to_built_archive": 54,
+  "runtime_manifest_sha256": "25bb9df4030f0fadf810c28e69978a14624644c0d3871379db9d69bb80e84406",
+  "cli_image_id": "sha256:d0eb8f0bd57319942c42a73241f140e0547a600252db1ccf4aab0393756fde34",
+  "versions": {
+    "claude_code": "2.1.322",
+    "agent_sdk": "0.3.322",
+    "anthropic_sdk": "1.8.0",
+    "mcp_sdk": "1.32.2",
+    "zod": "4.6.7"
+  },
+  "tests": {
+    "linux_docker": { "total": 248, "passed": 248, "failed": 0, "skipped": 0, "network": "none" },
+    "windows_combined": { "total": 244, "passed": 243, "failed": 0, "skipped_linux_only": 1 },
+    "windows_additional_write_tests": { "total": 4, "passed": 4, "failed": 0 },
+    "actual_sdk_cli_loopback_http": 15,
+    "pure_worker": 11,
+    "refresh_forwarder_synthetic": 2,
+    "backpressure_write": 4,
+    "provider_credentials_in_regression_tests": false
+  },
+  "real_provider": {
+    "model": "claude-haiku-5-5",
+    "path": "Responses facade -> genuine CLI -> private loopback forwarder -> existing Han HTTP relay -> provider",
+    "final_image_compiled_overlay": false,
+    "requests": 3,
+    "automatic_retries": 0,
+    "tool_intent": { "http": 200, "status": "completed", "name": "demo_add", "arguments_matched": true },
+    "caller_result_continuation": {
+      "http": 200,
+      "status": "completed",
+      "caller_computed_result": "5",
+      "expected_reply_matched": true,
+      "cache_read_input_tokens": 2772,
+      "cache_creation_input_tokens": 106
+    },
+    "responses_sse": { "http": 200, "status": "completed", "expected_reply_matched": true, "events": 10 },
+    "thinking_blocks_observed": 0,
+    "tools_executed_by_cli": false,
+    "temporary_container_removed": true
+  },
+  "discovered_and_fixed": [
+    {
+      "before": "Provider completed with200, but Responses facade returned502 unsupported_upstream_event",
+      "cause": "Nullable official context_management metadata was outside the adapter contract",
+      "after": "Nullable and documented applied-edit observations are retained as metadata"
+    },
+    {
+      "before": "Real tool intent returned200, but function_call_output continuation returned409 cli_session_history_mismatch",
+      "cause": "Responses omits literal direct-caller and null-toolset defaults retained in native session history",
+      "after": "Both history paths normalize equivalent defaults while retaining content, substantive metadata and signatures"
+    },
+    {
+      "before": "A connected nonreading client could leave a backpressured write waiting past cancellation",
+      "after": "Abort interrupts the write wait and finalizes owned work without another blocked error write"
+    }
+  ],
+  "intermediate_controller_limit": "One pre-final HTTP200-shaped response was followed by a local error:null parsing exception; its expected reply was not counted as verified. The final-image three-request workflow independently passed.",
+  "default_image_check": {
+    "image_id": "sha256:e78c90e79e1e29a473a15e0dbf1e9a4800d4472e65c0cf520c12d6b7861f4a4c",
+    "inference_backend": "http",
+    "optional_sdk_installed": false
+  },
+  "compose_validation": "docker compose config --quiet passed with synthetic environment values",
+  "production": {
+    "changed": false,
+    "image_id": "sha256:5766992ec7cc5178f0cf3d35a67fedb11b35177ac7adccafa93629661041c292",
+    "started_at": "2026-11-11T14:52:15.584378354Z",
+    "health": "healthy",
+    "litellm_modified": false,
+    "codex_modified": false
+  },
+  "remaining_limits": [
+    "CLI state lives in active workers; no arbitrary old-history hydration or restart recovery",
+    "Compaction, branching and changed prefixes may require a fresh session",
+    "Actual provider signed-thinking replay was not exercised by the simple Haiku prompts",
+    "Credential turnover was verified synthetically; actual account expiry during a CLI tool conversation was not tested",
+    "Production Claude Code, Codex and OpenCode qualification through LiteLLM remains pending for this backend",
+    "Large MCP output may be normalized, shortened or spilled by the official CLI",
+    "Forced tools, sampling overrides, stop sequences and count_tokens require the HTTP backend",
+    "Explicit thinking display updates is supported by HTTP, not the pinned SDK option contract",
+    "Existing generic HTTP upstream429 behavior is not claimed fixed"
+  ]
+}

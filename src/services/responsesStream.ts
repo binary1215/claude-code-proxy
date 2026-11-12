@@ -233,7 +233,7 @@ export class ResponsesStream {
       return this.stopBlock();
     }
     if (event.type === "message_delta") {
-      keys(event, ["type", "delta", "usage"]);
+      keys(event, ["type", "delta", "usage", "context_management"]);
       if (this.active || !record(event.delta)) problem("invalid_upstream_event");
       keys(event.delta, ["stop_reason", "stop_sequence", "container", "stop_details"]);
       if (event.delta.stop_sequence !== undefined && event.delta.stop_sequence !== null
@@ -246,6 +246,7 @@ export class ResponsesStream {
         if (reason === "refusal") this.refused = true;
       }
       this.updateMetadata(event.delta, false);
+      if (Object.hasOwn(event, "context_management")) this.updateMetadata({ context_management: event.context_management }, false);
       if (event.usage !== undefined) this.updateUsage(event.usage, true);
       this.messageDeltaSeen = true;
       return [];
@@ -430,6 +431,7 @@ export class ResponsesStream {
     if (update.stop_details != null) this.refused = true;
     // Anthropic's stream accumulator treats a null delta container as no update.
     if (!initial && update.container === null && previous.container != null) delete update.container;
+    if (!initial && update.context_management === null && previous.context_management != null) delete update.context_management;
     if (!initial) for (const key of ["stop_reason", "stop_sequence"]) {
       if (Object.hasOwn(source, key) && !(source[key] == null && previous[key] != null)) update[key] = source[key];
     }

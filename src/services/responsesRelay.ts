@@ -16,6 +16,8 @@ import { UpstreamDiagnosticsObserver, type DiagnosticReason } from "./upstreamDi
 import { insertPendingRequest, completeRequest } from "./historyService.js";
 import { registerTask, unregisterTask } from "./taskTracker.js";
 import { recordTokensForRateLimit } from "../middleware/rateLimiter.js";
+import { CLAUDE_INFERENCE_BACKEND } from "../config.js";
+import { relayCli } from "./cliRelay.js";
 import { logOperationalError } from "./operationalLogger.js";
 
 // Configuration is validated at startup only when explicitly opted in.
@@ -48,7 +50,7 @@ export async function relayResponses(req: Request, res: Response): Promise<void>
     }
     url = upstreamUrl(ANTHROPIC_BASE_URL, "/messages");
     const context = { model, principal: `proxy-key:${req.apiKeyFingerprint ?? "anonymous-development"}`,
-      upstream: upstreamStateScope(url.href, credential) };
+      upstream: upstreamStateScope(url.href + (CLAUDE_INFERENCE_BACKEND === "cli" ? "|cli" : ""), credential) };
     // Explicit per-request native policy for clients that can set HTTP headers but
     // cannot add JSON extension fields. Never mix two conflicting policy sources.
     let input = req.body;
@@ -70,6 +72,10 @@ export async function relayResponses(req: Request, res: Response): Promise<void>
   } catch (error) {
     if (error instanceof ResponsesError) sendError(res, error.status, error.code, error.message);
     else sendError(res, 503, "adapter_configuration_error", "Responses adapter configuration is invalid.");
+    return;
+  }
+  if (CLAUDE_INFERENCE_BACKEND === "cli") {
+    await relayCli(req, res, prepared.nativeBody, options, credential);
     return;
   }
   const body = Buffer.from(JSON.stringify(prepared.nativeBody));

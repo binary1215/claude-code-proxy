@@ -1,0 +1,43 @@
+services:
+  claude-proxy-cli:
+    init: true
+    build:
+      context: .
+      target: cli-inference
+      args:
+        CLAUDE_CODE_VERSION: ${CLAUDE_CODE_VERSION:-2.1.322}
+    restart: unless-stopped
+    ports:
+      - "${CLAUDE_CLI_BIND_ADDRESS:-0.0.0.0}:${CLAUDE_CLI_PORT:-13459}:3456"
+    environment:
+      CLAUDE_INFERENCE_BACKEND: cli
+      CLAUDE_CLI_WORKER_PATH: /app/integration/cli-backend/worker.mjs
+      CLAUDE_CLI_EXECUTABLE: /usr/local/bin/claude
+      CLAUDE_CLI_RUNTIME_DIR: /app/data/cli-runtime
+      CLAUDE_CLI_SESSION_TTL_SECONDS: ${CLAUDE_CLI_SESSION_TTL_SECONDS:-3600}
+      CLAUDE_CLI_MAX_SESSIONS: ${CLAUDE_CLI_MAX_SESSIONS:-8}
+      UPSTREAM_AUTH_SOURCE: configured
+      CLAUDE_AUTH_AUTO_REFRESH: "false"
+      AUTH_DISABLED: "false"
+      UPSTREAM_TIMEOUT_MS: ${UPSTREAM_TIMEOUT_MS:-300000}
+      ANTHROPIC_BASE_URL: ${CLAUDE_RELAY_URL:?Set the existing authorized HTTP relay URL}
+      ANTHROPIC_API_KEY: ${CLAUDE_RELAY_API_KEY:?Set its private relay API key}
+      ADMIN_API_SECRET: ${ADMIN_API_SECRET:?Set a private admin secret}
+      DATABASE_PATH: /app/data/proxy.db
+      RESPONSES_ENABLED: "true"
+      RESPONSES_STATE_KEY: ${RESPONSES_STATE_KEY:?Set a canonical base64 32-byte state key}
+      RESPONSES_MAX_OUTPUT_TOKENS: "8192"
+      RESPONSES_DEVELOPER_MESSAGE_MODE: ${RESPONSES_DEVELOPER_MESSAGE_MODE:-reject}
+      RESPONSES_APPLY_PATCH_MODE: ${RESPONSES_APPLY_PATCH_MODE:-reject}
+    volumes:
+      - cli-data:/app/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  cli-data:

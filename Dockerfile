@@ -52,5 +52,16 @@ ENV CLAUDE_CONFIG_DIR=/home/node/.claude \
 USER node
 VOLUME /home/node/.claude
 
+# Optional inference worker; plain HTTP images retain their dependency set.
+FROM cli-auth AS cli-inference
+USER root
+COPY integration/cli-backend/package.json integration/cli-backend/package-lock.json /app/integration/cli-backend/
+RUN npm ci --prefix /app/integration/cli-backend --omit=dev
+COPY integration/cli-backend/worker.mjs integration/cli-backend/helpers.mjs /app/integration/cli-backend/
+ENV CLAUDE_INFERENCE_BACKEND=cli \
+    CLAUDE_CLI_WORKER_PATH=/app/integration/cli-backend/worker.mjs \
+    CLAUDE_CLI_EXECUTABLE=/usr/local/bin/claude
+USER node
+
 # Keep plain docker build behavior unchanged. Opt in with --target cli-auth.
 FROM runtime AS default

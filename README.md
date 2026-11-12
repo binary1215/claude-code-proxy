@@ -1,6 +1,6 @@
 # Claude Code Proxy — native relay and opt-in Responses adapter
 
-A native Anthropic HTTP relay, forked from [MehdiMohseni82/claude-code-proxy](https://github.com/MehdiMohseni82/claude-code-proxy). **Model requests use native HTTP instead of the Claude Agent SDK/CLI execution backend.** An optional `cli-auth` image includes the official CLI for browser login and token refresh. The default image is CLI-free.
+A native Anthropic HTTP relay, forked from [MehdiMohseni82/claude-code-proxy](https://github.com/MehdiMohseni82/claude-code-proxy). **The default backend uses native HTTP.** An optional `cli-auth` image includes the official CLI for login and token refresh. A separate experimental `cli-inference` image runs genuine CLI inference with a caller-tool broker. The default image is CLI-free.
 
 ```text
 Claude Code / Messages -> stock LiteLLM pass-through -> native /v1/messages
@@ -8,7 +8,28 @@ Codex / Responses     -> stock LiteLLM pass-through -> opt-in /v1/responses
                                                         -> Anthropic HTTP upstream
 ```
 
-No automatic SDK fallback, tool execution, invented thinking, conversation storage, or provider/account failover is included. The caller owns conversation history and executes its client tools. Upstream-native server-tool definitions are forwarded on the native route; they are not executed on the proxy host. The new [Responses adapter](docs/RESPONSES-ADAPTER.md) is disabled by default and supports a deliberately bounded client-tool subset.
+The HTTP backend has no automatic SDK fallback, local tool execution, invented thinking, conversation storage or provider/account failover. The caller owns HTTP conversation history and executes its client tools. Upstream-native server-tool definitions are forwarded on the HTTP route; they are not executed on the proxy host. The [Responses adapter](docs/RESPONSES-ADAPTER.md) is disabled by default and supports a bounded client-tool subset.
+
+## Optional genuine CLI inference backend
+
+`CLAUDE_INFERENCE_BACKEND=http` remains the default. Selecting `cli` explicitly
+runs an isolated official CLI session, appends caller instructions through its
+supported system-prompt option, and brokers caller tools through owned MCP tools.
+Tool execution stays in the calling client. The CLI uses a private loopback HTTP
+forwarder, so provider authentication and refresh remain in the existing HTTP
+layer. There is no automatic switch between backends after a rejection.
+
+CLI sessions are stateful: reuse requires unchanged full caller history and
+session controls, and the session must still be alive. Restart, expiry, branching
+and caller compaction are separate compatibility limits. The HTTP backend keeps
+its original stateless behavior. See the [CLI backend contract](docs/CLI-INFERENCE.md),
+[optional Compose file](compose.cli.yml) and [private-env template](.env.cli.example).
+
+The experimental Linux image passes **248/248** tests. Three real Haiku5.5
+requests passed: tool intent, caller-result continuation and Responses SSE;
+the continuation reported **2772 cache-read tokens**. Real thinking replay and
+long coding sessions remain unqualified for this backend. Production Han still
+uses its existing HTTP image. [Verification receipt](docs/evidence/20261112-cli-inference.json).
 
 ## Thinking progress-update compatibility — 2026-11-12
 

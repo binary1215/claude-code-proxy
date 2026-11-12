@@ -15,6 +15,7 @@ admin/out/
 .env.*
 !.env.example
 !.env.adapter.example
+!.env.cli.example
 
 # Database and runtime data
 data/

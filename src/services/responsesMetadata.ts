@@ -1,6 +1,6 @@
 import { type JsonObject, ResponsesError } from "./responsesTypes.js";
 
-export const MESSAGE_METADATA_KEYS = ["container", "diagnostics", "stop_details"];
+export const MESSAGE_METADATA_KEYS = ["container", "diagnostics", "stop_details", "context_management"];
 const record = (value: any): value is JsonObject => value !== null && typeof value === "object" && !Array.isArray(value);
 const text = (value: any): boolean => typeof value === "string" && value.length <= 4096;
 const count = (value: any): boolean => Number.isSafeInteger(value) && value >= 0;
@@ -44,6 +44,21 @@ export function nativeMetadata(source: JsonObject, initial: boolean): JsonObject
           } else {
             shape(reason, ["type"]);
             check(["previous_message_not_found", "unavailable"].includes(reason.type));
+          }
+        }
+      } else if (name === "context_management") {
+        // Official BetaContextManagementResponse: observations, not a request
+        // to edit client history or a claim of compaction support.
+        shape(value, ["applied_edits"]);
+        check(Array.isArray(value.applied_edits));
+        for (const edit of value.applied_edits) {
+          check(record(edit));
+          if (edit.type === "clear_thinking_20251015") {
+            shape(edit, ["type", "cleared_input_tokens", "cleared_thinking_turns"]);
+            check(count(edit.cleared_input_tokens) && count(edit.cleared_thinking_turns));
+          } else {
+            shape(edit, ["type", "cleared_input_tokens", "cleared_tool_uses"]);
+            check(edit.type === "clear_tool_uses_20250919" && count(edit.cleared_input_tokens) && count(edit.cleared_tool_uses));
           }
         }
       } else {

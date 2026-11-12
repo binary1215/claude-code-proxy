@@ -1,5 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { relayNative } from "../services/nativeRelay.js";
+import { relayCli } from "../services/cliRelay.js";
+import { CLAUDE_INFERENCE_BACKEND } from "../config.js";
 
 const router = Router();
 async function messages(req: Request, res: Response, countTokens: boolean): Promise<void> {
@@ -14,6 +16,14 @@ async function messages(req: Request, res: Response, countTokens: boolean): Prom
   if (req.allowedModels?.length && !req.allowedModels.includes(body.model)) {
     res.status(403).json({ type: "error", error: { type: "permission_error", message: "Model is not permitted for this key." } });
     return;
+  }
+  if (CLAUDE_INFERENCE_BACKEND === "cli") {
+    if (countTokens) {
+      res.status(501).json({ type: "error", error: { type: "invalid_request_error", code: "cli_count_tokens_unavailable",
+        message: "CLI owns its expanded prompt; raw Messages token counting would not measure that context. Use the HTTP backend for this endpoint." } });
+      return;
+    }
+    return relayCli(req, res, body);
   }
   return relayNative(req, res, countTokens ? "/messages/count_tokens" : "/messages");
 }

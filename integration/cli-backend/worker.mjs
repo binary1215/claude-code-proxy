@@ -1,0 +1,236 @@
+import { createInterface } from 'node:readline';
+import { isAbsolute, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { query } from '@anthropic-ai/claude-agent-sdk';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import {
+  AsyncQueue, MCP_SERVER, NativeEventTransformer, ToolBroker, WorkerError,
+  createToolRegistry, isRecord, nativeThinkingToSdk, sdkEnvironment, validateEffort,
+} from './helpers.mjs';
+
+const ERROR_MESSAGES = {
+  invalid_ipc: 'Invalid worker command.',
+  invalid_start: 'Invalid CLI backend configuration.',
+  invalid_tools: 'Caller tool definitions are invalid.',
+  unsupported_tool_schema: 'The CLI backend requires object tool schemas.',
+  unsupported_options: 'A requested option is unsupported by the pinned CLI SDK.',
+  unsupported_tool_result: 'A caller tool result has no lossless supported MCP representation.',
+  invalid_tool_result: 'Caller tool result is invalid.',
+  unknown_tool_result: 'Caller tool result does not match an outstanding native tool call.',
+  tool_id_mismatch: 'Native tool correlation failed.',
+  unknown_tool: 'The CLI requested a tool outside the caller tool set.',
+  invalid_tool_input: 'The CLI tool input did not match the caller-tool envelope.',
+  invalid_native_event: 'The CLI emitted an invalid native event.',
+  tool_cancelled: 'The CLI tool wait was cancelled.',
+  retry_disabled: 'The CLI attempted a retry; this worker requires a new explicit request.',
+  fallback_disabled: 'The CLI attempted a model fallback.',
+  turn_in_progress: 'The previous CLI turn is still in progress.',
+  no_active_tool_turn: 'Additional tool-turn input requires an active CLI turn.',
+  worker_not_ready: 'The CLI worker is not ready.',
+  worker_closed: 'The CLI worker has closed.',
+  startup_failed: 'The CLI worker could not initialize.',
+  inference_failed: 'The CLI inference turn failed.',
+  options_failed: 'The CLI could not apply the requested session options.',
+};
+
+function validateStart(start) {
+  if (typeof start.model !== 'string' || !start.model || typeof start.system !== 'string'
+      || typeof start.cwd !== 'string' || !isAbsolute(start.cwd)
+      || typeof start.configDir !== 'string' || !isAbsolute(start.configDir)
+      || !Number.isSafeInteger(start.maxTokens) || start.maxTokens < 1) throw new WorkerError('invalid_start');
+  if (start.cliPath !== undefined && (typeof start.cliPath !== 'string' || !isAbsolute(start.cliPath))) throw new WorkerError('invalid_start');
+  let url;
+  try { url = new URL(start.upstream); } catch { throw new WorkerError('invalid_start'); }
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.hash || url.search) throw new WorkerError('invalid_start');
+  validateEffort(start.effort);
+  nativeThinkingToSdk(start.thinking);
+}
+
+export function createCallerMcpServer(registry, broker) {
+  const server = new McpServer({ name: 'claude-proxy-caller-tools', version: '1.0.0' }, { capabilities: { tools: {} } });
+  // The low-level handlers retain the caller's full JSON Schema instead of translating through Zod.
+  server.server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: registry.definitions }));
+  server.server.setRequestHandler(CallToolRequestSchema, async (request, extra) => broker.call(request.params.name, request.params.arguments, extra.signal));
+  server.server.onerror = () => {}; // Never log raw MCP errors or tool content.
+  return server;
+}
+
+/** Exported only for deterministic fake-SDK tests; production uses the real pinned SDK. */
+export class CliWorker {
+  constructor({ emit, queryFactory = query, onClosed = () => {} }) {
+    this.emit = emit;
+    this.queryFactory = queryFactory;
+    this.onClosed = onClosed;
+    this.queue = new AsyncQueue();
+    this.closed = false;
+    this.started = false;
+    this.ready = false;
+    this.turnInProgress = false;
+  }
+  async handle(message) {
+    if (!isRecord(message) || typeof message.type !== 'string') throw new WorkerError('invalid_ipc');
+    if (message.type === 'close') { this.close(); return; }
+    if (this.closed) throw new WorkerError('worker_closed');
+    if (message.type === 'start') { await this.start(message); return; }
+    if (!this.ready) throw new WorkerError('worker_not_ready');
+    switch (message.type) {
+      case 'prompt': {
+        if (message.appendToToolTurn !== undefined && typeof message.appendToToolTurn !== 'boolean') throw new WorkerError('invalid_ipc');
+        const appendToToolTurn = message.appendToToolTurn === true;
+        if (appendToToolTurn && !this.turnInProgress) throw new WorkerError('no_active_tool_turn');
+        if (!appendToToolTurn && this.turnInProgress) throw new WorkerError('turn_in_progress');
+        if (typeof message.content !== 'string' && !Array.isArray(message.content)) throw new WorkerError('invalid_ipc');
+        // There is intentionally no assistant-history hydration or local tool execution.
+        if (!appendToToolTurn) this.turnInProgress = true;
+        this.queue.push({ type: 'user', message: { role: 'user', content: message.content }, parent_tool_use_id: null, client_composed: true,
+          ...(appendToToolTurn ? { priority: 'next' } : {}) });
+        return;
+      }
+      case 'tool_result': this.broker.deliver(message); return;
+      case 'options': {
+        if (typeof message.request_id !== 'string' || !message.request_id) throw new WorkerError('invalid_ipc');
+        validateEffort(message.effort);
+        // Live effort is the SDK's documented flag-settings path, never a prompt mutation.
+        try { await this.query.applyFlagSettings({ effortLevel: message.effort ?? null }); }
+        catch { throw new WorkerError('options_failed'); }
+        if (!this.closed) this.emit({ type: 'options_applied', request_id: message.request_id });
+        return;
+      }
+      default: throw new WorkerError('invalid_ipc');
+    }
+  }
+  async start(start) {
+    if (this.started) throw new WorkerError('invalid_start');
+    this.started = true;
+    validateStart(start);
+    const registry = createToolRegistry(start.tools);
+    const env = sdkEnvironment(start);
+    this.broker = new ToolBroker(registry, message => this.emitUnlessClosed(message), error => this.fail(error));
+    this.transformer = new NativeEventTransformer(registry, this.broker);
+    this.mcpServer = createCallerMcpServer(registry, this.broker);
+    const preToolUse = async input => {
+      try { return this.broker.preToolUse(input); }
+      catch (error) { this.fail(error); throw error; }
+    };
+    this.abortController = new AbortController();
+    try {
+      this.query = this.queryFactory({
+        prompt: this.queue,
+        options: {
+          model: start.model,
+          ...(start.cliPath === undefined ? {} : { pathToClaudeCodeExecutable: start.cliPath }),
+          cwd: start.cwd,
+          env,
+          abortController: this.abortController,
+          systemPrompt: { type: 'preset', preset: 'claude_code', append: start.system },
+          tools: [],
+          skills: [],
+          plugins: [],
+          settingSources: [],
+          strictMcpConfig: true,
+          persistSession: false,
+          enableFileCheckpointing: false,
+          includePartialMessages: true,
+          verbatimPrompts: true,
+          permissionMode: 'default',
+          settings: {
+            disableClaudeAiConnectors: true,
+            disableBundledSkills: true,
+            autoMemoryEnabled: false,
+            enableAllProjectMcpServers: false,
+            fallbackModel: [],
+          },
+          ...(start.effort == null ? {} : { effort: start.effort }),
+          ...(start.thinking === undefined ? {} : { thinking: nativeThinkingToSdk(start.thinking) }),
+          mcpServers: registry.definitions.length ? {
+            [MCP_SERVER]: { type: 'sdk', name: MCP_SERVER, instance: this.mcpServer, timeout: 2_147_483_647 },
+          } : {},
+          hooks: { PreToolUse: [{ hooks: [preToolUse], timeout: 30, onFailure: 'block' }] },
+          // A supported allow hook normally resolves permission first. If the CLI still asks,
+          // use the exact native ID once more, never name/order association.
+          canUseTool: async (name, input, options) => {
+            const result = await preToolUse({ tool_name: name, tool_input: input, tool_use_id: options.toolUseID });
+            return { behavior: 'allow', updatedInput: result.hookSpecificOutput.updatedInput };
+          },
+          stderr: () => {},
+        },
+      });
+      this.consumption = this.consume();
+      await this.query.initializationResult();
+      if (this.closed) return;
+      this.ready = true;
+      this.emit({ type: 'ready' });
+    } catch {
+      this.fail(new WorkerError('startup_failed'));
+    }
+  }
+  async consume() {
+    try {
+      for await (const message of this.query) {
+        if (this.closed) break;
+        if (message.type === 'stream_event') {
+          if (message.event?.type === 'error') throw new WorkerError('inference_failed');
+          for (const event of this.transformer.transform(message.event)) this.emitUnlessClosed({ type: 'native_event', event });
+        } else if (message.type === 'result') {
+          const success = message.subtype === 'success' && !message.is_error;
+          this.turnInProgress = false;
+          this.emitUnlessClosed({ type: 'turn_result', success, session_id: message.session_id });
+          if (!success) { this.fail(new WorkerError('inference_failed')); break; }
+        } else if (message.type === 'system' && message.subtype === 'api_retry') {
+          throw new WorkerError('retry_disabled');
+        } else if (message.type === 'system' && message.subtype === 'model_refusal_fallback') {
+          throw new WorkerError('fallback_disabled');
+        }
+        // Assistant envelopes are per-content-block, not authoritative complete messages.
+        // All other SDK notices/stderr are intentionally excluded from IPC.
+      }
+      if (!this.closed) this.fail(new WorkerError('inference_failed'));
+    } catch (error) {
+      if (!this.closed) this.fail(error instanceof WorkerError ? error : new WorkerError('inference_failed'));
+    }
+  }
+  emitUnlessClosed(message) { if (!this.closed) this.emit(message); }
+  fail(error) {
+    if (this.closed) return;
+    const code = error instanceof WorkerError && Object.hasOwn(ERROR_MESSAGES, error.code) ? error.code : 'inference_failed';
+    // Stop the real engine before rejecting any pending MCP handler promises.
+    this.close();
+    this.emit({ type: 'error', code, message: ERROR_MESSAGES[code] });
+  }
+  close() {
+    if (this.closed) return;
+    this.closed = true;
+    this.ready = false;
+    try { this.query?.close(); } catch {}
+    this.abortController?.abort();
+    this.broker?.close();
+    this.queue.close();
+    void this.mcpServer?.close().catch(() => {});
+    this.onClosed();
+  }
+}
+
+function main() {
+  const input = createInterface({ input: process.stdin, crlfDelay: Infinity, terminal: false });
+  const worker = new CliWorker({
+    emit: message => process.stdout.write(`${JSON.stringify(message)}\n`),
+    onClosed: () => { input.close(); process.stdin.pause(); },
+  });
+  let chain = Promise.resolve();
+  input.on('line', line => {
+    let message;
+    try { message = JSON.parse(line); }
+    catch { worker.fail(new WorkerError('invalid_ipc')); return; }
+    // Cancellation must also work while initialization/options await a control reply.
+    if (message?.type === 'close') { worker.close(); return; }
+    chain = chain.then(() => worker.handle(message)).catch(error => worker.fail(error));
+  });
+  input.on('close', () => worker.close());
+  process.on('uncaughtException', () => worker.fail(new WorkerError('inference_failed')));
+  process.on('unhandledRejection', () => worker.fail(new WorkerError('inference_failed')));
+  process.on('SIGTERM', () => worker.close());
+  process.on('SIGINT', () => worker.close());
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
