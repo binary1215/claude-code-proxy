@@ -8,7 +8,7 @@ import { ANTHROPIC_BASE_URL, CLAUDE_CLI_MAX_SESSIONS, CLAUDE_CLI_RUNTIME_DIR, CL
 import { upstreamStateScope } from "./responsesState.js";
 import { registerCliUpstream, closeCliUpstream, cliTurnUsage, type CliUpstreamTurn } from "./cliUpstream.js";
 import type { ObservedUsage } from "./usageObserver.js";
-import { CliBackendError, CliMessageAccumulator, cliHash, cliMessages, cliSystem, cliTools } from "./cliProtocol.js";
+import { CliBackendError, CliMessageAccumulator, cliHash, cliMessages, cliSystem, cliTools, cliInferenceRequest } from "./cliProtocol.js";
 import type { JsonObject } from "./responsesTypes.js";
 
 type Credential = { token: string; kind: "oauth" | "api_key"; stateIdentity?: string };
@@ -86,6 +86,9 @@ class Session {
     readonly retired: { session: Session; historyHash: string; pending: string[] }[] = []) {
     this.effort = body.output_config?.effort;
     this.upstream = { active: false, calls: 0, scope: "", model };
+    this.upstream.nativeSystems = importedHistory?.flatMap((message, index) => message.role === "system" ? [{
+      index, marker: `[claude-proxy-system:${cliHash([this.id, index, message])}]`, message,
+    }] : []);
     if (body.thinking?.display === "updates") this.upstream.thinkingDisplay = "updates";
     // Rejections can precede the consumer attaching its awaited startup/turn handler.
     void this.ready.catch(() => {});
@@ -117,6 +120,7 @@ class Session {
         if (message.type === "ready") this.readyResolve();
         else if (message.type === "native_event") this.queue.push(message.event);
         else if (message.type === "compact_phase") {
+          if (this.upstream.compacting && message.active !== true) this.upstream.nativeSystemReplay = true;
           this.upstream.compacting = message.active === true;
           void this.send({ type: "compact_phase_ack", request_id: message.request_id }).catch(error => this.fail(error));
         } else if (message.type === "compact_boundary") {
@@ -147,6 +151,7 @@ class Session {
       effort: this.effort, cwd, configDir, authMode: "proxy", upstream: forwarding.base,
       ...(CLAUDE_CLI_AUTO_COMPACT_WINDOW ? { autoCompactWindow: CLAUDE_CLI_AUTO_COMPACT_WINDOW } : {}),
       ...(this.importedHistory ? { history: this.importedHistory } : {}),
+      ...(this.upstream.nativeSystems?.length ? { systemCarriers: this.upstream.nativeSystems.map(({ index, marker }) => ({ index, marker })) } : {}),
       credential: { kind: "api_key", token: forwarding.token },
       ...(process.env.CLAUDE_CLI_EXECUTABLE ? { cliPath: resolve(process.env.CLAUDE_CLI_EXECUTABLE) } : {}) });
     await this.ready;
@@ -293,8 +298,11 @@ class Registry {
     session: Session; messages: JsonObject[]; detach: () => void;
   }> {
     if (signal?.aborted) throw new CliBackendError("request_cancelled", "Request cancelled.", 499);
+    body = cliInferenceRequest(body);
     const messages = cliMessages(body.messages), system = cliSystem(body.system), tools = cliTools(body.tools);
-    if (messages.at(-1)?.role !== "user") throw new CliBackendError("unsupported_cli_prefill", "A CLI caller turn must end in user input.");
+    if ([...messages].reverse().find(message => message.role !== "system")?.role !== "user") {
+      throw new CliBackendError("unsupported_cli_prefill", "A CLI caller turn must end in user input, optionally followed by native system context.");
+    }
     if (body.tool_choice && !["auto", "none"].includes(body.tool_choice.type)) {
       throw new CliBackendError("unsupported_cli_control", "CLI tool choice supports auto or none.");
     }
@@ -313,11 +321,12 @@ class Registry {
       system.blocks, tools, body.max_tokens, body.thinking ?? null, body.tool_choice ?? null]);
     const origin = cliHash([principal, upstreamStateScope(ANTHROPIC_BASE_URL, credential)]);
     let pivot = messages.length - 1;
-    while (pivot >= 0 && messages[pivot].role === "user") pivot--;
+    while (pivot >= 0 && messages[pivot].role !== "assistant") pivot--;
     const history = messages.slice(0, pivot + 1), next = messages.slice(pivot + 1);
+    const newSystem = next.some(message => message.role === "system");
     let session: Session | undefined;
     let imported = false;
-    if (history.length) {
+    if (history.length && !newSystem) {
       const key = cliHash([scope, history]);
       const matches = this.index.get(key);
       session = matches && [...matches].find(value => !value.closed && !value.busy);
@@ -330,7 +339,7 @@ class Registry {
       }
     }
     if (!session) {
-      imported = history.length > 0;
+      imported = history.length > 0 || newSystem;
       if (!imported) {
       validateNextInput(next, new Set());
       }
@@ -370,6 +379,17 @@ class Registry {
         }
       }, 30000);
       this.timer.unref();
+    }
+    // Native next_user_message refers to CALLER turns. Resume and compaction
+    // add SDK helper users: do not let those consume a caller instruction's
+    // lifetime. Render active text for this request; omit it only after a real
+    // later caller user, while retaining any independent output policy.
+    for (const context of session.upstream.nativeSystems ?? []) {
+      if (context.message.clear_at !== "next_user_message") { context.wireMessage = context.message; continue; }
+      const expired = messages.slice(context.index + 1).some(message => message.role === "user");
+      context.wireMessage = !expired ? { ...context.message, clear_at: "never" } :
+        context.message.output_config && Object.keys(context.message.output_config as JsonObject).length ?
+          { role: "system", content: [], output_config: context.message.output_config } : null;
     }
     try { await session.begin(imported ? [] : next, body.output_config?.effort); }
     catch (error) { detach(); session.fail(error instanceof Error ? error : new Error()); throw error; }

@@ -17,16 +17,51 @@ export function canonical(value: unknown): string {
 export const cliHash = (value: unknown): string => createHash("sha256").update(canonical(value)).digest("hex");
 export const copy = <T>(value: T): T => JSON.parse(canonical(value));
 
+/** Apply native per-message effort through SDK settings. Substantive system
+ * turns retain their original role/order/metadata for the pinned resume adapter. */
+export function cliInferenceRequest(body: JsonObject): JsonObject {
+  if (!Array.isArray(body.messages)) return body;
+  let output = body.output_config;
+  const messages = body.messages.filter((message: JsonObject) => {
+    if (message?.role !== "system") return true;
+    const empty = message.content === undefined || message.content === "" || Array.isArray(message.content) &&
+      message.content.every((block: JsonObject) => block?.type === "text" && block.text === "");
+    if (Object.keys(message).some(key => !["role", "content", "output_config", "clear_at"].includes(key)) ||
+        message.clear_at != null && !["never", "next_user_message"].includes(message.clear_at) ||
+        !empty && typeof message.content !== "string" && (!Array.isArray(message.content) ||
+          message.content.some((block: JsonObject) => block?.type !== "text" || typeof block.text !== "string"))) {
+      throw new CliBackendError("unsupported_cli_system_message", "CLI per-message system turns support native text, cache markers, lifetime and effort controls.");
+    }
+    if (message.output_config != null) {
+      const policy = message.output_config;
+      if (typeof policy !== "object" || Array.isArray(policy) || Object.keys(policy).some(key => key !== "effort") ||
+          policy.effort !== undefined && policy.effort !== null && !["low", "medium", "high", "xhigh", "max"].includes(policy.effort)) {
+        throw new CliBackendError("unsupported_cli_control", "Per-message CLI system controls support native effort labels or null reset.");
+      }
+      if (Object.hasOwn(policy, "effort")) {
+        output = { ...(output ?? {}) };
+        if (policy.effort === null) delete output.effort;
+        else output.effort = policy.effort;
+      }
+    }
+    return !empty;
+  });
+  return { ...body, messages, ...(output !== undefined ? { output_config: output } : {}) };
+}
+
 export function cliMessages(value: unknown): JsonObject[] {
   if (!Array.isArray(value) || !value.length) throw new CliBackendError("invalid_cli_input", "A nonempty messages array is required.");
   return value.map(message => {
-    if (!message || !["user", "assistant"].includes(message.role)) {
-      throw new CliBackendError("invalid_cli_input", "CLI Messages accepts user and assistant turns.");
+    if (!message || !["user", "assistant", "system"].includes(message.role)) {
+      throw new CliBackendError("invalid_cli_input", "CLI Messages accepts user, assistant and native system turns.");
     }
     const content = typeof message.content === "string" ? [{ type: "text", text: message.content }] : message.content;
     if (!Array.isArray(content) || content.some(block => !block || typeof block !== "object" || Array.isArray(block) || typeof block.type !== "string")) {
       throw new CliBackendError("invalid_cli_input", "Message content must be text or typed blocks.");
     }
+    // Its entire native shape is restored on the private forwarding boundary;
+    // preserve string versus blocks, lifetime and per-turn output configuration.
+    if (message.role === "system") return copy(message);
     const normalized = copy(content) as JsonObject[];
     // Responses represents direct caller tools and unannotated text without
     // these literal native defaults. Match their equivalent visible history;

@@ -8,7 +8,7 @@ Codex / Responses     -> unchanged LiteLLM -> enabled /v1/responses
   -> genuine CLI / caller-tool broker -> private HTTP forwarder -> provider
 ```
 
-The HTTP backend has no automatic SDK fallback, local tool execution, invented thinking, conversation storage or provider/account failover. The caller owns HTTP conversation history and executes its client tools. Upstream-native server-tool definitions are forwarded on the HTTP route; they are not executed on the proxy host. The [Responses adapter](docs/RESPONSES-ADAPTER.md) is disabled by default and supports a bounded client-tool subset.
+The HTTP backend has no automatic SDK fallback, local tool execution, invented thinking, conversation storage or provider/account failover. The caller owns HTTP conversation history and executes its client tools. Upstream-native server-tool definitions are forwarded on the HTTP route; they are not executed on the proxy host. The [Responses adapter](docs/RESPONSES-ADAPTER.md) is disabled by default and supports a bounded client-tool subset. CLI mode uses the context and control adaptations described below rather than literal native-byte forwarding.
 
 ## Default CLI inference and context management
 
@@ -307,8 +307,8 @@ Endpoints here:
 
 | Endpoint | Behavior |
 | --- | --- |
-| `POST /v1/messages` | Native raw JSON/SSE relay |
-| `POST /v1/messages/count_tokens` | Native count request relay |
+| `POST /v1/messages` | Default CLI inference; explicit HTTP backend provides raw JSON/SSE relay |
+| `POST /v1/messages/count_tokens` | HTTP: native count relay; CLI:501 because the CLI expands context |
 | `GET /v1/models` | Native upstream model catalog, with query parameters |
 | `POST /v1/embeddings` | Optional existing Ollama embeddings adapter |
 | `GET /health` | Local DB/config/task/Ollama diagnostic, **not** a provider-auth probe |
@@ -316,7 +316,7 @@ Endpoints here:
 | `POST /v1/responses` | New opt-in stateless adapter with authenticated signed-state replay |
 | `/v1/chat/completions` | Removed/unsupported here; normal LiteLLM conversion is not fidelity-certified |
 
-## Migration from the SDK branch
+## Historical migration from the original SDK branch
 
 Read [the migration notes](docs/ADAPTER-PATCH.md) before replacing an existing service. Back up the database/volume and keep the previous image/configuration. Do not use `down -v` on an upgrade.
 
@@ -326,7 +326,7 @@ rollback and backup restoration using fresh synthetic volumes with networking di
 replace or back up a running deployment. The [operating checklist](docs/ADAPTER-PATCH.md#native-only-update-and-rollback-checklist)
 separates that rehearsal from an authorized service cutover.
 
-- The SDK/CLI model-execution backend, server-side tool grants, internal Chat translation, injected system prompts and proxy-managed cache TTLs are removed. The optional authentication-only CLI does not restore those features.
+- The earlier native-HTTP migration removed the original SDK execution and server-tool grants. The current default restores genuine CLI inference with caller-executed tools and a bounded native-history adapter; internal Chat translation and proxy-managed cache TTLs remain removed. See [the current CLI contract](docs/CLI-INFERENCE.md).
 - API keys, configured credentials and request history are retained. Token/cost columns become nullable transactionally; new cache fields are added.
 - Keys with old non-null `monthly_budget_usd`, `system_prompt` or `cache_ttl_seconds` fail with **409**. Move budget enforcement to LiteLLM and system/cache settings to caller requests, then clear those fields through `PATCH /api/admin/keys/:id` using `null`. The dashboard offers clear-only migration actions. New non-null values are rejected.
 - Built-in-tool grants left in old database rows are inert. Native TPM limits are best-effort observed-token windows, not prepaid reservations or financial budget enforcement. Unknown usage and simultaneous requests can exceed a requested limit; use the gateway for policy enforcement.

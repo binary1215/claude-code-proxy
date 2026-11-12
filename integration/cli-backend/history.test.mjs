@@ -59,3 +59,40 @@ test('import-only SessionStore loads exact entries by scoped session ID and keep
   assert.deepEqual(await store.load({ sessionId: snapshot.sessionId }), snapshot.entries);
   assert.deepEqual(await store.listSubkeys({ sessionId: snapshot.sessionId }), []);
 });
+
+test('caller system carriers retain source placement and exact source text for pinned native role restoration', () => {
+  const source = [
+    { role: 'user', content: 'Caller instruction.' },
+    { role: 'system', content: [
+      { type: 'text', text: 'Persistent environment.', cache_control: { type: 'ephemeral', ttl: '5m' } },
+      { type: 'text', text: 'Second context block.' },
+    ], clear_at: 'never', output_config: { effort: 'low' } },
+    { role: 'system', content: 'Current caller environment.', clear_at: 'next_user_message', output_config: { effort: 'high' } },
+  ];
+  const before = structuredClone(source);
+  const snapshot = nativeHistoryEntries(source, { model: 'fixture', cwd: '/owned', systemCarriers: [
+    { index: 1, marker: '[owned-system:first]' }, { index: 2, marker: '[owned-system:second]' },
+  ] });
+  assert.deepEqual(source, before);
+  assert.deepEqual(snapshot.entries.map(row => row.type), ['user', 'attachment', 'attachment']);
+  for (const [index, text] of [[1, '[owned-system:first]\nPersistent environment.\n\nSecond context block.'], [2, '[owned-system:second]\nCurrent caller environment.']]) {
+    const entry = snapshot.entries[index];
+    assert.equal(entry.renderedRole, 'system');
+    assert.deepEqual(entry.rendered, [{ content: text }]);
+    assert.deepEqual(entry.attachment, { type: 'caller_system' });
+    assert.equal(Object.hasOwn(entry, 'message'), false);
+    assert.equal(Object.hasOwn(entry, 'clear_at'), false, 'Lifecycle is restored against caller turns by the private forwarder');
+    assert.equal(entry.parentUuid, snapshot.entries[index - 1].uuid);
+  }
+});
+
+test('system carriers require exact trusted index mapping and native text content', () => {
+  const source = [{ role: 'user', content: 'Caller' }, { role: 'system', content: 'Environment' }];
+  const options = { model: 'fixture', cwd: '/owned' };
+  assert.throws(() => nativeHistoryEntries(source, options), { code: 'invalid_history' });
+  for (const systemCarriers of [[{ index: 0, marker: 'wrong-role' }], [{ index: 2, marker: 'outside' }], [{ index: 1, marker: '' }], [{ index: 1, marker: 'line\nbreak' }], [{ index: 1, marker: 'same' }, { index: 1, marker: 'other' }]]) {
+    assert.throws(() => nativeHistoryEntries(source, { ...options, systemCarriers }), { code: 'invalid_history' });
+  }
+  const nonText = [...source.slice(0, 1), { role: 'system', content: [{ type: 'image', source: { type: 'url', url: 'https://fixture.invalid/image' } }] }];
+  assert.throws(() => nativeHistoryEntries(nonText, { ...options, systemCarriers: [{ index: 1, marker: 'owned' }] }), { code: 'invalid_history' });
+});

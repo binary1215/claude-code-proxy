@@ -79,6 +79,38 @@ test('signed-empty, complete signature event, redacted: exact sealed blocks/orde
   assert.notEqual(stream.response.output[0].encrypted_content, 'caller_mutation');
 });
 
+test('thinking progress estimates remain metadata without changing signed-empty reasoning or actual usage',()=>{
+  const {stream,sealed}=fixture();
+  const events=run(stream,[start(),block(0,{type:'thinking',thinking:'',signature:''}),
+    delta(0,{type:'thinking_delta',thinking:'',estimated_tokens:50}),
+    delta(0,{type:'thinking_delta',thinking:'',estimated_tokens:100}),
+    delta(0,{type:'thinking_delta',thinking:'',estimated_tokens:null}),
+    delta(0,{type:'signature_delta',signature:'SIGNED_EMPTY_PROGRESS'}),
+    delta(0,{type:'thinking_delta',thinking:'',estimated_tokens:null}),
+    stop(0),messageDelta(),messageStop]);
+  stream.finish();
+  assert.deepEqual(sealed[0].block,{type:'thinking',thinking:'',signature:'SIGNED_EMPTY_PROGRESS'});
+  const response=completed(events);
+  assert.deepEqual(response.output[0].summary,[]);
+  assert.deepEqual(response.anthropic_metadata.thinking_progress,[{output_index:0,estimated_tokens:null,cumulative_estimated_tokens:150}]);
+  assert.ok(!events.some(event=>event.type==='response.reasoning_summary_text.delta'));
+  assert.equal(response.usage.output_tokens,messageDelta().usage.output_tokens);
+  assert.equal(response.anthropic_usage.output_tokens,messageDelta().usage.output_tokens);
+});
+
+test('thinking progress estimates accept finite nonnegative observations and reject invalid values',()=>{
+  for(const estimate of[-1,'50',true,Infinity]){
+    const {stream}=fixture();
+    const events=run(stream,[start(),block(0,{type:'thinking',thinking:''}),delta(0,{type:'thinking_delta',thinking:'',estimated_tokens:estimate})]);
+    assertFailure(events,'invalid_upstream_event');
+  }
+  const {stream}=fixture();
+  const events=run(stream,[start(),block(0,{type:'thinking',thinking:''}),
+    delta(0,{type:'thinking_delta',thinking:'',estimated_tokens:50.5}),delta(0,{type:'signature_delta',signature:'SYNTHETIC'}),
+    stop(0),messageDelta(),messageStop]);
+  assert.equal(completed(events).anthropic_metadata.thinking_progress[0].cumulative_estimated_tokens,50.5);
+});
+
 test('thinking summary appends text only; complete signature never becomes thinking text', () => {
   const { stream, sealed } = fixture();
   const events = run(stream, [start(), block(0, { type: 'thinking', thinking: 'initial ', signature: '' }),

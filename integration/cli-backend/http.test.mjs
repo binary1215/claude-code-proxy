@@ -37,6 +37,8 @@ const upstream=http.createServer(async(req,res)=>{
   const wantsSigned=contents.some(b=>b.type==='text'&&b.text?.includes('RESPONSES_SIGNED'));
   const wantsResponsesTool=contents.some(b=>b.type==='text'&&b.text?.includes('REQUEST_CALLER_TOOL_RESPONSES'));
   const failure=contents.some(b=>b.type==='text'&&b.text?.includes('REQUEST_PROVIDER_FAILURE'));
+  const unsupportedMetadata=contents.some(b=>b.type==='text'&&b.text?.includes('REQUEST_UNSUPPORTED_METADATA'));
+  const lateUnsupportedMetadata=contents.some(b=>b.type==='text'&&b.text?.includes('REQUEST_UNSUPPORTED_METADATA_LATE'));
   const hold=contents.some(b=>b.type==='text'&&b.text?.includes('REQUEST_PROVIDER_HOLD'));
   if(failure){
     calls.at(-1).scenario='failure';
@@ -44,6 +46,7 @@ const upstream=http.createServer(async(req,res)=>{
     return res.end(JSON.stringify({type:'error',error:{type:'rate_limit_error',message:failureMessage}}));
   }
   if(hold)calls.at(-1).scenario='hold';
+  if(unsupportedMetadata)calls.at(-1).scenario='unsupported-metadata';
   let blocks;
   if(scenarioText.includes('IMPORT_SUMMARY_WITHOUT_TOOLS')){
     blocks=[{type:'thinking',thinking:'Synthetic imported-summary reasoning',signature:'synthetic-import-summary-signature'},
@@ -66,19 +69,24 @@ const upstream=http.createServer(async(req,res)=>{
   const usage={input_tokens:5,output_tokens:9,cache_read_input_tokens:11,cache_creation_input_tokens:3};
   res.writeHead(200,{'content-type':'text/event-stream','request-id':'req_011abcdefghijklmnopqrstuv'});
   res.write(emit('message_start',{message:{id:'msg_real_cli_fixture_'+calls.length,type:'message',role:'assistant',model,
-    content:[],stop_reason:null,stop_sequence:null,context_management:null,usage:{...usage,output_tokens:0}}}));
+    content:[],stop_reason:null,stop_sequence:null,context_management:null,
+    ...(unsupportedMetadata&&!lateUnsupportedMetadata?{future_provider_metadata:{fixture:'unsupported-metadata'}}:{}),usage:{...usage,output_tokens:0}}}));
   if(hold){res.on('close',()=>closedScenarios.add('hold'));return;}
   blocks.forEach((b,index)=>{
     const start=b.type==='thinking'?{...b,thinking:'',signature:''}:b.type==='tool_use'?{...b,input:{}}:{...b,text:''};
     res.write(emit('content_block_start',{index,content_block:start}));
     if(b.type==='thinking'){
+      res.write(emit('content_block_delta',{index,delta:{type:'thinking_delta',thinking:'',estimated_tokens:50}}));
+      res.write(emit('content_block_delta',{index,delta:{type:'thinking_delta',thinking:'',estimated_tokens:100}}));
+      res.write(emit('content_block_delta',{index,delta:{type:'thinking_delta',thinking:'',estimated_tokens:null}}));
       res.write(emit('content_block_delta',{index,delta:{type:'thinking_delta',thinking:b.thinking}}));
       res.write(emit('content_block_delta',{index,delta:{type:'signature_delta',signature:b.signature}}));
     }else if(b.type==='tool_use')res.write(emit('content_block_delta',{index,delta:{type:'input_json_delta',partial_json:JSON.stringify(b.input)}}));
     else res.write(emit('content_block_delta',{index,delta:{type:'text_delta',text:b.text}}));
     res.write(emit('content_block_stop',{index}));
   });
-  res.end(emit('message_delta',{delta:{stop_reason:blocks.at(-1).type==='tool_use'?'tool_use':'end_turn',stop_sequence:null},usage,context_management:null})+emit('message_stop'));
+  res.end(emit('message_delta',{delta:{stop_reason:blocks.at(-1).type==='tool_use'?'tool_use':'end_turn',stop_sequence:null,
+    ...(lateUnsupportedMetadata?{future_provider_metadata:{fixture:'unsupported-metadata'}}:{})},usage,context_management:null})+emit('message_stop'));
 });
 upstream.listen(0,'127.0.0.1');await once(upstream,'listening');
 Object.assign(process.env,{DATABASE_PATH:':memory:',AUTH_DISABLED:'false',ADMIN_API_SECRET:randomBytes(24).toString('hex'),
@@ -98,11 +106,14 @@ const base=`http://127.0.0.1:${server.address().port}`;
 async function request(path,body){
   const response=await fetch(base+path,{method:'POST',headers:{authorization:`Bearer ${key.key}`,'content-type':'application/json'},body:JSON.stringify(body)});
   const text=await response.text();
-  if(response.headers.get('content-type')?.includes('text/event-stream')){
+  const contentType=response.headers.get('content-type')??'';
+  const cliSession=response.headers.get('x-claude-proxy-cli-session');
+  const cliHistory=response.headers.get('x-claude-proxy-cli-history');
+  if(contentType.includes('text/event-stream')){
     const events=text.split(/\r?\n/).filter(line=>line.startsWith('data:')).map(line=>JSON.parse(line.slice(5)));
-    return {status:response.status,text,events,value:events.at(-1)?.response};
+    return {status:response.status,text,contentType,cliSession,cliHistory,events,value:events.at(-1)?.response};
   }
-  return {status:response.status,text,value:JSON.parse(text)};
+  return {status:response.status,text,contentType,cliSession,cliHistory,value:JSON.parse(text)};
 }
 after(async()=>{
   await closeCliSessions();
@@ -305,6 +316,37 @@ test('Responses JSON and SSE preserve opaque signed items across their own exact
   }
 });
 
+test('Responses SSE preserves thinking progress separately from usage and exact signed replay capsules',async()=>{
+  const before=calls.length;
+  const body={model,store:false,stream:true,max_output_tokens:1024,
+    input:[{role:'user',content:'RESPONSES_SIGNED_PROGRESS'}]};
+  const response=await request('/v1/responses',body);
+  assert.equal(response.status,200,response.text);
+  assert.equal(response.value.status,'completed');
+  assert.equal(response.events.filter(event=>event.type==='response.completed').length,1);
+  assert.equal(response.events.at(-1)?.type,'response.completed');
+  assert.deepEqual(response.value.anthropic_metadata.thinking_progress,[
+    {output_index:0,estimated_tokens:null,cumulative_estimated_tokens:150},
+    {output_index:1,estimated_tokens:null,cumulative_estimated_tokens:150},
+  ]);
+  assert.deepEqual(response.value.anthropic_usage,{input_tokens:5,output_tokens:9,
+    cache_read_input_tokens:11,cache_creation_input_tokens:3});
+  assert.equal(response.value.usage.output_tokens,9,'Thinking estimates must not become billed output tokens');
+  const reasoning=response.value.output.filter(item=>item.type==='reasoning');
+  assert.equal(reasoning.length,2);
+  assert.ok(reasoning.every(item=>typeof item.encrypted_content==='string'));
+  assert.ok(!JSON.stringify(reasoning).includes('estimated_tokens'));
+  const replay=await request('/v1/responses',{...body,max_output_tokens:1025,
+    input:[...body.input,...response.value.output,{role:'user',content:'Continue RESPONSES_SIGNED_PROGRESS'}]});
+  assert.equal(replay.status,200,replay.text);
+  assert.equal(replay.value.status,'completed');
+  assert.equal(calls.length,before+2);
+  assert.deepEqual(providerBlocks(calls.at(-1)).filter(block=>block.type==='thinking'),[
+    {type:'thinking',thinking:'',signature:'synthetic-signed-empty'},
+    {type:'thinking',thinking:'Synthetic visible reasoning',signature:'synthetic-signed-visible'},
+  ],'Opening and importing replay capsules must preserve exact signed blocks without progress metadata');
+});
+
 test('Responses function calls roundtrip direct-caller defaults and nonalphabetical arguments through JSON and SSE',async()=>{
   const tools=[{type:'function',name:'caller_response_tool',description:'External caller executes this tool.',
     parameters:{type:'object',properties:{zeta:{type:'integer'},alpha:{type:'string'},nested:{type:'object',
@@ -336,6 +378,35 @@ test('Responses function calls roundtrip direct-caller defaults and nonalphabeti
   }
 });
 
+test('Responses SSE exposes the original conversion failure exactly once after later native events arrive',async()=>{
+  for(const marker of['REQUEST_UNSUPPORTED_METADATA_LATE','REQUEST_UNSUPPORTED_METADATA']){
+    const before=calls.length;
+    const late=marker.endsWith('_LATE');
+    const response=await request('/v1/responses',{model,store:false,stream:true,max_output_tokens:1024,
+      input:[{role:'user',content:marker}]});
+    assert.equal(response.status,late?200:502,response.text);
+    assert.equal(calls.length,before+1,'Conversion failure must not make another actual provider request');
+    if(late){
+      assert.equal(response.events.filter(event=>event.type==='response.failed').length,1,response.text);
+      assert.equal(response.events.at(-1)?.type,'response.failed','The client must receive a terminal failure before EOF');
+      assert.ok(!response.events.some(event=>['response.completed','response.incomplete'].includes(event.type)));
+      assert.ok(response.events.some(event=>event.type==='response.created'),
+        'The late metadata case must fail after ordinary SSE output has already started');
+      assert.equal(response.value.status,'failed');
+    }else{
+      assert.ok(response.contentType.startsWith('application/json'),'A preheader JSON error must have a JSON content type');
+      assert.equal(response.value.error.type,'api_error','A preheader failure must retain ordinary HTTP error semantics');
+    }
+    assert.equal(response.value.error.code,'unsupported_upstream_event');
+    const row=db.prepare('SELECT * FROM request_log ORDER BY id DESC LIMIT 1').get();
+    assert.equal(row.status,'error');
+    assert.equal(row.upstream_http_status,200);
+    assert.equal(row.usage_complete,0);
+    assert.equal(row.input_tokens,5);
+    assert.equal(row.output_tokens,9);
+  }
+});
+
 test('requested128000-token ceiling is observed on the actual CLI provider request',async()=>{
   const before=calls.length;
   const response=await request('/v1/messages',{model,max_tokens:128000,messages:[{role:'user',content:'Return CLI_HTTP_OK for the output-boundary fixture.'}]});
@@ -359,6 +430,107 @@ test('live low-to-high effort change reaches the same CLI conversation as an eff
   const actual=calls.at(-1).body;
   assert.equal(effectiveEffort(actual),'high',JSON.stringify({global:actual.output_config,
     perMessage:actual.messages.map(message=>({role:message.role,output_config:message.output_config}))}));
+});
+
+test('Claude Code empty system effort controls update one live SDK conversation without entering caller history',async()=>{
+  const before=calls.length;
+  const effectiveEffort=body=>body.messages.map(message=>message.output_config?.effort).filter(value=>value!==undefined).at(-1)
+    ?? body.output_config?.effort;
+  const body={model,max_tokens:1024,system:'NATIVE_EFFORT_CONTROL_SYSTEM',messages:[
+    {role:'user',content:'NATIVE_CONTROL_FIRST Return CLI_HTTP_OK.'},
+    {role:'system',content:[],output_config:{effort:'low'}},
+  ]};
+  const first=await request('/v1/messages',body);
+  assert.equal(first.status,200,first.text);
+  assert.equal(first.cliHistory,'live');
+  assert.ok(first.cliSession);
+  assert.equal(effectiveEffort(calls.at(-1).body),'low');
+  const second=await request('/v1/messages',{...body,messages:[...body.messages,
+    {role:'assistant',content:first.value.content},{role:'user',content:'NATIVE_CONTROL_SECOND Return CLI_HTTP_OK.'},
+    {role:'system',content:[],output_config:{effort:'high'}},
+  ]});
+  assert.equal(second.status,200,second.text);
+  assert.equal(second.cliSession,first.cliSession,'Empty native controls must not force a separate SDK conversation');
+  assert.equal(second.cliHistory,'live','Controls must be consistently omitted from continuation history matching');
+  assert.equal(effectiveEffort(calls.at(-1).body),'high');
+  const actual=calls.at(-1).body;
+  for(const marker of['NATIVE_CONTROL_FIRST','NATIVE_CONTROL_SECOND'])assert.equal(actual.messages
+    .filter(message=>message.role==='user').flatMap(message=>message.content)
+    .filter(block=>block.type==='text'&&block.text.includes(marker)).length,1);
+  assert.ok(actual.messages.some(message=>message.role==='assistant'
+    &&message.content.some(block=>block.type==='text'&&block.text==='CLI_HTTP_OK')));
+  const system=typeof actual.system==='string'?actual.system:actual.system.map(block=>block.text??'').join('\n');
+  assert.ok(system.includes('NATIVE_EFFORT_CONTROL_SYSTEM'),'The top-level caller system text must be preserved');
+  assert.equal(calls.length,before+2);
+});
+
+test('native environment system records preserve order, cache blocks and caller-relative lifetimes across live continuation and new-system import',async()=>{
+  const before=calls.length;
+  const userText='NATIVE_ENV_ORIGINAL_USER\n'+Array.from({length:80},(_,index)=>`Caller context line ${index}: preserve native message positions.`).join('\n');
+  const persistent={role:'system',clear_at:'never',output_config:{effort:'low'},content:[
+    {type:'text',text:'NATIVE_ENV_PERSISTENT\n<system-reminder>Caller-owned environment.</system-reminder>',
+      cache_control:{type:'ephemeral',ttl:'5m'}},
+    {type:'text',text:'NATIVE_ENV_PERSISTENT_SECOND_BLOCK'},
+  ]};
+  const ephemeral={role:'system',clear_at:'next_user_message',output_config:{effort:'high'},content:[
+    {type:'text',text:'NATIVE_ENV_THIS_TURN_ONLY',cache_control:{type:'ephemeral',ttl:'1h'}},
+  ]};
+  const body={model,max_tokens:1024,system:'NATIVE_ENV_TOP_LEVEL_SYSTEM',messages:[
+    {role:'user',content:userText},persistent,ephemeral,
+  ]};
+  const textMatches=(message,text,exact=false)=>(Array.isArray(message.content)?message.content:[{type:'text',text:message.content}])
+    .some(block=>block.type==='text'&&(exact?block.text===text:block.text?.includes(text)));
+  const locate=(actual,marker)=>actual.messages.findIndex(message=>message.role==='system'&&Array.isArray(message.content)
+    &&message.content.some(block=>block.type==='text'&&block.text.includes(marker)));
+  const verify=(actual,activeEphemeral=false)=>{
+    assert.ok(!JSON.stringify(actual).includes('[claude-proxy-system:'),'Private import carrier markers must never reach the provider');
+    const userIndex=actual.messages.findIndex(message=>message.role==='user'&&textMatches(message,userText,true));
+    const persistentIndex=locate(actual,'NATIVE_ENV_PERSISTENT\n');
+    const ephemeralIndex=locate(actual,'NATIVE_ENV_THIS_TURN_ONLY');
+    assert.ok(userIndex>=0&&persistentIndex>userIndex,'Original caller user/system order must survive SDK import');
+    assert.deepEqual(actual.messages[persistentIndex],persistent,'Persistent native record must retain exact content blocks and cache marker');
+    if(activeEphemeral){
+      assert.ok(ephemeralIndex>persistentIndex,'Active per-turn system content must retain its caller position');
+      assert.deepEqual(actual.messages[ephemeralIndex],{...ephemeral,clear_at:'never'},
+        'An active caller-relative record must retain exact text/cache blocks while SDK helper turns cannot expire it');
+    }else assert.equal(ephemeralIndex,-1,'A later real caller user turn must expire prior next_user_message text');
+    const effort=actual.messages.map(message=>message.output_config?.effort).filter(value=>value!==undefined).at(-1)
+      ??actual.output_config?.effort;
+    assert.equal(effort,'high','Expiring system text must not discard its separately applied effort setting');
+    const top=typeof actual.system==='string'?actual.system:actual.system.map(block=>block.text??'').join('\n');
+    assert.ok(top.includes('NATIVE_ENV_TOP_LEVEL_SYSTEM'));
+    assert.ok(!top.includes('NATIVE_ENV_PERSISTENT')&&!top.includes('NATIVE_ENV_THIS_TURN_ONLY'),
+      'Per-message system content must retain its original position rather than enter top-level system');
+    return {persistentIndex};
+  };
+  const first=await request('/v1/messages',body);
+  assert.equal(first.status,200,first.text);
+  assert.ok(first.cliSession);
+  verify(calls.at(-1).body,true);
+  const secondMessages=[...body.messages,{role:'assistant',content:first.value.content},
+    {role:'user',content:'NATIVE_ENV_SECOND_USER Return CLI_HTTP_OK.'}];
+  const second=await request('/v1/messages',{...body,messages:secondMessages});
+  assert.equal(second.status,200,second.text);
+  assert.equal(second.cliSession,first.cliSession,'Unchanged native system history must reuse the indexed SDK session');
+  const secondWire=calls.at(-1).body;
+  const retained=verify(secondWire);
+  const laterUser=secondWire.messages.findIndex(message=>message.role==='user'
+    &&textMatches(message,'NATIVE_ENV_SECOND_USER'));
+  assert.ok(laterUser>retained.persistentIndex,'Persistent system text must remain before the later real caller user');
+  const replacement={role:'system',clear_at:'never',output_config:{effort:'high'},content:[
+    {type:'text',text:'NATIVE_ENV_CHANGED_AFTER_ASSISTANT',cache_control:{type:'ephemeral',ttl:'5m'}},
+  ]};
+  const third=await request('/v1/messages',{...body,messages:[...secondMessages,{role:'assistant',content:second.value.content},
+    {role:'user',content:'NATIVE_ENV_THIRD_USER Return CLI_HTTP_OK.'},replacement]});
+  assert.equal(third.status,200,third.text);
+  assert.notEqual(third.cliSession,second.cliSession,'New native system content must import the complete updated history');
+  const thirdWire=calls.at(-1).body;
+  verify(thirdWire);
+  const replacementIndex=locate(thirdWire,'NATIVE_ENV_CHANGED_AFTER_ASSISTANT');
+  assert.deepEqual(thirdWire.messages[replacementIndex],replacement);
+  assert.ok(thirdWire.messages.findIndex(message=>message.role==='user'
+    &&textMatches(message,'NATIVE_ENV_THIRD_USER'))<replacementIndex);
+  assert.equal(calls.length,before+3,'System preservation must not create extra provider calls');
 });
 
 test('Claude Code thinking display updates reaches the provider with its public beta and preserves signed output',async()=>{
@@ -598,8 +770,8 @@ test('outer history counts each actual model call once and excludes conversation
       assert.equal(row.status,'error');assert.equal(row.usage_complete,0);
       assert.equal(row.input_tokens,null);assert.equal(row.output_tokens,null);
     }else{
-      assert.equal(row.status,calls[index].scenario==='hold'?'cancelled':'success');
-      assert.equal(row.usage_complete,calls[index].scenario==='hold'?0:1);
+      assert.equal(row.status,calls[index].scenario==='hold'?'cancelled':calls[index].scenario==='unsupported-metadata'?'error':'success');
+      assert.equal(row.usage_complete,['hold','unsupported-metadata'].includes(calls[index].scenario)?0:1);
       assert.equal(row.input_tokens,5);assert.equal(row.output_tokens,calls[index].scenario==='hold'?0:9);
       assert.equal(row.cache_read_input_tokens,11);assert.equal(row.cache_creation_input_tokens,3);
     }

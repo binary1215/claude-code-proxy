@@ -78,6 +78,27 @@ native IDs, including identical parallel calls and caller errors. A successfully
 imported continuation retires a matching old pending worker whose calls were
 already completed, so scope changes do not accumulate abandoned tool waits.
 
+Native per-message `role:system` text stays at its conversation position; it is
+not moved to top-level system or demoted to user content. The pinned importer
+uses system-role attachment carriers and the private HTTP forwarder restores
+the caller's original text blocks/cache markers and per-message effort. Carrier
+markers never belong in the provider prompt. New system turns import the full
+history; an unchanged system prefix can continue on its existing live worker.
+CLI compaction replaces its transcript and can discard imported attachment
+rows. After that replacement, the forwarder explicitly reattaches active caller
+system instructions after the new summary. Expired caller text stays omitted;
+the compacted prompt position and cache prefix can change.
+
+`clear_at:next_user_message` is resolved against **caller** user messages. The
+SDK adds its own resume/compaction helper users, so copying that field literally
+would expire an active caller instruction too early. The forwarder sends active
+text with `clear_at:never` for that call; after a later caller user it omits the
+expired text, retaining an independent output-config control where present.
+This is a semantic CLI adaptation, not a byte-preserving native transport.
+Expiring text changes the rendered cache prefix. `never`/default lifetimes and
+cache blocks remain unchanged; per-message tool additions/removals are outside
+this text-only system-message contract.
+
 ## Caching and compaction
 
 CLI owns cache markers and context rendering. Verify actual
@@ -118,6 +139,10 @@ summary, not a guarantee of perfect semantic retention.
   required beta in the private forwarder. The SDK's option union does not yet
   contain this value, so its normal display default is selected first; internal
   compaction keeps its own rendering policy.
+- Native `thinking_delta.estimated_tokens` progress is kept separately in
+  Responses `anthropic_metadata.thinking_progress`, including its cumulative
+  per-frame estimate. It is not reasoning text, a signature or billable usage;
+  provider `usage.output_tokens` remains authoritative.
 - Forced tool choice, serial-only tool choice, sampling/stop overrides and native
   server-tool types remain HTTP-backend capabilities.
 - Caller results support text and base64 images. CLI/MCP can resize, shorten or

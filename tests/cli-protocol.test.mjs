@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { canonical, cliMessages, cliSystem, cliTools, CliMessageAccumulator } from '../dist/services/cliProtocol.js';
+import { canonical, cliMessages, cliSystem, cliTools, cliInferenceRequest, CliMessageAccumulator } from '../dist/services/cliProtocol.js';
 
 test('CLI history matching ignores JSON key order while retaining text, block order and signatures',()=>{
   assert.equal(canonical({b:2,a:1}),canonical({a:1,b:2}));
@@ -22,6 +22,25 @@ test('CLI system and tool transport preserves original text/schema without grant
   assert.deepEqual(cliTools(tools),tools);
   assert.throws(()=>cliTools([{type:'web_search_20260209',name:'web_search'}]),{code:'unsupported_cli_tools'});
   assert.throws(()=>cliTools([...tools,...tools]),{code:'unsupported_cli_tools'});
+});
+
+test('native CLI empty system effort controls change policy without reclassifying instructions or user history',()=>{
+  const body={model:'fixture',system:'Original system.',output_config:{effort:'medium'},messages:[
+    {role:'user',content:'First user input.'},{role:'system',content:[],output_config:{effort:'low'}},
+    {role:'assistant',content:'First reply.'},{role:'user',content:'Follow up.'},
+    {role:'system',content:[],output_config:{effort:'high'}}]};
+  const snapshot=structuredClone(body),prepared=cliInferenceRequest(body);
+  assert.deepEqual(body,snapshot);assert.equal(prepared.system,body.system);
+  assert.deepEqual(prepared.output_config,{effort:'high'});
+  assert.deepEqual(prepared.messages,[body.messages[0],body.messages[2],body.messages[3]]);
+  const reset=cliInferenceRequest({...body,messages:[...body.messages,{role:'system',output_config:{effort:null}}]});
+  assert.deepEqual(reset.output_config,{});
+  const system={role:'system',content:[{type:'text',text:'Late genuine instruction.',cache_control:{type:'ephemeral'}}],clear_at:'next_user_message',output_config:{effort:'low'}};
+  const native=cliInferenceRequest({...body,messages:[body.messages[0],system]});
+  assert.deepEqual(native.messages,[body.messages[0],system]);
+  assert.deepEqual(cliMessages(native.messages)[1],system);
+  assert.deepEqual(cliMessages([{role:'system',content:'Exact string.'}]),[{role:'system',content:'Exact string.'}]);
+  assert.throws(()=>cliInferenceRequest({...body,messages:[{role:'system',content:[{type:'tool_addition'}]},body.messages[0]]}),{code:'unsupported_cli_system_message'});
 });
 
 test('CLI history equates only literal direct-tool and empty-citation native defaults',()=>{

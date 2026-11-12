@@ -28,7 +28,7 @@ export async function writeCliBytes(res: Response, bytes: Buffer, signal?: Abort
   });
 }
 
-/** A state-owning optional backend. The default native HTTP path does not enter here. */
+/** State-owning CLI inference behind the Messages and Responses facades. */
 export async function relayCli(req: Request, res: Response, nativeBody: JsonObject,
   responseOptions?: ResponseTranslationOptions,
   configuredCredential?: { token: string; kind: "oauth" | "api_key"; stateIdentity?: string }): Promise<void> {
@@ -101,10 +101,13 @@ export async function relayCli(req: Request, res: Response, nativeBody: JsonObje
     if (!res.destroyed) {
       if (!res.headersSent) {
         if (failure) res.status(failure.status).type(failure.contentType).send(failure.body);
+        else if (terminal?.type === "response.failed") {
+          res.status(502).type("application/json").json({ error: { type: "api_error", ...terminal.response.error } });
+        }
         else {
           const problem = error instanceof CliBackendError || error instanceof ResponsesError ? error :
             new CliBackendError("cli_inference_failed", "The CLI inference request failed.", 502);
-          res.status(timedOut ? 504 : cancelled ? 499 : problem.status).json({ type: "error", error: {
+          res.status(timedOut ? 504 : cancelled ? 499 : problem.status).type("application/json").json({ type: "error", error: {
             type: timedOut ? "api_error" : problem.status >= 500 ? "api_error" : "invalid_request_error",
             code: timedOut ? "cli_timeout" : problem.code, message: timedOut ? "The CLI request timed out." : problem.message,
           } });
@@ -115,7 +118,10 @@ export async function relayCli(req: Request, res: Response, nativeBody: JsonObje
         res.destroy();
       } else {
         try {
-          const failed = converter?.fail(timedOut ? "upstream_timeout" : cancelled ? "cancelled" : "upstream_error", "") ??
+          // A converter failure may already be held while the next native
+          // frame throws. fail() is then idempotently empty; deliver the held
+          // failure so clients receive its reason instead of a truncated SSE.
+          const failed = terminal?.type === "response.failed" ? [terminal] : converter?.fail(timedOut ? "upstream_timeout" : cancelled ? "cancelled" : "upstream_error", "") ??
             [{ type: "error", error: { type: "api_error", message: "The CLI request did not complete." } }];
           for (const event of failed) await writeCliBytes(res, eventBytes(event), controller.signal);
           res.end();

@@ -10,16 +10,27 @@ export const HISTORY_CLI_VERSION = '2.1.322';
  * replacing signed thinking. Completed calls must be loaded WITH their results:
  * resuming a dangling call makes the CLI synthesize an interrupted-tool result.
  */
-export function nativeHistoryEntries(history, { model, cwd, sessionId = randomUUID(), timestamp = new Date().toISOString() }) {
+export function nativeHistoryEntries(history, { model, cwd, systemCarriers = [], sessionId = randomUUID(), timestamp = new Date().toISOString() }) {
   if (!Array.isArray(history) || !history.length || typeof model !== 'string' || !model || typeof cwd !== 'string' || !cwd) {
     throw new WorkerError('invalid_history');
   }
+  if (!Array.isArray(systemCarriers)) throw new WorkerError('invalid_history');
+  const carriers = new Map();
+  const markers = new Set();
+  for (const carrier of systemCarriers) {
+    if (!isRecord(carrier) || !Number.isSafeInteger(carrier.index) || carrier.index < 0 || carrier.index >= history.length
+        || history[carrier.index]?.role !== 'system' || typeof carrier.marker !== 'string' || !carrier.marker
+        || carrier.marker.includes('\n') || carriers.has(carrier.index) || markers.has(carrier.marker)) throw new WorkerError('invalid_history');
+    carriers.set(carrier.index, carrier.marker);
+    markers.add(carrier.marker);
+  }
   const pending = new Set();
   let previous = null;
-  const entries = history.map(source => {
-    if (!isRecord(source) || !['user', 'assistant'].includes(source.role)) throw new WorkerError('invalid_history');
+  const entries = history.map((source, index) => {
+    if (!isRecord(source) || !['user', 'assistant', 'system'].includes(source.role)) throw new WorkerError('invalid_history');
     const content = typeof source.content === 'string' ? [{ type: 'text', text: source.content }] : structuredClone(source.content);
     if (!Array.isArray(content) || content.some(block => !isRecord(block) || typeof block.type !== 'string')) throw new WorkerError('invalid_history');
+    if (source.role === 'system' && (!carriers.has(index) || content.some(block => block.type !== 'text' || typeof block.text !== 'string'))) throw new WorkerError('invalid_history');
     const mapped = content.map(block => {
       if (block.type === 'tool_use') {
         if (source.role !== 'assistant' || typeof block.id !== 'string' || !block.id || pending.has(block.id)
@@ -45,10 +56,22 @@ export function nativeHistoryEntries(history, { model, cwd, sessionId = randomUU
       cwd, version: HISTORY_CLI_VERSION, isSidechain: false, userType: 'external',
       requestedModel: model, message,
     };
+    if (source.role === 'system') {
+      // api_system transcript rows are discarded on resume in this pinned CLI.
+      // Its persisted rendered attachment retains role/order. The trusted
+      // private forwarder restores the complete caller record from this marker;
+      // cache controls, effort and caller-relative lifetime are never inferred
+      // from the carrier. Include source text for genuine CLI token estimates.
+      entry.type = 'attachment';
+      delete entry.message;
+      entry.attachment = { type: 'caller_system' };
+      entry.rendered = [{ content: `${carriers.get(index)}\n${content.map(block => block.text).join('\n\n')}` }];
+      entry.renderedRole = 'system';
+    }
     previous = uuid;
     return entry;
   });
-  if (pending.size || entries.at(-1).type !== 'user') throw new WorkerError('invalid_history');
+  if (pending.size || !['user', 'system'].includes(history.at(-1).role)) throw new WorkerError('invalid_history');
   return { sessionId, entries };
 }
 

@@ -43,6 +43,20 @@ delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
 const {acquireCliSession,closeCliSessions}=await import('../../dist/services/cliSessions.js');
 const {db}=await import('../../dist/db/connection.js');
 const credential={kind:'api_key',token:process.env.ANTHROPIC_API_KEY};
+function callerSystems(label){
+  return [
+    {role:'system',content:[{type:'text',text:`${label}_PERSISTENT_SYSTEM`,cache_control:{type:'ephemeral',ttl:'5m'}},
+      {type:'text',text:`${label}_SECOND_SYSTEM_BLOCK`}],clear_at:'never',output_config:{effort:'low'}},
+    {role:'system',content:[{type:'text',text:`${label}_CURRENT_CALLER_ONLY`,cache_control:{type:'ephemeral',ttl:'1h'}}],clear_at:'next_user_message'},
+  ];
+}
+function assertSystemContext(body,systems,{expired=false}={}){
+  const persistent=body.messages.filter(message=>message.role==='system'&&JSON.stringify(message.content).includes(systems[0].content[0].text));
+  assert.deepEqual(persistent,[systems[0]],'Persistent caller system role, complete content and cache controls must survive genuine SDK compaction');
+  const transient=body.messages.filter(message=>JSON.stringify(message.content).includes(systems[1].content[0].text));
+  assert.deepEqual(transient,expired?[]:[{...systems[1],clear_at:'never'}], 'Only a real later caller user expires next_user_message text');
+  assert.equal(JSON.stringify(body).includes('[claude-proxy-system:'),false,'Internal system carrier markers must never reach the provider');
+}
 async function turn(body){
   const lease=await acquireCliSession(body,'synthetic-compact-principal',credential);
   const events=[];for await(const event of lease.session.events())events.push(event);
@@ -55,11 +69,13 @@ after(async()=>{
   rmSync(target,{recursive:true,force:true,maxRetries:5,retryDelay:200});
 });
 test('genuine CLI compact boundary accounts all internal calls and its live conversation continues',async()=>{
+  const systems=callerSystems('MANUAL');
   const body={model:'claude-haiku-5-5',max_tokens:2048,output_config:{effort:'low'},messages:[{role:'user',content:
-    'Remember TARGET_OPAL_482. '+Array.from({length:1800},(_,i)=>`context${i} synthetic-note`).join(' ')}]};
+    'Remember TARGET_OPAL_482. '+Array.from({length:1800},(_,i)=>`context${i} synthetic-note`).join(' ')},...systems]};
   const first=await turn(body);
   assert.equal(first.message.content[0].text,'BEFORE_COMPACT_OK');
   assert.equal(calls.length,1);
+  assertSystemContext(calls.at(-1).body,systems);
   phase='compact';const before=calls.length;
   const compact=await first.session.compact('Retain TARGET_OPAL_482 and summarize the completed conversation.');
   const actual=calls.length-before;
@@ -70,6 +86,7 @@ test('genuine CLI compact boundary accounts all internal calls and its live conv
   assert.equal(compact.usage.cacheReadInputTokens,actual*11);assert.equal(compact.usage.cacheCreationInputTokens,actual*3);
   assert.equal(compact.usage.usageComplete,true);
   assert.ok(calls.slice(before).every(call=>call.body.model===body.model));
+  calls.slice(before).forEach(call=>assertSystemContext(call.body,systems));
   phase='after';
   const next=await turn({...body,messages:[...body.messages,{role:'assistant',content:first.message.content},
     {role:'user',content:'Continue from the retained target.'}]});
@@ -78,14 +95,17 @@ test('genuine CLI compact boundary accounts all internal calls and its live conv
   assert.ok(JSON.stringify(calls.at(-1).body.messages).includes('The retained target is TARGET_OPAL_482'));
   assert.equal(next.message.usage.input_tokens,5,'Prior compaction counters must not be charged again');
   assert.equal(next.message.usage.output_tokens,9);
+  assertSystemContext(calls.at(-1).body,systems,{expired:true});
 });
 
 test('automatic CLI compaction preserves wire context usage while accounting its internal model calls',async(t)=>{
   phase='overflow';
+  const systems=callerSystems('AUTO');
   const body={model:'claude-haiku-5-5',max_tokens:2048,output_config:{effort:'low'},messages:[{role:'user',content:
-    'AUTO_COMPACT_USAGE_FIXTURE: Remember TARGET_OPAL_482 and return BEFORE_COMPACT_OK. '+('synthetic context '.repeat(50000))}]};
+    'AUTO_COMPACT_USAGE_FIXTURE: Remember TARGET_OPAL_482 and return BEFORE_COMPACT_OK. '+('synthetic context '.repeat(50000))},...systems]};
   const first=await turn(body);activeSession=first.session;
   assert.equal(first.message.usage.input_tokens,950000);
+  assertSystemContext(calls.at(-1).body,systems);
   // The first oversized input and the most recent completed exchange are
   // protected. An attempted auto-compact can legitimately emit failed status
   // without a boundary when no older complete round can be summarized yet.
@@ -107,5 +127,6 @@ test('automatic CLI compaction preserves wire context usage while accounting its
   assert.equal(next.session.turnUsage.inputTokens,actual.length*5,'Admin accounting includes every actual internal call');
   assert.equal(next.session.turnUsage.outputTokens,actual.length*9);
   assert.equal(next.session.turnUsage.cacheReadInputTokens,actual.length*11);
+  actual.forEach(call=>assertSystemContext(call.body,systems,{expired:true}));
   t.diagnostic(`Observed auto boundary: ${actual.filter(call=>call.compacting).length} compaction requests + 1 inference; wire input 5, admin turn input ${next.session.turnUsage.inputTokens}.`);
 });

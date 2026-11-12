@@ -28,6 +28,8 @@ export interface CliUpstreamTurn {
   inferenceCalls?: number;
   requests?: CliUpstreamRequest[];
   thinkingDisplay?: "updates";
+  nativeSystems?: { index: number; marker: string; message: Record<string, unknown>; wireMessage?: Record<string, unknown> | null }[];
+  nativeSystemReplay?: boolean;
 }
 
 /** Sum actual provider calls, including CLI compaction, without double-counting
@@ -79,6 +81,52 @@ export async function registerCliUpstream(turn: CliUpstreamTurn): Promise<{ base
           return;
         }
         if (messages) { owner.calls++; if (!owner.compacting) owner.inferenceCalls = (owner.inferenceCalls ?? 0) + 1; }
+        // The pinned CLI resume transport renders caller-owned system text via
+        // attachment rows but cannot retain their native cache/lifetime fields.
+        // Restore ONLY our exact role:system carrier, in place, before any model
+        // call (including compaction). Caller-relative lifetimes have already
+        // been resolved so the CLI's own helper users cannot expire them early.
+        if (messages && owner.nativeSystems?.length && Array.isArray(body?.messages)) {
+          let restored = false;
+          const seen = new Set<string>();
+          body.messages = body.messages.flatMap((message: Record<string, any>) => {
+            if (message.role !== "system") return [message];
+            const text = typeof message.content === "string" ? message.content : Array.isArray(message.content) ?
+              message.content.filter((block: Record<string, any>) => block?.type === "text").map((block: Record<string, any>) => block.text).join("\n") : "";
+            const mappings = owner.nativeSystems!.map(value => ({ value, offset: text.indexOf(value.marker) }))
+              .filter(value => value.offset >= 0).sort((a, b) => a.offset - b.offset);
+            if (!mappings.length) return [message];
+            restored = true;
+            // Adjacent persisted attachments are coalesced into one system
+            // string by the pinned CLI. Expand every owned carrier in order,
+            // keeping any unrelated CLI system text at its original position.
+            const result: Record<string, unknown>[] = [];
+            let cursor = 0;
+            for (const { value, offset } of mappings) {
+              seen.add(value.marker);
+              const source = value.message.content;
+              const sourceText = typeof source === "string" ? source : Array.isArray(source) ? source.map(block => block.text).join("\n\n") : "";
+              const carrier = value.marker + "\n" + sourceText;
+              if (offset < cursor || !text.startsWith(carrier, offset)) throw new Error("invalid_cli_system_carrier");
+              const prefix = text.slice(cursor, offset);
+              if (prefix.trim()) result.push({ ...message, content: prefix });
+              const native = value.wireMessage === undefined ? value.message : value.wireMessage;
+              if (native !== null) result.push(native);
+              cursor = offset + carrier.length;
+            }
+            const suffix = text.slice(cursor);
+            if (suffix.trim()) result.push({ ...message, content: suffix });
+            return result;
+          });
+          // CLI compact replacement can remove imported attachment rows.
+          // Reattach active caller instructions after the new summary; expired
+          // caller text is still excluded by the current wireMessage policy.
+          if (owner.nativeSystemReplay) for (const mapping of owner.nativeSystems) {
+            const native = mapping.wireMessage === undefined ? mapping.message : mapping.wireMessage;
+            if (!seen.has(mapping.marker) && native !== null) { body.messages.push(native); restored = true; }
+          }
+          if (restored) bytes = Buffer.from(JSON.stringify(body));
+        }
         // The SDK's option union predates the public updates display. Complete
         // this explicit caller option on the genuine CLI's inference request;
         // internal compaction retains its own thinking/rendering policy.

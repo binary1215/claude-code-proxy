@@ -9,7 +9,7 @@ services:
       - PORT=3456
       - DATABASE_PATH=/app/data/proxy.db
       - CLAUDE_INFERENCE_BACKEND=${CLAUDE_INFERENCE_BACKEND:-cli}
-      - CLAUDE_CLI_RUNTIME_DIR=/app/data/cli-runtime
+      - CLAUDE_CLI_RUNTIME_DIR=/tmp/claude-proxy-cli
       - CLAUDE_CLI_SESSION_TTL_SECONDS=${CLAUDE_CLI_SESSION_TTL_SECONDS:-3600}
       - CLAUDE_CLI_MAX_SESSIONS=${CLAUDE_CLI_MAX_SESSIONS:-8}
       - UPSTREAM_AUTH_SOURCE=${UPSTREAM_AUTH_SOURCE:-configured}
@@ -29,6 +29,8 @@ services:
       - OLLAMA_URL=http://ollama:11434
     volumes:
       - app-data:/app/data
+    tmpfs:
+      - /tmp:size=256m,mode=1777
     expose:
       - "3456"
     restart: unless-stopped

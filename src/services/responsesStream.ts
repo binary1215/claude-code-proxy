@@ -344,8 +344,24 @@ export class ResponsesStream {
     if (state.bytes > BLOCK_LIMIT) problem("upstream_limit_exceeded");
     const base = { item_id: state.item.id, output_index: state.index };
     if (state.native.type === "thinking" && delta.type === "thinking_delta") {
-      keys(delta, ["type", "thinking"]);
-      if (typeof delta.thinking !== "string" || state.signatureStarted) problem("invalid_upstream_event");
+      keys(delta, ["type", "thinking", "estimated_tokens"]);
+      if (typeof delta.thinking !== "string" || state.signatureStarted && delta.thinking.length) problem("invalid_upstream_event");
+      if (Object.hasOwn(delta, "estimated_tokens")) {
+        const estimate = delta.estimated_tokens;
+        if (estimate !== null && (typeof estimate !== "number" || !Number.isFinite(estimate) || estimate < 0)) problem("invalid_upstream_event");
+        // BetaThinkingDelta progress is observational, not billable usage or
+        // signed reasoning content. Preserve it separately, including null reset.
+        const metadata = this.value.anthropic_metadata ?? {};
+        const progress: JsonObject[] = metadata.thinking_progress ?? [];
+        let current = progress.find(value => value.output_index === state.index);
+        if (!current) { current = { output_index: state.index, estimated_tokens: null, cumulative_estimated_tokens: null }; progress.push(current); }
+        current.estimated_tokens = estimate;
+        if (estimate !== null) {
+          const sum = (current.cumulative_estimated_tokens ?? 0) + estimate;
+          current.cumulative_estimated_tokens = Number.isFinite(sum) ? sum : null;
+        }
+        this.value.anthropic_metadata = { ...metadata, thinking_progress: progress };
+      }
       state.native.thinking += delta.thinking;
       return delta.thinking.length ? this.thinking(delta.thinking) : [];
     }

@@ -130,7 +130,7 @@ export class CliWorker {
     validateStart(start);
     const registry = createToolRegistry(start.tools);
     const env = sdkEnvironment(start);
-    const imported = start.history === undefined ? undefined : nativeHistoryEntries(start.history, { model: start.model, cwd: start.cwd });
+    const imported = start.history === undefined ? undefined : nativeHistoryEntries(start.history, { model: start.model, cwd: start.cwd, systemCarriers: start.systemCarriers });
     this.broker = new ToolBroker(registry, message => this.emitUnlessClosed(message), error => this.fail(error));
     this.transformer = new NativeEventTransformer(registry, this.broker);
     this.mcpServer = createCallerMcpServer(registry, this.broker);
