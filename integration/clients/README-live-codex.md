@@ -147,6 +147,17 @@ Neither changes `functional_pass`. Per-request `sse_failure_codes` contains
 only known adapter error codes or the fixed `unrecognized_sse_failure` label;
 free-form provider errors remain in memory.
 
+Managed LiteLLM Responses may expose only `input_tokens_details.cached_tokens`
+and `cache_write_tokens`. Those counters are also observed, with native counters
+taking precedence when both forms exist; aliases are never added twice.
+The report records the actual gateway Responses path and distinguishes the
+managed `/v1/responses` conversion from configured pass-through paths.
+Reasoning-state presence is reported separately for `output_item.done` and the
+final `response.completed` snapshot. The legacy `encrypted_content_present`
+field refers to done items only; a false value does not establish absence from
+the final snapshot. Identity/content comparison remains separate from functional
+tool/compaction/continuation results.
+
 ## Retention and bounds
 
 Observer bodies, SSE, signatures, opaque capsules, raw RPC events, exception

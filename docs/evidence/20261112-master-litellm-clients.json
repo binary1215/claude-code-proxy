@@ -1,0 +1,367 @@
+{
+  "date": "2026-11-12",
+  "default_branch": "master",
+  "merged_commit": "c51430cee258116a83180f775b92c11c81dd002a",
+  "operating_source": "fc80fa3fbfa5e274806647a214afc24b8866792e",
+  "operating_image": "sha256:34b5f1b91a24f1d2148b4d52ec37550eccf100e7567fd968931502e14a88b870",
+  "gateway_version": "1.109.0",
+  "model_alias": "claude-haiku-5-5-han",
+  "configured_native_model": "claude-haiku-5-5",
+  "routes": {
+    "claude_code": "managed /v1/messages",
+    "codex": "managed /v1/responses"
+  },
+  "changes": {
+    "litellm_source": false,
+    "gateway_settings": false,
+    "installed_clients": false,
+    "new_keys": 0,
+    "existing_credential_handling": "process memory and child stdin/environment only; no credential files"
+  },
+  "claude_code": {
+    "functional_pass": true,
+    "qualification_pass": true,
+    "actions": [
+      {
+        "action": "initial_client_tool",
+        "success": true,
+        "native_replies": 2,
+        "native_completed": true,
+        "usage": {
+          "input_tokens": 2,
+          "output_tokens": 120,
+          "cache_creation_input_tokens": 447,
+          "cache_read_input_tokens": 6056
+        }
+      },
+      {
+        "action": "warm_cache",
+        "success": true,
+        "native_replies": 1,
+        "native_completed": true,
+        "usage": {
+          "input_tokens": 2,
+          "output_tokens": 84,
+          "cache_creation_input_tokens": 814,
+          "cache_read_input_tokens": 5741
+        }
+      },
+      {
+        "action": "client_manual_compact",
+        "success": true,
+        "local_command_compact": true
+      },
+      {
+        "action": "retained_tool_result",
+        "success": true,
+        "native_replies": 1,
+        "native_completed": true,
+        "usage": {
+          "input_tokens": 2,
+          "output_tokens": 124,
+          "cache_creation_input_tokens": 2034,
+          "cache_read_input_tokens": 2364
+        }
+      },
+      {
+        "action": "after_compaction_cache",
+        "success": true,
+        "native_replies": 1,
+        "native_completed": true,
+        "usage": {
+          "input_tokens": 2,
+          "output_tokens": 154,
+          "cache_creation_input_tokens": 675,
+          "cache_read_input_tokens": 3766
+        }
+      }
+    ],
+    "compaction": {
+      "boundaries": [
+        {
+          "trigger": "manual",
+          "pre_tokens": 6645,
+          "post_tokens": 1010,
+          "duration_ms": 7808,
+          "cumulative_dropped_tokens": 5635
+        }
+      ],
+      "pre": [
+        {
+          "trigger": "manual"
+        }
+      ],
+      "post": [
+        {
+          "trigger": "manual",
+          "retained_target": true
+        }
+      ]
+    },
+    "checks": {
+      "client_owned_tool": true,
+      "initial_marker": true,
+      "warm_cache_read": true,
+      "client_manual_compaction": true,
+      "retained_tool_result": true,
+      "after_compaction_cache_read": true,
+      "thinking_emitted": true,
+      "signed_thinking_replayed": true,
+      "actual_returned_blocks_preserved": true,
+      "configured_model_ids_only": true,
+      "no_retry_or_fallback": true
+    },
+    "alias_mapping": {
+      "requested": "claude-haiku-5-5-han",
+      "configured_canonical": "claude-haiku-5-5",
+      "accepted_sse_models": [
+        "claude-haiku-5-5-han",
+        "claude-haiku-5-5"
+      ],
+      "configuration_source": "LiteLLM owner confirmed static Han route; no fallback",
+      "observation_scope": "client response model may be public alias; gateway-to-Han model is not visible to this observer",
+      "public_alias_seen": true,
+      "canonical_id_seen": false
+    },
+    "observer": {
+      "requests": 6,
+      "statuses": [
+        {
+          "request": 1,
+          "action": "initial_client_tool",
+          "status": 200
+        },
+        {
+          "request": 2,
+          "action": "initial_client_tool",
+          "status": 200
+        },
+        {
+          "request": 3,
+          "action": "warm_cache",
+          "status": 200
+        },
+        {
+          "request": 4,
+          "action": "client_manual_compact",
+          "status": 200
+        },
+        {
+          "request": 5,
+          "action": "retained_tool_result",
+          "status": 200
+        },
+        {
+          "request": 6,
+          "action": "after_compaction_cache",
+          "status": 200
+        }
+      ],
+      "models": [
+        "claude-haiku-5-5-han"
+      ],
+      "returned_thinking": 5,
+      "returned_signed_thinking": 5,
+      "returned_redacted": 0,
+      "replayed_thinking": 5,
+      "replayed_signed_thinking": 5,
+      "replayed_redacted": 0,
+      "signature_content_mismatches": 0,
+      "unrecognized_replayed_blocks": 0
+    }
+  },
+  "codex": {
+    "functional_pass": true,
+    "endpoint_request_attempts": 5,
+    "actual_dot7_gateway_tested": true,
+    "gateway_responses_path": "/v1/responses",
+    "gateway_managed_conversion_tested": true,
+    "local_compaction_pass": true,
+    "post_compaction_followups_pass": true,
+    "observed_reasoning_preserved": false,
+    "post_compaction_reasoning_replay_observed": false,
+    "reasoning_check_count": 1,
+    "observed_no_retries": true,
+    "no_hidden_retries": null,
+    "installed_client_modified": false,
+    "phases": {
+      "initial": {
+        "functional_pass": true,
+        "terminal_status": "completed",
+        "requests": [
+          {
+            "http_status": 200,
+            "response_completed_count": 1,
+            "reasoning_count": 0,
+            "reasoning_present": false,
+            "reasoning_done_completed_exact": null,
+            "encrypted_content_present": false,
+            "usage": {
+              "native_input_tokens": null,
+              "native_output_tokens": null,
+              "cache_creation_input_tokens": null,
+              "cache_read_input_tokens": null,
+              "ephemeral_5m_input_tokens": null,
+              "ephemeral_1h_input_tokens": null,
+              "input_tokens": 12707,
+              "output_tokens": 71,
+              "total_tokens": 12778,
+              "cached_tokens": 0,
+              "cache_write_tokens": 12705
+            }
+          },
+          {
+            "http_status": 200,
+            "response_completed_count": 1,
+            "reasoning_count": 0,
+            "reasoning_present": false,
+            "reasoning_done_completed_exact": null,
+            "encrypted_content_present": false,
+            "usage": {
+              "native_input_tokens": null,
+              "native_output_tokens": null,
+              "cache_creation_input_tokens": null,
+              "cache_read_input_tokens": null,
+              "ephemeral_5m_input_tokens": null,
+              "ephemeral_1h_input_tokens": null,
+              "input_tokens": 12836,
+              "output_tokens": 20,
+              "total_tokens": 12856,
+              "cached_tokens": 12705,
+              "cache_write_tokens": 129
+            }
+          }
+        ]
+      },
+      "compact": {
+        "functional_pass": true,
+        "terminal_status": "completed",
+        "requests": [
+          {
+            "http_status": 200,
+            "response_completed_count": 1,
+            "reasoning_count": 1,
+            "reasoning_present": true,
+            "reasoning_done_completed_exact": false,
+            "encrypted_content_present": false,
+            "usage": {
+              "native_input_tokens": null,
+              "native_output_tokens": null,
+              "cache_creation_input_tokens": null,
+              "cache_read_input_tokens": null,
+              "ephemeral_5m_input_tokens": null,
+              "ephemeral_1h_input_tokens": null,
+              "input_tokens": 11048,
+              "output_tokens": 848,
+              "total_tokens": 11896,
+              "cached_tokens": 0,
+              "cache_write_tokens": 11046
+            }
+          }
+        ]
+      },
+      "followup": {
+        "functional_pass": true,
+        "terminal_status": "completed",
+        "requests": [
+          {
+            "http_status": 200,
+            "response_completed_count": 1,
+            "reasoning_count": 0,
+            "reasoning_present": false,
+            "reasoning_done_completed_exact": null,
+            "encrypted_content_present": false,
+            "usage": {
+              "native_input_tokens": null,
+              "native_output_tokens": null,
+              "cache_creation_input_tokens": null,
+              "cache_read_input_tokens": null,
+              "ephemeral_5m_input_tokens": null,
+              "ephemeral_1h_input_tokens": null,
+              "input_tokens": 13510,
+              "output_tokens": 23,
+              "total_tokens": 13533,
+              "cached_tokens": 2321,
+              "cache_write_tokens": 11187
+            }
+          }
+        ]
+      },
+      "followup_second": {
+        "functional_pass": true,
+        "terminal_status": "completed",
+        "requests": [
+          {
+            "http_status": 200,
+            "response_completed_count": 1,
+            "reasoning_count": 0,
+            "reasoning_present": false,
+            "reasoning_done_completed_exact": null,
+            "encrypted_content_present": false,
+            "usage": {
+              "native_input_tokens": null,
+              "native_output_tokens": null,
+              "cache_creation_input_tokens": null,
+              "cache_read_input_tokens": null,
+              "ephemeral_5m_input_tokens": null,
+              "ephemeral_1h_input_tokens": null,
+              "input_tokens": 13599,
+              "output_tokens": 28,
+              "total_tokens": 13627,
+              "cached_tokens": 12341,
+              "cache_write_tokens": 1254
+            }
+          }
+        ]
+      }
+    },
+    "cache_projection_from_original_usage": {
+      "cache_write_observed": true,
+      "cache_hit_observed": true,
+      "cache_write_usage_response_count": 5,
+      "cache_read_usage_response_count": 5
+    },
+    "original_cache_hit_observed": null,
+    "original_cache_write_observed": null
+  },
+  "reasoning_stream_gap": {
+    "observed_phase": "Codex compact",
+    "done_completed_capsules_equal": false,
+    "done_encrypted_content_present": false,
+    "completed_encrypted_content_present": "not separately retained by original observer",
+    "installed_source_observation": {
+      "file": "litellm/responses/litellm_completion_transformation/streaming_iterator.py",
+      "done_constructor_line": 1081,
+      "done_fields": [
+        "id",
+        "type",
+        "summary"
+      ],
+      "final_constructor": "transformation.py:_extract_reasoning_output_items encodes thinking_blocks; final snapshot aligns IDs separately"
+    },
+    "judgment": "The installed managed streaming path can omit signed state from item.done while assembling final state separately. The actual snapshot has not been re-inspected; complete absence of final signed state is not established.",
+    "gateway_or_proxy_fix_deployed": false
+  },
+  "earlier_native_attempt": {
+    "requests": 1,
+    "http_statuses": [
+      {
+        "request": 1,
+        "action": "initial_client_tool",
+        "status": 200
+      }
+    ],
+    "error": "unexpected_model",
+    "interpretation": "Harness initially rejected the legitimate public -han alias. Allowed alias/canonical mapping was corrected; no service response was rewritten."
+  },
+  "total_external_requests": 12,
+  "qualification_scope": {
+    "observation": "client-to-gateway wire; gateway-to-Han raw wire not observed",
+    "tools": "Codex no-I/O get_goal and native client-owned synthetic MCP fixture; no repository editing",
+    "compaction": "real client manual/local compaction; no real automatic threshold crossing",
+    "codex_signed_thinking_replay_qualified": false,
+    "native_signed_thinking_replay_qualified": true,
+    "consumer_container_removed": true,
+    "temporary_existing-key_controllers_exited": true
+  }
+}

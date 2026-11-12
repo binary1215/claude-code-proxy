@@ -37,6 +37,8 @@ class LiveCodexObserverTests(unittest.TestCase):
                          ('http', '192.168.0.64', 13459, '/v1/responses'))
         self.assertEqual(gateway_target('http://192.168.0.7:4000/claude-responses/v1/'),
                          ('http', '192.168.0.7', 4000, '/claude-responses/v1/responses'))
+        self.assertEqual(gateway_target('http://192.168.0.7:4000/v1'),
+                         ('http', '192.168.0.7', 4000, '/v1/responses'))
         for url in ('http://user:secret@192.168.0.64:13459/v1',
                     'http://192.168.0.64:13459/v1?secret=not-allowed',
                     'http://192.168.0.64:13459/v1#fragment',
@@ -78,6 +80,21 @@ class LiveCodexObserverTests(unittest.TestCase):
         self.assertIs(both['cache_hit_observed'], True)
         self.assertEqual(both['cache_write_usage_response_count'], 2)
         self.assertEqual(both['cache_read_usage_response_count'], 2)
+
+    def test_managed_responses_cache_counters_are_observed_without_native_extensions(self):
+        result = cache_observations([{'cached_tokens': 12705, 'cache_write_tokens': 129},
+                                     {'cached_tokens': 0, 'cache_write_tokens': 11046}])
+        self.assertEqual(result, {'cache_write_observed': True, 'cache_hit_observed': True,
+                                 'cache_write_usage_response_count': 2, 'cache_read_usage_response_count': 2})
+
+    def test_native_and_standard_cache_aliases_are_not_double_counted(self):
+        result = cache_observations([{'cache_read_input_tokens': 0, 'cached_tokens': 12,
+                                     'cache_creation_input_tokens': 7, 'cache_write_tokens': 7}])
+        self.assertFalse(result['cache_hit_observed'])
+        self.assertTrue(result['cache_write_observed'])
+        self.assertEqual(result['cache_read_usage_response_count'], 1)
+        self.assertEqual(result['cache_write_usage_response_count'], 1)
+        self.assertIsNone(cache_observations([{'cached_tokens': -1}])['cache_hit_observed'])
 
     def test_missing_cache_fields_stay_unknown(self):
         unknown = {'cache_write_observed': None, 'cache_hit_observed': None,
@@ -131,6 +148,21 @@ class LiveCodexObserverTests(unittest.TestCase):
             {'type': 'error', 'error': 'PRIVATE_SENTINEL'},
         ]), ['unrecognized_sse_failure'] * 3)
 
+    def test_reasoning_done_without_state_does_not_claim_completed_snapshot_lacks_state(self):
+        item = {'id': 'rs_fixture', 'type': 'reasoning', 'summary': []}
+        stream = [{'type': 'response.output_item.done', 'item': item},
+                  {'type': 'response.completed', 'response': {'output': [
+                      {**item, 'encrypted_content': 'PRIVATE_SIGNED_STATE_SENTINEL'}]}}]
+        record = {'wire': ''.join('data: ' + json.dumps(event) + '\n\n' for event in stream).encode(),
+                  'status': 200, 'finished': True, 'auth_exact': True,
+                  'cache_header_exact': True, 'phase': 'compact'}
+        summary = record_summary(record)
+        self.assertFalse(summary['encrypted_content_present'])
+        self.assertFalse(summary['reasoning_done_encrypted_content_present'])
+        self.assertTrue(summary['reasoning_completed_encrypted_content_present'])
+        self.assertFalse(summary['reasoning_done_completed_exact'])
+        self.assertNotIn('PRIVATE_SIGNED_STATE_SENTINEL', json.dumps(summary))
+
     def test_failed_sse_report_retains_codes_without_raw_error_content(self):
         stream = [
             {'type': 'response.failed', 'response': {'error': {
@@ -145,6 +177,7 @@ class LiveCodexObserverTests(unittest.TestCase):
         self.assertIs(summary['sse_parsed'], True)
         self.assertEqual(summary['sse_failure_codes'], ['malformed_tool_input', 'unrecognized_sse_failure'])
         self.assertEqual(summary['response_completed_count'], 0)
+        self.assertIsNone(summary['reasoning_completed_encrypted_content_present'])
         self.assertIsNone(summary['usage'])
         self.assertNotIn('PRIVATE_SENTINEL', json.dumps(summary))
         self.assertNotIn('wire', summary)

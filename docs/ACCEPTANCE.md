@@ -32,6 +32,24 @@ gateway routes still target the separate test relay, not Han. See
 [the receipt](evidence/20261112-cli-default-compaction.json) and
 [CLI contract](CLI-INFERENCE.md).
 
+## Actual managed LiteLLM client qualification — 2026-11-12
+
+The default `master` now contains the CLI work. Actual Claude Code 2.1.322 through
+managed Messages passes client-owned MCP execution, cache reuse, manual
+compaction 6645→1010, retained tool output and five exact signed-thinking replay
+observations. Actual Codex 0.160.0 through managed Responses passes get_goal,
+local compaction and two follow-ups over five requests, with positive reported
+cache reads. The gateway, installed clients and operating image are unchanged.
+
+Codex reasoning-state fidelity remains unqualified: a compact reasoning
+`output_item.done` has no encrypted state and differs from the final snapshot.
+Installed LiteLLM constructs these separately; the old observer did not record
+the final field independently. This is an observed event inconsistency and
+source-supported explanation, not proof that all final reasoning is lost.
+The observer now distinguishes both fields, and recognizes standard managed
+Responses cache counters. These reporting changes add no model calls or gates.
+See [the client receipt](evidence/20261112-master-litellm-clients.json).
+
 ## Current source integration — 2026-11-06
 
 The coding-workflow/usage branch is integrated with the current `master`

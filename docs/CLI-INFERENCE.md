@@ -179,6 +179,12 @@ reads and real manual compaction, separately from scripted automatic compaction.
 The earlier optional-backend results remain historical in
 [20261112-cli-inference.json](evidence/20261112-cli-inference.json).
 
+The [managed LiteLLM client receipt](evidence/20261112-master-litellm-clients.json)
+adds actual Claude Code tool/cache/compact/signed replay and Codex functional
+tool/compact/follow-up checks. Native signed replay passed on the client-facing
+wire. Managed Responses has an observed done/completed state inconsistency, so
+Codex signed-state fidelity is not qualified by its functional pass.
+
 Primary interfaces: [Agent SDK](https://code.claude.com/docs/en/agent-sdk/typescript),
 [sessions](https://code.claude.com/docs/en/agent-sdk/sessions),
 [custom tools](https://code.claude.com/docs/en/agent-sdk/custom-tools),

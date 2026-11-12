@@ -54,9 +54,33 @@ and [context contract](docs/CLI-INFERENCE.md).
 
 Separately, existing LiteLLM managed Messages passed two real Haiku turns with
 **6311 upstream cache-read tokens**; its managed Responses path completed a text
-request. No gateway configuration/client source changed. These three calls did
-not emit thinking or exercise compaction, and managed conversion is not a
-transparent Han Responses fidelity test.
+request. No gateway configuration/client source changed. Those initial three
+calls did not emit thinking or exercise compaction. Subsequent actual-client
+qualification is recorded below.
+
+## Actual clients through LiteLLM — 2026-11-12
+
+The CLI-default branch is merged into `master`. Real Claude Code 2.1.322 and
+Codex 0.160.0 also pass their bounded workflows through the existing
+LiteLLM 1.109.0 managed Han routes, using `claude-haiku-5-5-han`.
+
+- **Claude Code / Messages:** a client-owned MCP tool executes once; manual
+  compaction reduces 6645→1010 tokens; its tool result survives; warm/post-compact
+  cache reads are 5741/3766. Five signed-thinking replay observations match
+  actual earlier returned blocks without content/signature mismatches.
+- **Codex / Responses:** five requests pass get_goal, local compaction and two
+  follow-ups. Reported cached tokens are 0/12705/0/2321/12341.
+- **Remaining Responses fidelity gap:** the compact stream's reasoning
+  `output_item.done` lacks `encrypted_content` and differs from the completed
+  snapshot. Installed LiteLLM builds done items without that field and assembles
+  final reasoning separately. The original observer did not retain the final
+  field separately, so absence from the whole response is unproven. Codex signed
+  reasoning replay through managed conversion is **not qualified**.
+
+The gateway and installed clients were unchanged. Observations cover the
+client-facing gateway wire; the gateway-to-Han raw wire was not captured.
+These are no-I/O tool and manual-compaction tests, not repository editing or
+automatic-threshold qualification. See [the client receipt](docs/evidence/20261112-master-litellm-clients.json).
 
 ## Earlier HTTP thinking progress-update compatibility — 2026-11-12
 

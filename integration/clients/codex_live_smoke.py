@@ -77,10 +77,24 @@ def safe_sse_failures(stream):
 
 
 def cache_observations(usages):
-    writes = [usage['cache_creation_input_tokens'] for usage in usages if isinstance(usage, dict)
-              and isinstance(usage.get('cache_creation_input_tokens'), int) and not isinstance(usage.get('cache_creation_input_tokens'), bool)]
-    reads = [usage['cache_read_input_tokens'] for usage in usages if isinstance(usage, dict)
-             and isinstance(usage.get('cache_read_input_tokens'), int) and not isinstance(usage.get('cache_read_input_tokens'), bool)]
+    # Managed Responses reports standard input_tokens_details rather than the
+    # proxy's native extension. Use one counter per response, never add aliases.
+    def valid(value):
+        return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+    def counts(primary, alternate):
+        values = []
+        for usage in usages:
+            if not isinstance(usage, dict):
+                continue
+            value = usage.get(primary)
+            if not valid(value):
+                value = usage.get(alternate)
+            if valid(value):
+                values.append(value)
+        return values
+    usages = list(usages)
+    writes = counts('cache_creation_input_tokens', 'cache_write_tokens')
+    reads = counts('cache_read_input_tokens', 'cached_tokens')
     return {'cache_write_observed': any(value > 0 for value in writes) if writes else None,
             'cache_hit_observed': any(value > 0 for value in reads) if reads else None,
             'cache_write_usage_response_count': len(writes), 'cache_read_usage_response_count': len(reads)}
@@ -279,6 +293,8 @@ def record_summary(record):
                'auth_exact': record['auth_exact'], 'caller_cache_header_exact': record['cache_header_exact'],
                'sse_parsed': False, 'sse_failure_codes': [], 'response_completed_count': 0, 'reasoning_count': 0,
                'reasoning_present': False, 'reasoning_done_completed_exact': None,
+               'reasoning_done_encrypted_content_present': None,
+               'reasoning_completed_encrypted_content_present': None,
                'encrypted_content_present': False, 'marker_present': False, 'usage': None}
     try:
         stream = events(record)
@@ -292,11 +308,15 @@ def record_summary(record):
         output = completed[0].get('output', [])
         done_capsules = capsules(done)
         complete_capsules = capsules(output)
+        def sealed(items):
+            return bool(items) and all(isinstance(item_id, str) and bool(item_id)
+                                       and isinstance(value, str) and bool(value) for item_id, value in items)
         summary.update(reasoning_count=len(done_capsules), reasoning_present=bool(done_capsules or complete_capsules),
                        reasoning_done_completed_exact=done_capsules == complete_capsules if done_capsules or complete_capsules else None,
-                       encrypted_content_present=bool(done_capsules) and all(
-                           isinstance(item_id, str) and bool(item_id) and isinstance(sealed, str) and bool(sealed)
-                           for item_id, sealed in done_capsules), usage=usage_only(completed[0]))
+                       encrypted_content_present=sealed(done_capsules),
+                       reasoning_done_encrypted_content_present=sealed(done_capsules),
+                       reasoning_completed_encrypted_content_present=sealed(complete_capsules),
+                       usage=usage_only(completed[0]))
         marker = MARKERS.get(record['phase'])
         summary['marker_present'] = marker is not None and any(
             marker in block.get('text', '') for item in output if item.get('type') == 'message'
@@ -627,7 +647,11 @@ def main(argv=None):
         report['endpoint_request_attempts'] = state.gateway_attempts if state and gateway_mode else None
         report['gateway_request_attempts'] = state.gateway_attempts if state and gateway_mode and not direct_mode else None
         report['direct_relay_request_attempts'] = state.gateway_attempts if state and direct_mode else state.remote_attempts if state else 0
-        report['actual_dot7_gateway_tested'] = bool(state and state.gateway_attempts and target == ('http', '192.168.0.7', 4000, '/claude-responses/v1/responses'))
+        report['actual_dot7_gateway_tested'] = bool(state and state.gateway_attempts and target is not None
+                                                     and target[1:3] == ('192.168.0.7', 4000))
+        report['gateway_responses_path'] = target[3] if gateway_mode and not direct_mode else None
+        report['gateway_managed_conversion_tested'] = bool(report['actual_dot7_gateway_tested']
+                                                            and target[3] == '/v1/responses')
         report['observer_failure_code'] = state.failure if state else None
         report['client_request_count'] = len(state.records['client']) if state else 0
         report['remote_request_count'] = None if gateway_mode else len(state.records['remote']) if state else 0
