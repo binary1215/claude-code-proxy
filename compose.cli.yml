@@ -3,17 +3,17 @@ services:
     init: true
     build:
       context: .
-      target: cli-inference
+      target: ${PROXY_BUILD_TARGET:-default}
       args:
         CLAUDE_CODE_VERSION: ${CLAUDE_CODE_VERSION:-2.1.322}
     restart: unless-stopped
     ports:
       - "${CLAUDE_CLI_BIND_ADDRESS:-0.0.0.0}:${CLAUDE_CLI_PORT:-13459}:3456"
     environment:
-      CLAUDE_INFERENCE_BACKEND: cli
+      CLAUDE_INFERENCE_BACKEND: ${CLAUDE_INFERENCE_BACKEND:-cli}
       CLAUDE_CLI_WORKER_PATH: /app/integration/cli-backend/worker.mjs
       CLAUDE_CLI_EXECUTABLE: /usr/local/bin/claude
-      CLAUDE_CLI_RUNTIME_DIR: /app/data/cli-runtime
+      CLAUDE_CLI_RUNTIME_DIR: /tmp/claude-proxy-cli
       CLAUDE_CLI_SESSION_TTL_SECONDS: ${CLAUDE_CLI_SESSION_TTL_SECONDS:-3600}
       CLAUDE_CLI_MAX_SESSIONS: ${CLAUDE_CLI_MAX_SESSIONS:-8}
       UPSTREAM_AUTH_SOURCE: configured

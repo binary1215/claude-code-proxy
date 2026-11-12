@@ -133,10 +133,10 @@ test('worker auth environment is replaced, not merged; store mode reads no token
   assert.equal(proxy.CLAUDE_CODE_OAUTH_TOKEN, undefined);
 });
 
-test('thinking maps the documented native budget only and rejects unsupported updates display', () => {
+test('thinking maps native budgets and leaves updates display to the private forwarder', () => {
   assert.deepEqual(nativeThinkingToSdk({ type: 'enabled', budget_tokens: 2048, display: 'omitted' }), { type: 'enabled', budgetTokens: 2048, display: 'omitted' });
   assert.deepEqual(nativeThinkingToSdk({ type: 'adaptive' }), { type: 'adaptive' });
-  assert.throws(() => nativeThinkingToSdk({ type: 'adaptive', display: 'updates' }), { code: 'unsupported_options' });
+  assert.deepEqual(nativeThinkingToSdk({ type: 'adaptive', display: 'updates' }), { type: 'adaptive' });
   assert.throws(() => nativeThinkingToSdk({ type: 'disabled', budget_tokens: 1 }), { code: 'unsupported_options' });
 });
 
@@ -251,4 +251,90 @@ test('retry/fallback SDK notices terminate rather than silently continuing', asy
     assert.equal(emitted.at(-1).code, subtype === 'api_retry' ? 'retry_disabled' : 'fallback_disabled');
     assert.ok(!JSON.stringify(emitted).includes('raw sensitive'));
   }
+});
+
+test('caller compacted history resumes through the pinned native store and an empty guarded continuation', async () => {
+  const fake = fakeSdk(), emitted = [];
+  const worker = new CliWorker({ emit: message => emitted.push(message), queryFactory: fake.factory });
+  const config = configuration();
+  config.history = [
+    { role: 'user', content: [{ type: 'text', text: 'Caller compacted summary.' }] },
+    { role: 'assistant', content: [{ type: 'thinking', thinking: 'unchanged', signature: 'opaque' }, { type: 'text', text: 'Old reply.' }] },
+    { role: 'user', content: [{ type: 'text', text: 'New instruction.' }] },
+  ];
+  await worker.handle(config);
+  const options = fake.argument.options;
+  assert.equal(options.persistSession, true);
+  assert.match(options.resume, /^[a-f0-9-]{36}$/);
+  const entries = await options.sessionStore.load({ sessionId: options.resume });
+  assert.deepEqual(entries.map(entry => entry.message.role), ['user', 'assistant', 'user']);
+  assert.deepEqual(entries[1].message.content, config.history[1].content);
+  assert.deepEqual(entries.at(-1).message.content, config.history.at(-1).content);
+  await worker.handle({ type: 'prompt', content: [] });
+  assert.deepEqual((await fake.argument.prompt.next()).value, {
+    type: 'user', message: { role: 'user', content: [] }, parent_tool_use_id: null, client_composed: true,
+  });
+  assert.equal(options.env.DISABLE_AUTO_COMPACT, undefined);
+  assert.equal(options.settings.autoCompactEnabled, true);
+  assert.equal(options.settings.idleCompaction, false);
+  assert.equal(options.settings.precomputeCompactionEnabled, false);
+  worker.close();
+});
+
+test('compaction phases require parent acknowledgement and expose no summary content', async () => {
+  const fake = fakeSdk(), emitted = [];
+  const worker = new CliWorker({ emit: message => emitted.push(message), queryFactory: fake.factory });
+  await worker.handle(configuration());
+  const options = fake.argument.options;
+  const pre = options.hooks.PreCompact[0].hooks[0]({ trigger: 'auto' });
+  const start = emitted.at(-1);
+  assert.equal(start.type, 'compact_phase');
+  assert.equal(start.active, true);
+  let preFinished = false;
+  void pre.then(() => { preFinished = true; });
+  await turn();
+  assert.equal(preFinished, false, 'The provider phase must wait until its owner has changed accounting state');
+  await worker.handle({ type: 'compact_phase_ack', request_id: start.request_id });
+  await pre;
+  fake.events.push({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'PRIVATE_COMPACT_SUMMARY' } } });
+  await turn();
+  assert.equal(emitted.some(message => message.type === 'native_event'), false);
+  const post = options.hooks.PostCompact[0].hooks[0]({ trigger: 'auto', compact_summary: 'PRIVATE_COMPACT_SUMMARY' });
+  const end = emitted.at(-1);
+  assert.equal(end.active, false);
+  await worker.handle({ type: 'compact_phase_ack', request_id: end.request_id });
+  await post;
+  fake.events.push({ type: 'system', subtype: 'compact_boundary', compact_metadata: {
+    trigger: 'auto', pre_tokens: 200, post_tokens: 50, duration_ms: 5, cumulative_dropped_tokens: 0,
+    summary: 'PRIVATE_COMPACT_SUMMARY', preserved_messages: { uuids: ['private-transcript-id'] }, arbitrary: 3,
+  } });
+  fake.events.push({ type: 'system', subtype: 'status', status: null, compact_result: 'success', compact_error: 'PRIVATE_ERROR_DETAIL' });
+  await turn();
+  assert.deepEqual(emitted.find(message => message.type === 'compact_boundary'), { type: 'compact_boundary', compact_metadata: {
+    trigger: 'auto', pre_tokens: 200, post_tokens: 50, duration_ms: 5, cumulative_dropped_tokens: 0,
+  } });
+  assert.ok(!JSON.stringify(emitted).includes('PRIVATE_COMPACT_SUMMARY'));
+  assert.ok(!JSON.stringify(emitted).includes('PRIVATE_ERROR_DETAIL'));
+  assert.ok(!JSON.stringify(emitted).includes('private-transcript-id'));
+  worker.close();
+});
+
+test('trusted compact dispatch is separate from guarded client input and ordinary inference completion', async () => {
+  const fake = fakeSdk(), emitted = [];
+  const worker = new CliWorker({ emit: message => emitted.push(message), queryFactory: fake.factory });
+  await worker.handle(configuration());
+  assert.equal(fake.argument.options.verbatimPrompts, false);
+  await worker.handle({ type: 'compact', instructions: 'Preserve acceptance criteria.' });
+  const command = (await fake.argument.prompt.next()).value;
+  assert.equal(command.message.content, '/compact Preserve acceptance criteria.');
+  assert.equal(Object.hasOwn(command, 'client_composed'), false);
+  fake.events.push({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'PRIVATE_SUMMARY' } } });
+  fake.events.push({ type: 'result', subtype: 'success', is_error: false, session_id: 'compact-session', local_command: 'compact' });
+  await turn();
+  assert.deepEqual(emitted.at(-1), { type: 'compact_result', success: true, session_id: 'compact-session' });
+  assert.equal(emitted.some(message => message.type === 'turn_result' || message.type === 'native_event'), false);
+  assert.equal(worker.turnInProgress, false);
+  await worker.handle({ type: 'prompt', content: '/compact literal external message' });
+  assert.equal((await fake.argument.prompt.next()).value.client_composed, true);
+  worker.close();
 });

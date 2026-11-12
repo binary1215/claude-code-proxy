@@ -7,6 +7,14 @@ import { resolveUpstreamCredential } from "./settingsService.js";
 import { upstreamHeaders, upstreamUrl } from "./nativeRelay.js";
 import { upstreamStateScope } from "./responsesState.js";
 import { UpstreamDiagnosticsObserver } from "./upstreamDiagnostics.js";
+import { UsageObserver, type ObservedUsage } from "./usageObserver.js";
+
+interface CliUpstreamRequest {
+  kind: "inference" | "compaction";
+  usage: UsageObserver;
+  done: Promise<void>;
+  outgoing?: ClientRequest;
+}
 
 export interface CliUpstreamTurn {
   active: boolean;
@@ -16,6 +24,29 @@ export interface CliUpstreamTurn {
   observer?: UpstreamDiagnosticsObserver;
   failure?: { status: number; body: Buffer; contentType: string };
   outgoing?: ClientRequest;
+  compacting?: boolean;
+  inferenceCalls?: number;
+  requests?: CliUpstreamRequest[];
+  thinkingDisplay?: "updates";
+}
+
+/** Sum actual provider calls, including CLI compaction, without double-counting
+ * the SDK's cumulative result counters or inventing missing usage. */
+export async function cliTurnUsage(turn: CliUpstreamTurn): Promise<ObservedUsage | undefined> {
+  const requests = [...(turn.requests ?? [])];
+  if (!requests.length) return undefined;
+  await Promise.all(requests.map(request => request.done));
+  const values = requests.map(request => request.usage.snapshot());
+  const fields = ["inputTokens", "outputTokens", "cacheCreationInputTokens", "cacheReadInputTokens",
+    "cacheCreation5mTokens", "cacheCreation1hTokens"] as const;
+  const result = { usageComplete: values.every(value => value.usageComplete) } as ObservedUsage;
+  for (const field of fields) {
+    const counts = values.map(value => value[field]);
+    const known = counts.filter((value): value is number => value !== null);
+    const total = known.length ? known.reduce((sum, value) => sum + value, 0) : null;
+    result[field] = total !== null && Number.isSafeInteger(total) ? total : null;
+  }
+  return result;
 }
 const clients = new Map<string, CliUpstreamTurn>();
 let server: http.Server | undefined;
@@ -40,14 +71,22 @@ export async function registerCliUpstream(turn: CliUpstreamTurn): Promise<{ base
           if (size > 10 * 1024 * 1024) { res.writeHead(413).end(); return; }
           chunks.push(Buffer.from(chunk));
         }
-        const bytes = Buffer.concat(chunks);
+        let bytes = Buffer.concat(chunks);
         const body = bytes.length ? JSON.parse(bytes.toString("utf8")) : undefined;
-        if (messages && (!owner.active || owner.calls || body?.model !== owner.model)) {
+        if (messages && (!owner.active || !owner.compacting && (owner.inferenceCalls ?? 0) > 0 || body?.model !== owner.model)) {
           res.writeHead(409, { "content-type": "application/json" }).end(JSON.stringify({ type: "error",
-            error: { type: "invalid_request_error", message: "One configured-model request belongs to each caller turn." } }));
+            error: { type: "invalid_request_error", message: "One configured-model inference belongs to each caller turn; CLI compaction is accounted separately." } }));
           return;
         }
-        if (messages) owner.calls++;
+        if (messages) { owner.calls++; if (!owner.compacting) owner.inferenceCalls = (owner.inferenceCalls ?? 0) + 1; }
+        // The SDK's option union predates the public updates display. Complete
+        // this explicit caller option on the genuine CLI's inference request;
+        // internal compaction retains its own thinking/rendering policy.
+        if (messages && !owner.compacting && owner.thinkingDisplay === "updates" && body?.thinking &&
+            ["adaptive", "enabled"].includes(body.thinking.type) && body.thinking.display !== "updates") {
+          body.thinking.display = "updates";
+          bytes = Buffer.from(JSON.stringify(body));
+        }
         const credential = await resolveUpstreamCredential(() => res.destroyed);
         // Refresh can outlive a cancelled caller. Recheck ownership after the
         // await before creating any provider request, as the HTTP relay does.
@@ -62,7 +101,15 @@ export async function registerCliUpstream(turn: CliUpstreamTurn): Promise<{ base
         if (bytes.length) headers["content-length"] = bytes.length;
         const observer = messages ? new UpstreamDiagnosticsObserver(credential.kind) : undefined;
         if (observer) owner.observer = observer;
+        let finishUsage: (() => void) | undefined;
+        let receivedResponse = false;
+        const record: CliUpstreamRequest | undefined = messages ? {
+          kind: owner.compacting ? "compaction" : "inference", usage: new UsageObserver(true),
+          done: new Promise<void>(resolve => { finishUsage = resolve; }),
+        } : undefined;
+        if (record) (owner.requests ??= []).push(record);
         const outgoing = (url.protocol === "https:" ? https : http).request(url, { method: req.method, headers }, incoming => {
+          receivedResponse = true;
           void (async () => {
             const status = incoming.statusCode ?? 502;
             observer?.receive(status, incoming.headers);
@@ -71,6 +118,7 @@ export async function registerCliUpstream(turn: CliUpstreamTurn): Promise<{ base
             for await (const chunk of incoming) {
               const value = Buffer.from(chunk);
               observer?.write(value);
+              record?.usage.write(value);
               if (messages && status >= 400 && errorSize < 65536) {
                 errorChunks.push(value.subarray(0, 65536 - errorSize)); errorSize += value.length;
               }
@@ -78,14 +126,17 @@ export async function registerCliUpstream(turn: CliUpstreamTurn): Promise<{ base
               if (!res.write(value)) await new Promise<void>(resolve => { res.once("drain", resolve); res.once("close", resolve); });
             }
             observer?.end();
+            record?.usage.end();
             if (messages && status >= 400 && !owner.failure) owner.failure = { status, body: Buffer.concat(errorChunks),
               contentType: String(incoming.headers["content-type"] ?? "application/json") };
             res.end();
-          })().catch(() => res.destroy());
+          })().catch(() => res.destroy()).finally(() => finishUsage?.());
         });
+        if (record) record.outgoing = outgoing;
         if (messages) owner.outgoing = outgoing;
         outgoing.setTimeout(UPSTREAM_TIMEOUT_MS, () => outgoing.destroy());
-        outgoing.on("error", () => { if (!res.headersSent) res.writeHead(502).end(); else res.destroy(); });
+        outgoing.on("error", () => { finishUsage?.(); if (!res.headersSent) res.writeHead(502).end(); else res.destroy(); });
+        outgoing.on("close", () => { if (!receivedResponse) finishUsage?.(); });
         res.on("close", () => { if (!res.writableFinished) outgoing.destroy(); });
         outgoing.end(bytes.length ? bytes : undefined);
       })().catch(() => { if (!res.headersSent) res.writeHead(400).end(); else res.destroy(); });
@@ -99,7 +150,7 @@ export async function registerCliUpstream(turn: CliUpstreamTurn): Promise<{ base
   }
   const base = await starting, token = randomBytes(32).toString("hex");
   clients.set(token, turn);
-  return { base, token, close: () => { turn.outgoing?.destroy(); clients.delete(token); } };
+  return { base, token, close: () => { turn.outgoing?.destroy(); for (const request of turn.requests ?? []) request.outgoing?.destroy(); clients.delete(token); } };
 }
 
 export async function closeCliUpstream(): Promise<void> {

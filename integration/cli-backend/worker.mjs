@@ -1,6 +1,7 @@
 import { createInterface } from 'node:readline';
 import { isAbsolute, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
@@ -8,10 +9,12 @@ import {
   AsyncQueue, MCP_SERVER, NativeEventTransformer, ToolBroker, WorkerError,
   createToolRegistry, isRecord, nativeThinkingToSdk, sdkEnvironment, validateEffort,
 } from './helpers.mjs';
+import { nativeHistoryEntries, nativeHistoryStore } from './history.mjs';
 
 const ERROR_MESSAGES = {
   invalid_ipc: 'Invalid worker command.',
   invalid_start: 'Invalid CLI backend configuration.',
+  invalid_history: 'The imported native history must preserve roles and completed caller tool pairs.',
   invalid_tools: 'Caller tool definitions are invalid.',
   unsupported_tool_schema: 'The CLI backend requires object tool schemas.',
   unsupported_options: 'A requested option is unsupported by the pinned CLI SDK.',
@@ -44,6 +47,7 @@ function validateStart(start) {
   try { url = new URL(start.upstream); } catch { throw new WorkerError('invalid_start'); }
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.hash || url.search) throw new WorkerError('invalid_start');
   validateEffort(start.effort);
+  if (start.autoCompactWindow !== undefined && (!Number.isSafeInteger(start.autoCompactWindow) || start.autoCompactWindow < 100000 || start.autoCompactWindow > 1000000)) throw new WorkerError('invalid_start');
   nativeThinkingToSdk(start.thinking);
 }
 
@@ -67,6 +71,9 @@ export class CliWorker {
     this.started = false;
     this.ready = false;
     this.turnInProgress = false;
+    this.compacting = false;
+    this.compactCommandInProgress = false;
+    this.compactAcknowledgements = new Map();
   }
   async handle(message) {
     if (!isRecord(message) || typeof message.type !== 'string') throw new WorkerError('invalid_ipc');
@@ -88,6 +95,23 @@ export class CliWorker {
         return;
       }
       case 'tool_result': this.broker.deliver(message); return;
+      case 'compact_phase_ack': {
+        if (typeof message.request_id !== 'string') throw new WorkerError('invalid_ipc');
+        const pending = this.compactAcknowledgements.get(message.request_id);
+        if (!pending) throw new WorkerError('invalid_ipc');
+        this.compactAcknowledgements.delete(message.request_id);
+        pending.resolve();
+        return;
+      }
+      case 'compact': {
+        if (this.turnInProgress) throw new WorkerError('turn_in_progress');
+        if (message.instructions !== undefined && typeof message.instructions !== 'string') throw new WorkerError('invalid_ipc');
+        this.turnInProgress = true;
+        this.compactCommandInProgress = true;
+        // Trusted broker command only. External prompts always set client_composed.
+        this.queue.push({ type: 'user', message: { role: 'user', content: `/compact${message.instructions ? ` ${message.instructions}` : ''}` }, parent_tool_use_id: null });
+        return;
+      }
       case 'options': {
         if (typeof message.request_id !== 'string' || !message.request_id) throw new WorkerError('invalid_ipc');
         validateEffort(message.effort);
@@ -106,6 +130,7 @@ export class CliWorker {
     validateStart(start);
     const registry = createToolRegistry(start.tools);
     const env = sdkEnvironment(start);
+    const imported = start.history === undefined ? undefined : nativeHistoryEntries(start.history, { model: start.model, cwd: start.cwd });
     this.broker = new ToolBroker(registry, message => this.emitUnlessClosed(message), error => this.fail(error));
     this.transformer = new NativeEventTransformer(registry, this.broker);
     this.mcpServer = createCallerMcpServer(registry, this.broker);
@@ -129,10 +154,13 @@ export class CliWorker {
           plugins: [],
           settingSources: [],
           strictMcpConfig: true,
-          persistSession: false,
+          persistSession: Boolean(imported),
+          ...(imported ? { resume: imported.sessionId, sessionStore: nativeHistoryStore(imported) } : {}),
           enableFileCheckpointing: false,
           includePartialMessages: true,
-          verbatimPrompts: true,
+          // Per-message guards protect every external prompt and allow only
+          // the broker's own /compact control to dispatch as a CLI command.
+          verbatimPrompts: false,
           permissionMode: 'default',
           settings: {
             disableClaudeAiConnectors: true,
@@ -140,13 +168,21 @@ export class CliWorker {
             autoMemoryEnabled: false,
             enableAllProjectMcpServers: false,
             fallbackModel: [],
+            autoCompactEnabled: true,
+            ...(start.autoCompactWindow ? { autoCompactWindow: start.autoCompactWindow } : {}),
+            idleCompaction: false,
+            precomputeCompactionEnabled: false,
           },
           ...(start.effort == null ? {} : { effort: start.effort }),
           ...(start.thinking === undefined ? {} : { thinking: nativeThinkingToSdk(start.thinking) }),
           mcpServers: registry.definitions.length ? {
             [MCP_SERVER]: { type: 'sdk', name: MCP_SERVER, instance: this.mcpServer, timeout: 2_147_483_647 },
           } : {},
-          hooks: { PreToolUse: [{ hooks: [preToolUse], timeout: 30, onFailure: 'block' }] },
+          hooks: {
+            PreToolUse: [{ hooks: [preToolUse], timeout: 30, onFailure: 'block' }],
+            PreCompact: [{ hooks: [async () => { await this.compactPhase(true); return {}; }], timeout: 30, onFailure: 'block' }],
+            PostCompact: [{ hooks: [async () => { await this.compactPhase(false); return {}; }], timeout: 30, onFailure: 'block' }],
+          },
           // A supported allow hook normally resolves permission first. If the CLI still asks,
           // use the exact native ID once more, never name/order association.
           canUseTool: async (name, input, options) => {
@@ -165,18 +201,44 @@ export class CliWorker {
       this.fail(new WorkerError('startup_failed'));
     }
   }
+  async compactPhase(active) {
+    if (this.closed) throw new WorkerError('worker_closed');
+    this.compacting = active;
+    const request_id = randomUUID();
+    const acknowledgement = new Promise((resolve, reject) => this.compactAcknowledgements.set(request_id, { resolve, reject }));
+    this.emit({ type: 'compact_phase', active, request_id });
+    await acknowledgement;
+  }
   async consume() {
     try {
       for await (const message of this.query) {
         if (this.closed) break;
         if (message.type === 'stream_event') {
+          // Compaction is an internal model call, never an ordinary assistant reply.
+          if (this.compacting || this.compactCommandInProgress) continue;
           if (message.event?.type === 'error') throw new WorkerError('inference_failed');
           for (const event of this.transformer.transform(message.event)) this.emitUnlessClosed({ type: 'native_event', event });
         } else if (message.type === 'result') {
           const success = message.subtype === 'success' && !message.is_error;
           this.turnInProgress = false;
-          this.emitUnlessClosed({ type: 'turn_result', success, session_id: message.session_id });
+          const compact = this.compactCommandInProgress || message.local_command === 'compact';
+          this.compactCommandInProgress = false;
+          this.emitUnlessClosed({ type: compact ? 'compact_result' : 'turn_result', success, session_id: message.session_id });
           if (!success) { this.fail(new WorkerError('inference_failed')); break; }
+        } else if (message.type === 'system' && message.subtype === 'compact_boundary') {
+          const source = message.compact_metadata ?? {};
+          const compact_metadata = {};
+          if (['manual', 'auto'].includes(source.trigger)) compact_metadata.trigger = source.trigger;
+          for (const key of ['pre_tokens', 'post_tokens', 'duration_ms', 'cumulative_dropped_tokens']) {
+            if (typeof source[key] === 'number' && Number.isFinite(source[key]) && source[key] >= 0) compact_metadata[key] = source[key];
+          }
+          this.emitUnlessClosed({ type: 'compact_boundary', compact_metadata });
+        } else if (message.type === 'system' && message.subtype === 'status') {
+          if (message.compact_result === 'failed' && this.compacting) await this.compactPhase(false);
+          if (message.status === 'compacting' || message.compact_result !== undefined) {
+            this.emitUnlessClosed({ type: 'compact_status', status: message.status === 'compacting' ? 'compacting' : null,
+              ...(['success', 'failed'].includes(message.compact_result) ? { compact_result: message.compact_result } : {}) });
+          }
         } else if (message.type === 'system' && message.subtype === 'api_retry') {
           throw new WorkerError('retry_disabled');
         } else if (message.type === 'system' && message.subtype === 'model_refusal_fallback') {
@@ -205,6 +267,8 @@ export class CliWorker {
     try { this.query?.close(); } catch {}
     this.abortController?.abort();
     this.broker?.close();
+    for (const pending of this.compactAcknowledgements.values()) pending.reject(new WorkerError('worker_closed'));
+    this.compactAcknowledgements.clear();
     this.queue.close();
     void this.mcpServer?.close().catch(() => {});
     this.onClosed();

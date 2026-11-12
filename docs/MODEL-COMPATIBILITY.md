@@ -1,5 +1,11 @@
 # Current Claude model compatibility
 
+The default inference backend is now the genuine CLI. This document's literal
+native-HTTP statements and historical HTTP receipts apply to the explicit
+`CLAUDE_INFERENCE_BACKEND=http` backend. Responses model policies are shared;
+CLI context rendering, caching and compaction have their own
+[contract and verification](CLI-INFERENCE.md).
+
 Verified on 2026-11-11 against the authenticated Han model catalogue and the
 official [thinking configuration](https://platform.claude.com/docs/en/build-with-claude/thinking-troubleshooting),
 [effort](https://platform.claude.com/docs/en/build-with-claude/effort), and

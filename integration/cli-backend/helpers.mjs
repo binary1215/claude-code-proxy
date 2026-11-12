@@ -4,6 +4,8 @@ import { isDeepStrictEqual } from 'node:util';
 export const MCP_SERVER = 'caller';
 export const BROKER_ID = '__claude_proxy_tool_use_id';
 export const MAX_MCP_RESULT_CHARS = 500_000;
+export const localToolName = name => `t_${createHash('sha256').update(name).digest('hex').slice(0, 24)}`;
+export const nativeToolName = name => `mcp__${MCP_SERVER}__${localToolName(name)}`;
 
 export class WorkerError extends Error {
   constructor(code) {
@@ -79,8 +81,8 @@ export function createToolRegistry(tools) {
     if (!isRecord(tool) || typeof tool.name !== 'string' || !tool.name || byOriginal.has(tool.name)) {
       throw new WorkerError('invalid_tools');
     }
-    const local = `t_${createHash('sha256').update(tool.name).digest('hex').slice(0, 24)}`;
-    const native = `mcp__${MCP_SERVER}__${local}`;
+    const local = localToolName(tool.name);
+    const native = nativeToolName(tool.name);
     const entry = {
       original: tool.name, local, native,
       definition: {
@@ -244,12 +246,14 @@ export function nativeThinkingToSdk(thinking) {
   if (!isRecord(thinking) || !['adaptive', 'enabled', 'disabled'].includes(thinking.type)) throw new WorkerError('unsupported_options');
   const allowed = thinking.type === 'enabled' ? ['type', 'budget_tokens', 'display'] : thinking.type === 'adaptive' ? ['type', 'display'] : ['type'];
   if (Object.keys(thinking).some(key => !allowed.includes(key))) throw new WorkerError('unsupported_options');
-  if (thinking.display !== undefined && !['summarized', 'omitted'].includes(thinking.display)) throw new WorkerError('unsupported_options');
+  if (thinking.display !== undefined && !['summarized', 'omitted', 'updates'].includes(thinking.display)) throw new WorkerError('unsupported_options');
   if (thinking.type === 'enabled' && (!Number.isSafeInteger(thinking.budget_tokens) || thinking.budget_tokens < 1024)) throw new WorkerError('unsupported_options');
   return {
     type: thinking.type,
     ...(thinking.budget_tokens === undefined ? {} : { budgetTokens: thinking.budget_tokens }),
-    ...(thinking.display === undefined ? {} : { display: thinking.display }),
+    // The private forwarder supplies the explicit native updates option/beta;
+    // use the documented SDK default rather than an unsupported SDK enum.
+    ...(thinking.display === undefined || thinking.display === 'updates' ? {} : { display: thinking.display }),
   };
 }
 
@@ -281,7 +285,6 @@ export function sdkEnvironment(start, inherited = process.env) {
     CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1',
     CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS: '0',
     ENABLE_TOOL_SEARCH: 'false',
-    DISABLE_AUTO_COMPACT: '1',
     // Broker owns a much shorter caller/session deadline and closes the query on expiry.
     MCP_TOOL_TIMEOUT: '2147483647',
     MAX_MCP_OUTPUT_TOKENS: '100000',

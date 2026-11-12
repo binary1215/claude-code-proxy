@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Optional genuine Claude Agent SDK worker for the native relay",
+  "description": "Pinned genuine Claude Agent SDK inference worker with native history import",
   "engines": { "node": ">=20" },
   "scripts": { "test": "node --test *.test.mjs" },
   "dependencies": {

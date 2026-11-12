@@ -3,11 +3,21 @@
 # Convention follows the other services on this host (jarvis, openpulse, haloignite).
 services:
   app:
-    build: .
+    build:
+      context: .
+      target: ${PROXY_BUILD_TARGET:-default}
+      args:
+        CLAUDE_CODE_VERSION: ${CLAUDE_CODE_VERSION:-2.1.322}
     container_name: claudeproxy-app
     environment:
       - PORT=3456
       - DATABASE_PATH=/app/data/proxy.db
+      - CLAUDE_INFERENCE_BACKEND=${CLAUDE_INFERENCE_BACKEND:-cli}
+      - CLAUDE_CLI_RUNTIME_DIR=/app/data/cli-runtime
+      - CLAUDE_CLI_SESSION_TTL_SECONDS=${CLAUDE_CLI_SESSION_TTL_SECONDS:-3600}
+      - CLAUDE_CLI_MAX_SESSIONS=${CLAUDE_CLI_MAX_SESSIONS:-8}
+      - UPSTREAM_AUTH_SOURCE=${UPSTREAM_AUTH_SOURCE:-configured}
+      - CLAUDE_AUTH_AUTO_REFRESH=${CLAUDE_AUTH_AUTO_REFRESH:-false}
       - ADMIN_API_SECRET=${ADMIN_API_SECRET}
       # Token can now be set via admin UI (Settings page) instead of env var.
       # If set here, it serves as a fallback when no token is in the database.
@@ -21,6 +31,7 @@ services:
       - RESPONSES_MAX_OUTPUT_TOKENS=${RESPONSES_MAX_OUTPUT_TOKENS:-8192}
       - RESPONSES_THINKING_BUDGET_TOKENS=${RESPONSES_THINKING_BUDGET_TOKENS:-1024}
       - RESPONSES_APPLY_PATCH_MODE=${RESPONSES_APPLY_PATCH_MODE:-reject}
+      - RESPONSES_DEVELOPER_MESSAGE_MODE=${RESPONSES_DEVELOPER_MESSAGE_MODE:-reject}
       - OLLAMA_URL=http://ollama:11434
     volumes:
       - app-data:/app/data

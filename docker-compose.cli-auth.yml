@@ -1,9 +1,10 @@
-# Optional overlay: docker compose -f docker-compose.yml -f docker-compose.cli-auth.yml up -d --build app
+# Login-store overlay for the full default CLI image:
+# docker compose -f docker-compose.yml -f docker-compose.cli-auth.yml up -d --build app
 services:
   app:
     build:
       context: .
-      target: cli-auth
+      target: default
     environment:
       - UPSTREAM_AUTH_SOURCE=claude_cli
       - CLAUDE_CONFIG_DIR=/home/node/.claude

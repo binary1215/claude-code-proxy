@@ -1,35 +1,37 @@
-# Claude Code Proxy — native relay and opt-in Responses adapter
+# Claude Code Proxy — CLI inference and Messages / Responses facade
 
-A native Anthropic HTTP relay, forked from [MehdiMohseni82/claude-code-proxy](https://github.com/MehdiMohseni82/claude-code-proxy). **The default backend uses native HTTP.** An optional `cli-auth` image includes the official CLI for login and token refresh. A separate experimental `cli-inference` image runs genuine CLI inference with a caller-tool broker. The default image is CLI-free.
+A Claude CLI inference proxy, forked from [MehdiMohseni82/claude-code-proxy](https://github.com/MehdiMohseni82/claude-code-proxy). **The default backend uses the genuine Agent SDK/Claude CLI.** The standard image includes SDK0.3.322 and CLI2.1.322. A literal native HTTP relay remains an explicit backend/build target.
 
 ```text
-Claude Code / Messages -> stock LiteLLM pass-through -> native /v1/messages
-Codex / Responses     -> stock LiteLLM pass-through -> opt-in /v1/responses
-                                                        -> Anthropic HTTP upstream
+Claude Code / Messages -> unchanged LiteLLM -> /v1/messages
+Codex / Responses     -> unchanged LiteLLM -> enabled /v1/responses
+  -> genuine CLI / caller-tool broker -> private HTTP forwarder -> provider
 ```
 
 The HTTP backend has no automatic SDK fallback, local tool execution, invented thinking, conversation storage or provider/account failover. The caller owns HTTP conversation history and executes its client tools. Upstream-native server-tool definitions are forwarded on the HTTP route; they are not executed on the proxy host. The [Responses adapter](docs/RESPONSES-ADAPTER.md) is disabled by default and supports a bounded client-tool subset.
 
-## Optional genuine CLI inference backend
+## Default CLI inference and context management
 
-`CLAUDE_INFERENCE_BACKEND=http` remains the default. Selecting `cli` explicitly
+`CLAUDE_INFERENCE_BACKEND=cli` is the default. It
 runs an isolated official CLI session, appends caller instructions through its
 supported system-prompt option, and brokers caller tools through owned MCP tools.
 Tool execution stays in the calling client. The CLI uses a private loopback HTTP
 forwarder, so provider authentication and refresh remain in the existing HTTP
 layer. There is no automatic switch between backends after a rejection.
 
-CLI sessions are stateful: reuse requires unchanged full caller history and
-session controls, and the session must still be alive. Restart, expiry, branching
-and caller compaction are separate compatibility limits. The HTTP backend keeps
-its original stateless behavior. See the [CLI backend contract](docs/CLI-INFERENCE.md),
+Live sessions reuse matching history. Compacted, changed or restarted caller
+history can be imported with native roles, thinking signatures and completed tool
+results through a version-pinned CLI resume adapter. CLI automatic compaction is
+enabled; client-local compaction can remove tools during its summary request.
+Actual internal compaction usage is counted separately from wire context usage.
+Imported transcripts are temporary, with a default runtime under `/tmp`.
+See the [CLI backend contract and limits](docs/CLI-INFERENCE.md),
 [optional Compose file](compose.cli.yml) and [private-env template](.env.cli.example).
 
-The experimental Linux image passes **248/248** tests. Three real Haiku5.5
+The earlier optional-stage Linux image passed **248/248** tests. Three real Haiku5.5
 requests passed: tool intent, caller-result continuation and Responses SSE;
-the continuation reported **2772 cache-read tokens**. Real thinking replay and
-long coding sessions remain unqualified for this backend. Production Han still
-uses its existing HTTP image. [Verification receipt](docs/evidence/20261112-cli-inference.json).
+the continuation reported **2772 cache-read tokens**. Those historical results
+precede the default/compaction work. [Historical receipt](docs/evidence/20261112-cli-inference.json).
 
 ## Thinking progress-update compatibility — 2026-11-12
 

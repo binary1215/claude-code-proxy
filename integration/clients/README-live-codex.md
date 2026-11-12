@@ -6,6 +6,14 @@ stock LiteLLM diagnostic gateway. It does not install clients, edit normal clien
 configuration, deploy gateways/containers, read provider credentials, or change
 existing gateway or relay settings.
 
+`--model` selects a native Claude model ID; omitting it retains the original
+Haiku4.5 model. For a prepared validation relay, the explicit endpoint option
+also accepts `--gateway-base-url http://192.168.0.64:13459/v1 --model claude-haiku-5-5`.
+Supply that relay's proxy key in the named `--gateway-key-env` variable. This
+starts no local LiteLLM and the report records `mode: direct_relay`, direct-relay
+attempts, and `actual_dot7_gateway_tested: false`. The same five-request and
+phase bounds apply; this direct check does not qualify the gateway route.
+
 ## Existing .7 gateway
 
 Use the already deployed authenticated route:

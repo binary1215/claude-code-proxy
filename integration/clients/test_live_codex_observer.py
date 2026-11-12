@@ -1,18 +1,49 @@
 """Pure report/fixture checks: no subprocesses, clients, listeners or live calls."""
 import json
+import argparse
 import unittest
 
 from codex_live_smoke import (
     CACHE_FIXTURE_ROWS,
     SAFE_SSE_FAILURE_CODES,
+    MODEL,
+    PHASE_LIMITS,
+    State,
     cache_fixture_text,
     cache_observations,
     record_summary,
     safe_sse_failures,
+    gateway_target,
+    native_model,
 )
 
 
 class LiveCodexObserverTests(unittest.TestCase):
+    def test_selected_native_model_is_used_without_changing_default_or_phase_bounds(self):
+        self.assertEqual(MODEL, 'claude-haiku-4-5-20251001')
+        self.assertEqual(PHASE_LIMITS, {'initial': 2, 'compact': 1, 'followup': 1, 'followup_second': 1})
+        self.assertEqual(sum(PHASE_LIMITS.values()), 5)
+        for model in ('claude-haiku-5-5', 'claude-opus-5-5', MODEL):
+            with self.subTest(model=model):
+                self.assertEqual(native_model(model), model)
+                self.assertEqual(State('synthetic-fixture-key', model=model).model, model)
+        self.assertEqual(State('synthetic-fixture-key').model, MODEL)
+        for model in ('', 'not-claude', 'claude-\nsecret', 'claude-/path'):
+            with self.subTest(invalid=model), self.assertRaises(argparse.ArgumentTypeError):
+                native_model(model)
+
+    def test_explicit_validation_relay_and_existing_gateway_keep_the_selected_paths(self):
+        self.assertEqual(gateway_target('http://192.168.0.64:13459/v1'),
+                         ('http', '192.168.0.64', 13459, '/v1/responses'))
+        self.assertEqual(gateway_target('http://192.168.0.7:4000/claude-responses/v1/'),
+                         ('http', '192.168.0.7', 4000, '/claude-responses/v1/responses'))
+        for url in ('http://user:secret@192.168.0.64:13459/v1',
+                    'http://192.168.0.64:13459/v1?secret=not-allowed',
+                    'http://192.168.0.64:13459/v1#fragment',
+                    'http://192.168.0.64:13459/incorrect'):
+            with self.subTest(url=url), self.assertRaises(ValueError):
+                gateway_target(url)
+
     def test_cache_fixture_is_deterministic_bounded_reference_text(self):
         text = cache_fixture_text()
         self.assertEqual(text, cache_fixture_text())

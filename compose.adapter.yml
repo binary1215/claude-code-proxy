@@ -1,14 +1,24 @@
 # Standalone backend; LiteLLM is on another LAN host. No gateway/admin UI here.
 services:
   claude-proxy:
-    build: .
+    build:
+      context: .
+      target: ${PROXY_BUILD_TARGET:-default}
+      args:
+        CLAUDE_CODE_VERSION: ${CLAUDE_CODE_VERSION:-2.1.322}
     environment:
       PORT: "3456"
       DATABASE_PATH: /app/data/proxy.db
+      CLAUDE_INFERENCE_BACKEND: ${CLAUDE_INFERENCE_BACKEND:-cli}
+      CLAUDE_CLI_RUNTIME_DIR: /app/data/cli-runtime
+      CLAUDE_CLI_SESSION_TTL_SECONDS: ${CLAUDE_CLI_SESSION_TTL_SECONDS:-3600}
+      CLAUDE_CLI_MAX_SESSIONS: ${CLAUDE_CLI_MAX_SESSIONS:-8}
+      UPSTREAM_AUTH_SOURCE: ${UPSTREAM_AUTH_SOURCE:-configured}
+      CLAUDE_AUTH_AUTO_REFRESH: ${CLAUDE_AUTH_AUTO_REFRESH:-false}
       ADMIN_API_SECRET: ${ADMIN_API_SECRET:?Set a dedicated proxy admin secret}
       ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      # Optional setup-token input; upstream acceptance is NOT guaranteed.
+      # Optional official setup-token input; the CLI backend performs inference.
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
       UPSTREAM_TIMEOUT_MS: ${UPSTREAM_TIMEOUT_MS:-300000}
       RESPONSES_ENABLED: ${RESPONSES_ENABLED:-false}

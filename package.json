@@ -1,11 +1,14 @@
 {
   "name": "claude-cli-as-api",
   "version": "1.0.0",
-  "description": "Native Anthropic Messages HTTP relay for a separate LiteLLM gateway",
+  "description": "Claude CLI inference proxy with an explicit native HTTP relay backend for a separate LiteLLM gateway",
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "test": "npm run build && node --test tests/*.test.mjs",
+    "test": "npm run build && node scripts/test-http.mjs",
+    "test:http": "npm run build && node scripts/test-http.mjs",
+    "test:cli": "npm run build && npm --prefix integration/cli-backend test",
+    "install:cli": "npm ci --prefix integration/cli-backend",
     "start": "node dist/server.js",
     "dev": "tsx src/server.ts",
     "postinstall": "npm rebuild better-sqlite3"

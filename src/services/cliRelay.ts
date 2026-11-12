@@ -9,6 +9,8 @@ import { completeRequest, insertPendingRequest } from "./historyService.js";
 import { registerTask, unregisterTask } from "./taskTracker.js";
 import { recordTokensForRateLimit } from "../middleware/rateLimiter.js";
 import { logOperationalError } from "./operationalLogger.js";
+import { cliTurnUsage } from "./cliUpstream.js";
+import type { ObservedUsage } from "./usageObserver.js";
 import { ResponsesStream, convertNativeMessage } from "./responsesStream.js";
 import { ResponsesError, type JsonObject, type ResponseTranslationOptions } from "./responsesTypes.js";
 import type { DiagnosticReason, UpstreamDiagnosticsObserver } from "./upstreamDiagnostics.js";
@@ -41,6 +43,7 @@ export async function relayCli(req: Request, res: Response, nativeBody: JsonObje
   let converter: ResponsesStream | undefined;
   let terminal: JsonObject | undefined;
   let upstreamObserver: UpstreamDiagnosticsObserver | undefined;
+  let turnUsage: ObservedUsage | undefined;
   const logId = insertPendingRequest({ apiKeyId: req.apiKeyId ?? null, completionId: id,
     requestedModel: model, resolvedModel: model, isStream: streaming });
   const cancel = () => { cancelled = true; controller.abort(); };
@@ -56,6 +59,7 @@ export async function relayCli(req: Request, res: Response, nativeBody: JsonObje
     lease = await acquireCliSession(nativeBody, `proxy-key:${req.apiKeyFingerprint ?? "anonymous-development"}`, credential, controller.signal);
     res.setHeader("x-claude-proxy-backend", "cli");
     res.setHeader("x-claude-proxy-cli-session", lease.session.id);
+    res.setHeader("x-claude-proxy-cli-history", lease.session.importedHistory ? "imported" : "live");
     if (streaming && responseOptions) converter = new ResponsesStream(responseOptions);
     for await (const event of lease.session.events()) {
       const bytes = eventBytes(event);
@@ -72,6 +76,7 @@ export async function relayCli(req: Request, res: Response, nativeBody: JsonObje
       }
     }
     observer.end();
+    turnUsage = lease.session.turnUsage;
     upstreamObserver = lease.session.upstream.observer;
     const message = lease.session.message!;
     const converted = !streaming && responseOptions ? convertNativeMessage(message, responseOptions) : undefined;
@@ -90,7 +95,9 @@ export async function relayCli(req: Request, res: Response, nativeBody: JsonObje
     reason = timedOut ? "timeout" : cancelled ? "cancelled" : "provider_error";
     const failure = lease?.session.upstream.failure;
     upstreamObserver ??= lease?.session.upstream.observer;
+    const accounting = lease ? cliTurnUsage(lease.session.upstream) : undefined;
     lease?.session.fail(error instanceof Error ? error : new Error());
+    turnUsage ??= await accounting;
     if (!res.destroyed) {
       if (!res.headersSent) {
         if (failure) res.status(failure.status).type(failure.contentType).send(failure.body);
@@ -118,7 +125,7 @@ export async function relayCli(req: Request, res: Response, nativeBody: JsonObje
   } finally {
     clearTimeout(timer); req.off("aborted", cancel); res.off("close", close); lease?.detach();
     observer.end(); unregisterTask(id);
-    const usage = observer.snapshot();
+    const usage = turnUsage ?? observer.snapshot();
     try {
       completeRequest(logId, status, { ...usage, usageComplete: status === "success" && usage.usageComplete,
         durationMs: Date.now() - started, errorMessage: status === "error" ? "upstream_error" : undefined,

@@ -1,5 +1,6 @@
 import { mkdirSync } from "fs";
-import { dirname } from "path";
+import { dirname, join } from "path";
+import { tmpdir } from "node:os";
 
 export const PORT = parseInt(process.env.PORT || "3456");
 export const DATABASE_PATH = process.env.DATABASE_PATH || "./data/proxy.db";
@@ -20,19 +21,25 @@ if (!Number.isSafeInteger(UPSTREAM_TIMEOUT_MS) || UPSTREAM_TIMEOUT_MS <= 0 || UP
 }
 export const OLLAMA_URL = process.env.OLLAMA_URL || "http://ollama:11434";
 
-// Explicit per-container selection. HTTP deployments never start a CLI worker.
-export const CLAUDE_INFERENCE_BACKEND = process.env.CLAUDE_INFERENCE_BACKEND ?? "http";
+// Genuine CLI inference is the default. Explicit HTTP deployments do not start workers.
+export const CLAUDE_INFERENCE_BACKEND = process.env.CLAUDE_INFERENCE_BACKEND ?? "cli";
 if (!["http", "cli"].includes(CLAUDE_INFERENCE_BACKEND)) {
   throw new Error("CLAUDE_INFERENCE_BACKEND must be http or cli");
 }
 export const CLAUDE_CLI_WORKER_PATH = process.env.CLAUDE_CLI_WORKER_PATH || "integration/cli-backend/worker.mjs";
-export const CLAUDE_CLI_RUNTIME_DIR = process.env.CLAUDE_CLI_RUNTIME_DIR || `${dirname(DATABASE_PATH)}/cli-runtime`;
+export const CLAUDE_CLI_RUNTIME_DIR = process.env.CLAUDE_CLI_RUNTIME_DIR || join(tmpdir(), "claude-proxy-cli");
 export const CLAUDE_CLI_SESSION_TTL_SECONDS = Number(process.env.CLAUDE_CLI_SESSION_TTL_SECONDS || 3600);
 export const CLAUDE_CLI_MAX_SESSIONS = Number(process.env.CLAUDE_CLI_MAX_SESSIONS || 8);
+export const CLAUDE_CLI_AUTO_COMPACT_WINDOW = process.env.CLAUDE_CLI_AUTO_COMPACT_WINDOW
+  ? Number(process.env.CLAUDE_CLI_AUTO_COMPACT_WINDOW) : undefined;
 if (CLAUDE_INFERENCE_BACKEND === "cli" &&
     (!Number.isSafeInteger(CLAUDE_CLI_SESSION_TTL_SECONDS) || CLAUDE_CLI_SESSION_TTL_SECONDS < 60 ||
       !Number.isSafeInteger(CLAUDE_CLI_MAX_SESSIONS) || CLAUDE_CLI_MAX_SESSIONS < 1)) {
   throw new Error("CLI session TTL must be at least 60 seconds and maximum sessions must be positive");
+}
+if (CLAUDE_INFERENCE_BACKEND === "cli" && CLAUDE_CLI_AUTO_COMPACT_WINDOW !== undefined &&
+    (!Number.isSafeInteger(CLAUDE_CLI_AUTO_COMPACT_WINDOW) || CLAUDE_CLI_AUTO_COMPACT_WINDOW < 100000 || CLAUDE_CLI_AUTO_COMPACT_WINDOW > 1000000)) {
+  throw new Error("CLAUDE_CLI_AUTO_COMPACT_WINDOW must be between 100000 and 1000000 tokens");
 }
 
 // Opt-in only: existing native deployments do not acquire a new protocol route.

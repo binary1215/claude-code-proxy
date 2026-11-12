@@ -23,8 +23,16 @@ const upstream=http.createServer(async(req,res)=>{
   if(req.url.startsWith('/v1/messages/count_tokens'))return res.end('{"input_tokens":200}');
   calls.push({headers:req.headers,body,path:req.url});
   const contents=(body.messages??[]).flatMap(m=>Array.isArray(m.content)?m.content:[{type:'text',text:m.content}]);
+  const userTexts=[...(body.messages??[])].reverse().filter(message=>message.role==='user')
+    .map(message=>(Array.isArray(message.content)?message.content:[{type:'text',text:message.content}])
+      .filter(block=>block.type==='text').map(block=>block.text).join('\n'));
+  // A resumed CLI can append its own environment reminder after caller input.
+  // Script only explicit fixture markers; assertions below check the real input.
+  const scenarioText=userTexts.find(text=>text.includes('IMPORT_SUMMARY_WITHOUT_TOOLS')||text.includes('COMPACTED_IMPORT_'))??'';
   const hasResult=contents.some(b=>b.type==='tool_result');
   const wantsTool=contents.some(b=>b.type==='text'&&b.text?.includes('REQUEST_CALLER_TOOL'));
+  const wantsChain=contents.some(b=>b.type==='text'&&b.text?.includes('REQUEST_CALLER_TOOL_CHAIN'))
+    &&!contents.some(b=>b.type==='text'&&b.text?.includes('STOP_CALLER_TOOL_CHAIN'));
   const wantsParallel=contents.some(b=>b.type==='text'&&b.text?.includes('REQUEST_CALLER_TOOL_PARALLEL'));
   const wantsSigned=contents.some(b=>b.type==='text'&&b.text?.includes('RESPONSES_SIGNED'));
   const wantsResponsesTool=contents.some(b=>b.type==='text'&&b.text?.includes('REQUEST_CALLER_TOOL_RESPONSES'));
@@ -37,7 +45,14 @@ const upstream=http.createServer(async(req,res)=>{
   }
   if(hold)calls.at(-1).scenario='hold';
   let blocks;
-  if(wantsTool&&!hasResult){
+  if(scenarioText.includes('IMPORT_SUMMARY_WITHOUT_TOOLS')){
+    blocks=[{type:'thinking',thinking:'Synthetic imported-summary reasoning',signature:'synthetic-import-summary-signature'},
+      {type:'text',text:'SUMMARY_SOURCE_TOOL_VALUE_42 retained in a compacted summary.',citations:null}];
+  }else if(scenarioText.includes('COMPACTED_IMPORT_')){
+    const phase=scenarioText.includes('FOLLOWUP_2')?2:scenarioText.includes('FOLLOWUP_1')?1:0;
+    blocks=[{type:'thinking',thinking:`Synthetic compacted reasoning ${phase}`,signature:`synthetic-compacted-signature-${phase}`},
+      {type:'text',text:`COMPACTED_REPLY_${phase}`,citations:null}];
+  }else if(wantsChain||(wantsTool&&!hasResult)){
     const tool=body.tools.find(t=>t.name.startsWith('mcp__caller__'));
     assert.ok(tool,'Caller MCP tool must be declared by the real CLI');
     blocks=[{type:'thinking',thinking:'Synthetic signed thought',signature:'synthetic-provider-signature'},
@@ -69,7 +84,7 @@ upstream.listen(0,'127.0.0.1');await once(upstream,'listening');
 Object.assign(process.env,{DATABASE_PATH:':memory:',AUTH_DISABLED:'false',ADMIN_API_SECRET:randomBytes(24).toString('hex'),
   UPSTREAM_AUTH_SOURCE:'configured',ANTHROPIC_API_KEY:'sk-ant-api-scripted-provider-not-a-real-credential',
   ANTHROPIC_BASE_URL:`http://127.0.0.1:${upstream.address().port}`,CLAUDE_INFERENCE_BACKEND:'cli',
-  CLAUDE_CLI_RUNTIME_DIR:runtime,CLAUDE_CLI_WORKER_PATH:new URL('./worker.mjs',import.meta.url).pathname.replace(/^\/([A-Za-z]:)/,'$1'),
+  CLAUDE_CLI_RUNTIME_DIR:runtime,CLAUDE_CLI_MAX_SESSIONS:'8',CLAUDE_CLI_WORKER_PATH:new URL('./worker.mjs',import.meta.url).pathname.replace(/^\/([A-Za-z]:)/,'$1'),
   UPSTREAM_TIMEOUT_MS:'30000',RESPONSES_ENABLED:'true',RESPONSES_STATE_KEY:randomBytes(32).toString('base64'),
   CLAUDE_AUTH_AUTO_REFRESH:'false'});
 delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
@@ -344,6 +359,199 @@ test('live low-to-high effort change reaches the same CLI conversation as an eff
   const actual=calls.at(-1).body;
   assert.equal(effectiveEffort(actual),'high',JSON.stringify({global:actual.output_config,
     perMessage:actual.messages.map(message=>({role:message.role,output_config:message.output_config}))}));
+});
+
+test('Claude Code thinking display updates reaches the provider with its public beta and preserves signed output',async()=>{
+  const before=calls.length;
+  const response=await request('/v1/messages',{model,max_tokens:1024,thinking:{type:'adaptive',display:'updates'},
+    messages:[{role:'user',content:'RESPONSES_SIGNED_NATIVE_UPDATES'}]});
+  assert.equal(response.status,200,response.text);
+  assert.equal(calls.length,before+1);
+  assert.equal(calls.at(-1).body.thinking.type,'adaptive');
+  assert.equal(calls.at(-1).body.thinking.display,'updates');
+  assert.ok(String(calls.at(-1).headers['anthropic-beta']).split(',').map(value=>value.trim())
+    .includes('thinking-display-updates-2026-08-18'));
+  assert.ok(response.value.content.some(block=>block.type==='thinking'&&block.thinking===''
+    &&block.signature==='synthetic-signed-empty'));
+  assert.ok(response.value.content.some(block=>block.type==='thinking'&&block.thinking==='Synthetic visible reasoning'
+    &&block.signature==='synthetic-signed-visible'));
+});
+
+test('toolset-changing summary import and fresh compacted context retain native history then replay new signed thinking twice',async()=>{
+  const before=calls.length;
+  const initial={model,max_tokens:1024,system:'IMPORT_WORKFLOW_SYSTEM',tools:callerTools,
+    messages:[{role:'user',content:'REQUEST_CALLER_TOOL_BEFORE_IMPORT'}]};
+  const first=await request('/v1/messages',initial);
+  assert.equal(first.status,200,first.text);
+  const tool=first.value.content.find(block=>block.type==='tool_use');
+  const originalNativeName=calls[before].body.tools.find(definition=>definition.name.startsWith('mcp__caller__')).name;
+  const completedMessages=[...initial.messages,{role:'assistant',content:first.value.content},
+    {role:'user',content:[{type:'tool_result',tool_use_id:tool.id,content:'SUMMARY_SOURCE_TOOL_VALUE_42'}]}];
+  const completed=await request('/v1/messages',{...initial,messages:completedMessages});
+  assert.equal(completed.status,200,completed.text);
+  const summaryBody={...initial,tools:[],messages:[...completedMessages,{role:'assistant',content:completed.value.content},
+    {role:'user',content:'IMPORT_SUMMARY_WITHOUT_TOOLS'}]};
+  const summary=await request('/v1/messages',summaryBody);
+  assert.equal(summary.status,200,summary.text);
+  assert.equal(calls.length,before+3);
+  const imported=calls.at(-1).body;
+  assert.ok(!(imported.tools??[]).some(definition=>definition.name.startsWith('mcp__caller__')),
+    'Historical tools must not become newly callable tools');
+  const assistant=imported.messages.find(message=>message.role==='assistant'&&message.content.some(block=>block.type==='tool_use'&&block.id===tool.id));
+  assert.ok(assistant,'Imported tool call must stay in an assistant role');
+  assert.ok(assistant.content.some(block=>block.type==='thinking'&&block.signature==='synthetic-provider-signature'));
+  const historicalCall=assistant.content.find(block=>block.type==='tool_use'&&block.id===tool.id);
+  assert.equal(historicalCall.name,originalNativeName);
+  assert.deepEqual(historicalCall.input.input,{value:7});
+  const resultMessage=imported.messages.find(message=>message.role==='user'&&message.content.some(block=>block.type==='tool_result'&&block.tool_use_id===tool.id));
+  assert.ok(resultMessage,'Imported result must stay in a user/tool_result role');
+  const historicalResult=resultMessage.content.find(block=>block.type==='tool_result'&&block.tool_use_id===tool.id);
+  assert.ok(JSON.stringify(historicalResult).includes('SUMMARY_SOURCE_TOOL_VALUE_42'));
+  assert.ok(!JSON.stringify(historicalResult).toLowerCase().includes('interrupted'));
+  assert.ok(imported.messages.some(message=>message.role==='user'&&message.content.some(block=>block.type==='text'
+    &&block.text==='IMPORT_SUMMARY_WITHOUT_TOOLS')),'The summary instruction itself must reach the provider');
+  assert.ok(summary.value.content.some(block=>block.type==='thinking'&&block.signature==='synthetic-import-summary-signature'));
+  const summaryText=summary.value.content.find(block=>block.type==='text').text;
+  const compacted={model,max_tokens:1024,system:'IMPORT_WORKFLOW_SYSTEM',tools:[],messages:[
+    {role:'user',content:'COMPACTED_IMPORT_CONTEXT\n'+summaryText}]};
+  let reply=await request('/v1/messages',compacted);
+  assert.equal(reply.status,200,reply.text);
+  assert.equal(reply.value.usage.cache_read_input_tokens,11);
+  const compactedWire=providerBlocks(calls.at(-1));
+  assert.ok(!compactedWire.some(block=>block.type==='tool_use'||block.type==='tool_result'),
+    'User-only compacted context must not retain stale private tool history');
+  assert.ok(!compactedWire.some(block=>block.type==='thinking'));
+  let history=[...compacted.messages];
+  for(let phase=1;phase<=2;phase++){
+    const prior=reply.value;
+    history.push({role:'assistant',content:prior.content},{role:'user',content:`COMPACTED_IMPORT_FOLLOWUP_${phase}`});
+    reply=await request('/v1/messages',{...compacted,messages:history});
+    assert.equal(reply.status,200,reply.text);
+    assert.equal(reply.value.usage.cache_read_input_tokens,11);
+    const actual=providerBlocks(calls.at(-1));
+    for(let retained=0;retained<phase;retained++)assert.ok(actual.some(block=>block.type==='thinking'
+      &&block.signature===`synthetic-compacted-signature-${retained}`&&block.thinking===`Synthetic compacted reasoning ${retained}`));
+    assert.ok(reply.value.content.some(block=>block.type==='thinking'&&block.signature===`synthetic-compacted-signature-${phase}`));
+  }
+  assert.equal(calls.length,before+6);
+});
+
+test('external slash-command-shaped text reaches the provider literally without invoking internal compaction',async()=>{
+  const before=calls.length;
+  const literal='/compact this-is-user-text @file';
+  const response=await request('/v1/messages',{model,max_tokens:1024,messages:[{role:'user',content:literal}]});
+  assert.equal(response.status,200,response.text);
+  assert.equal(calls.length,before+1,'External text must produce one ordinary turn, without an internal compaction request');
+  assert.ok(calls.at(-1).body.messages.some(message=>message.role==='user'
+    &&message.content.some(block=>block.type==='text'&&block.text===literal)));
+  assert.equal(response.value.content.find(block=>block.type==='text').text,'CLI_HTTP_OK');
+});
+
+test('changed token ceiling, system and branch history import the original native roles without later-branch leakage',async()=>{
+  const before=calls.length;
+  const initial={model,max_tokens:1024,system:'BASE_IMPORT_SYSTEM',messages:[{role:'user',content:'BRANCH_IMPORT_ORIGINAL Return CLI_HTTP_OK.'}]};
+  const first=await request('/v1/messages',initial);
+  assert.equal(first.status,200,first.text);
+  const prefix=[...initial.messages,{role:'assistant',content:first.value.content}];
+  const advanced=await request('/v1/messages',{...initial,messages:[...prefix,{role:'user',content:'BRANCH_PATH_A_ONLY Return CLI_HTTP_OK.'}]});
+  assert.equal(advanced.status,200,advanced.text);
+  for(const variant of[
+    {name:'max',max_tokens:2048,system:'BASE_IMPORT_SYSTEM',prompt:'IMPORT_CHANGED_MAX'},
+    {name:'system',max_tokens:1024,system:'UPDATED_IMPORT_SYSTEM',prompt:'IMPORT_CHANGED_SYSTEM'},
+    {name:'branch',max_tokens:1024,system:'BASE_IMPORT_SYSTEM',prompt:'BRANCH_PATH_B_ONLY'},
+  ]){
+    const response=await request('/v1/messages',{...initial,max_tokens:variant.max_tokens,system:variant.system,
+      messages:[...prefix,{role:'user',content:variant.prompt+' Return CLI_HTTP_OK.'}]});
+    assert.equal(response.status,200,response.text);
+    const actual=calls.at(-1).body;
+    assert.equal(actual.max_tokens,variant.max_tokens);
+    assert.ok(actual.messages.some(message=>message.role==='assistant'&&message.content.some(block=>block.type==='text'&&block.text==='CLI_HTTP_OK')));
+    assert.ok(!JSON.stringify(actual.messages).includes('BRANCH_PATH_A_ONLY'));
+    assert.ok(providerBlocks(calls.at(-1)).some(block=>block.type==='text'&&block.text.includes(variant.prompt)));
+    const system=typeof actual.system==='string'?actual.system:actual.system.map(block=>block.text??'').join('\n');
+    assert.ok(system.includes(variant.system));
+    if(variant.name==='system')assert.ok(!system.includes('BASE_IMPORT_SYSTEM'));
+  }
+  assert.equal(calls.length,before+5);
+});
+
+test('cold history ending in a completed caller tool result imports the real result without an interruption placeholder',async()=>{
+  const before=calls.length;
+  const toolId='toolu_imported_completed_42';
+  const body={model,max_tokens:1024,tools:[],system:'COLD_TOOL_RESULT_IMPORT',messages:[
+    {role:'user',content:'An earlier caller requested the external computation.'},
+    {role:'assistant',content:[{type:'thinking',thinking:'Synthetic historical thought',signature:'synthetic-cold-history-signature'},
+      {type:'tool_use',id:toolId,name:'historical_caller_tool',input:{zeta:7,alpha:3}}]},
+    {role:'user',content:[{type:'tool_result',tool_use_id:toolId,content:'REAL_COMPLETED_CALLER_RESULT_42'}]},
+  ]};
+  const response=await request('/v1/messages',body);
+  assert.equal(response.status,200,response.text);
+  assert.equal(calls.length,before+1);
+  const actual=calls.at(-1).body;
+  const assistant=actual.messages.find(message=>message.role==='assistant'&&message.content.some(block=>block.type==='tool_use'&&block.id===toolId));
+  assert.ok(assistant);assert.ok(assistant.content.some(block=>block.type==='thinking'&&block.signature==='synthetic-cold-history-signature'));
+  const result=actual.messages.filter(message=>message.role==='user').flatMap(message=>message.content)
+    .find(block=>block.type==='tool_result'&&block.tool_use_id===toolId);
+  assert.ok(result);assert.ok(JSON.stringify(result).includes('REAL_COMPLETED_CALLER_RESULT_42'));
+  assert.ok(!JSON.stringify(result).toLowerCase().includes('interrupted'));
+  assert.ok(!(actual.tools??[]).some(tool=>tool.name.startsWith('mcp__caller__')));
+});
+
+test('ten scope-changing caller tool results retire superseded pending workers instead of exhausting capacity',async()=>{
+  const before=calls.length;
+  const initial={model,max_tokens:1024,system:'CHAIN_IMPORT_LIFECYCLE',tools:callerTools,
+    messages:[{role:'user',content:'REQUEST_CALLER_TOOL_CHAIN'}]};
+  const history=[...initial.messages];
+  let response=await request('/v1/messages',initial);
+  assert.equal(response.status,200,response.text);
+  const seen=new Set();
+  for(let turn=1;turn<=10;turn++){
+    const tool=response.value.content.find(block=>block.type==='tool_use');
+    assert.ok(tool,`Chain turn ${turn} must return a caller tool`);
+    assert.ok(!seen.has(tool.id),'Every actual provider call must use a unique native tool ID');
+    seen.add(tool.id);
+    const result=`CHAIN_COMPLETED_VALUE_${turn}`;
+    history.push({role:'assistant',content:response.value.content},
+      {role:'user',content:[{type:'tool_result',tool_use_id:tool.id,content:result}]});
+    response=await request('/v1/messages',{...initial,max_tokens:1024+turn,messages:history});
+    assert.equal(response.status,200,`Scope-changing chain turn ${turn}: ${response.text}`);
+    const actual=calls.at(-1).body;
+    assert.equal(actual.max_tokens,1024+turn);
+    const imported=providerBlocks(calls.at(-1));
+    const nativeResult=imported.find(block=>block.type==='tool_result'&&block.tool_use_id===tool.id);
+    assert.ok(nativeResult&&JSON.stringify(nativeResult).includes(result));
+    assert.ok(!JSON.stringify(nativeResult).toLowerCase().includes('interrupted'));
+    assert.ok(imported.some(block=>block.type==='tool_use'&&block.id===tool.id));
+  }
+  const finalTool=response.value.content.find(block=>block.type==='tool_use');
+  assert.ok(finalTool&&!seen.has(finalTool.id));
+  history.push({role:'assistant',content:response.value.content},{role:'user',content:[
+    {type:'tool_result',tool_use_id:finalTool.id,content:'CHAIN_FINAL_COMPLETED_VALUE'},
+    {type:'text',text:'STOP_CALLER_TOOL_CHAIN'},
+  ]});
+  const final=await request('/v1/messages',{...initial,max_tokens:1035,messages:history});
+  assert.equal(final.status,200,final.text);
+  assert.ok(!final.value.content.some(block=>block.type==='tool_use'));
+  assert.equal(final.value.content.find(block=>block.type==='text').text,'CALLER_RESULT_ACCEPTED');
+  assert.equal(calls.length,before+12,'Each result and final stop must produce exactly one model request');
+});
+
+test('full signed caller history hydrates after all previous CLI workers are closed',async()=>{
+  const before=calls.length;
+  const initial={model,max_tokens:1024,system:'RESTART_HISTORY_SYSTEM',messages:[{role:'user',content:'RESPONSES_SIGNED_RESTART_NATIVE'}]};
+  const first=await request('/v1/messages',initial);
+  assert.equal(first.status,200,first.text);
+  await closeCliSessions();
+  const resumed=await request('/v1/messages',{...initial,messages:[...initial.messages,{role:'assistant',content:first.value.content},
+    {role:'user',content:'RESTART_IMPORT_FOLLOWUP'}]});
+  assert.equal(resumed.status,200,resumed.text);
+  assert.equal(calls.length,before+2);
+  const actual=calls.at(-1).body;
+  const assistant=actual.messages.find(message=>message.role==='assistant'&&message.content.some(block=>block.type==='thinking'));
+  assert.ok(assistant);
+  assert.ok(assistant.content.some(block=>block.type==='thinking'&&block.signature==='synthetic-signed-empty'&&block.thinking===''));
+  assert.ok(assistant.content.some(block=>block.type==='thinking'&&block.signature==='synthetic-signed-visible'&&block.thinking==='Synthetic visible reasoning'));
+  assert.ok(actual.messages.some(message=>message.role==='user'&&message.content.some(block=>block.type==='text'&&block.text.includes('RESTART_IMPORT_FOLLOWUP'))));
 });
 
 test('provider failure is returned once without a second model call or a successful completion',async()=>{

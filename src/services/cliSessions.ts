@@ -3,10 +3,11 @@ import { createInterface } from "node:readline";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { resolve, sep, join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { ANTHROPIC_BASE_URL, CLAUDE_CLI_MAX_SESSIONS, CLAUDE_CLI_RUNTIME_DIR,
+import { ANTHROPIC_BASE_URL, CLAUDE_CLI_MAX_SESSIONS, CLAUDE_CLI_RUNTIME_DIR, CLAUDE_CLI_AUTO_COMPACT_WINDOW,
   CLAUDE_CLI_SESSION_TTL_SECONDS, CLAUDE_CLI_WORKER_PATH } from "../config.js";
 import { upstreamStateScope } from "./responsesState.js";
-import { registerCliUpstream, closeCliUpstream, type CliUpstreamTurn } from "./cliUpstream.js";
+import { registerCliUpstream, closeCliUpstream, cliTurnUsage, type CliUpstreamTurn } from "./cliUpstream.js";
+import type { ObservedUsage } from "./usageObserver.js";
 import { CliBackendError, CliMessageAccumulator, cliHash, cliMessages, cliSystem, cliTools } from "./cliProtocol.js";
 import type { JsonObject } from "./responsesTypes.js";
 
@@ -61,7 +62,12 @@ class Session {
   closed = false;
   pending = new Set<string>();
   index?: string;
+  historyHash?: string;
+  historyLength = 0;
   message?: JsonObject;
+  turnUsage?: ObservedUsage;
+  compactions = 0;
+  lastCompaction?: JsonObject;
   private readyResolve!: () => void;
   private readyReject!: (error: Error) => void;
   private readonly ready = new Promise<void>((resolve, reject) => { this.readyResolve = resolve; this.readyReject = reject; });
@@ -69,14 +75,18 @@ class Session {
   private completedReject?: (error: Error) => void;
   private completed: Promise<void> = Promise.resolve();
   private options = new Map<string, { resolve: () => void; reject: (error: Error) => void }>();
+  private compactWaiter?: { resolve: () => void; reject: (error: Error) => void };
   private forwarding?: { close: () => void };
   private effort: unknown;
   private exitResolve!: () => void;
   readonly exited = new Promise<void>(resolve => { this.exitResolve = resolve; });
 
-  constructor(readonly scope: string, readonly model: string, readonly body: JsonObject, readonly owner: Registry) {
+  constructor(readonly scope: string, readonly model: string, readonly body: JsonObject, readonly owner: Registry,
+    readonly importedHistory?: JsonObject[], readonly origin = "",
+    readonly retired: { session: Session; historyHash: string; pending: string[] }[] = []) {
     this.effort = body.output_config?.effort;
     this.upstream = { active: false, calls: 0, scope: "", model };
+    if (body.thinking?.display === "updates") this.upstream.thinkingDisplay = "updates";
     // Rejections can precede the consumer attaching its awaited startup/turn handler.
     void this.ready.catch(() => {});
   }
@@ -106,15 +116,24 @@ class Session {
         this.lastUsed = Date.now();
         if (message.type === "ready") this.readyResolve();
         else if (message.type === "native_event") this.queue.push(message.event);
+        else if (message.type === "compact_phase") {
+          this.upstream.compacting = message.active === true;
+          void this.send({ type: "compact_phase_ack", request_id: message.request_id }).catch(error => this.fail(error));
+        } else if (message.type === "compact_boundary") {
+          this.compactions++; this.lastCompaction = message.compact_metadata;
+        } else if (message.type === "compact_result") {
+          if (message.success) this.compactWaiter?.resolve();
+          else this.compactWaiter?.reject(new CliBackendError("cli_compaction_failed", "CLI compaction failed.", 502));
+        }
         else if (message.type === "turn_result") {
           if (!message.success) this.fail(new CliBackendError("cli_inference_failed", "The CLI inference turn failed.", 502));
           else this.completedResolve?.();
         } else if (message.type === "options_applied") {
           this.options.get(message.request_id)?.resolve(); this.options.delete(message.request_id);
         } else if (message.type === "error") {
-          const clientError = ["unsupported_options", "unsupported_tool_result", "invalid_tool_result", "unsupported_tool_schema"].includes(message.code);
+          const clientError = ["unsupported_options", "unsupported_tool_result", "invalid_tool_result", "unsupported_tool_schema", "invalid_history"].includes(message.code);
           this.fail(new CliBackendError(clientError ? message.code : "cli_inference_failed",
-            clientError ? "The requested option or tool result is outside the CLI backend contract." : "The CLI inference worker failed.", clientError ? 400 : 502));
+            clientError ? "The requested option, native history or tool result is outside the CLI backend contract." : "The CLI inference worker failed.", clientError ? 400 : 502));
         }
       } catch { this.fail(new CliBackendError("cli_worker_protocol_error", "The CLI worker returned an invalid frame.", 502)); }
     });
@@ -126,6 +145,8 @@ class Session {
     await this.send({ type: "start", model: this.model, system: cliSystem(this.body.system).text,
       tools: cliTools(this.body.tools), maxTokens: this.body.max_tokens, thinking: this.body.thinking,
       effort: this.effort, cwd, configDir, authMode: "proxy", upstream: forwarding.base,
+      ...(CLAUDE_CLI_AUTO_COMPACT_WINDOW ? { autoCompactWindow: CLAUDE_CLI_AUTO_COMPACT_WINDOW } : {}),
+      ...(this.importedHistory ? { history: this.importedHistory } : {}),
       credential: { kind: "api_key", token: forwarding.token },
       ...(process.env.CLAUDE_CLI_EXECUTABLE ? { cliPath: resolve(process.env.CLAUDE_CLI_EXECUTABLE) } : {}) });
     await this.ready;
@@ -136,8 +157,9 @@ class Session {
   }
   async begin(messages: JsonObject[], effort: unknown): Promise<void> {
     validateNextInput(messages, this.pending);
-    this.busy = true; this.lastUsed = Date.now(); this.message = undefined;
-    this.upstream.active = true; this.upstream.calls = 0;
+    this.busy = true; this.lastUsed = Date.now(); this.message = undefined; this.turnUsage = undefined;
+    this.upstream.active = true; this.upstream.calls = 0; this.upstream.inferenceCalls = 0; this.upstream.compacting = false;
+    this.upstream.requests = [];
     this.upstream.failure = undefined; this.upstream.observer = undefined;
     if (effort !== this.effort) {
       const requestId = randomUUID();
@@ -171,22 +193,57 @@ class Session {
       if (event.type === "message_stop") {
         this.message = accumulator.result();
         if (this.message.stop_reason !== "tool_use") await this.completed;
+        this.turnUsage = await cliTurnUsage(this.upstream);
+        // Wire usage describes this inference's context, as native clients
+        // expect. Separate turnUsage includes internal compaction accounting;
+        // adding it to wire input_tokens would spuriously trigger compaction.
         yield event; return;
       }
       yield event;
+    }
+  }
+  /** Trusted operator/test control, not a user-message slash-command parser. */
+  async compact(instructions?: string): Promise<{ compacted: boolean; metadata?: JsonObject;
+    usage?: ObservedUsage; providerCalls: number }> {
+    if (this.closed || this.busy || this.pending.size) {
+      throw new CliBackendError("cli_session_busy", "Finish the active caller/tool turn before compaction.", 409);
+    }
+    this.busy = true; this.upstream.active = true; this.upstream.calls = 0;
+    this.upstream.inferenceCalls = 0; this.upstream.compacting = false; this.upstream.requests = [];
+    this.upstream.failure = undefined; this.upstream.observer = undefined;
+    const before = this.compactions;
+    const done = new Promise<void>((resolve, reject) => { this.compactWaiter = { resolve, reject }; });
+    void done.catch(() => {});
+    try {
+      await this.send({ type: "compact", ...(instructions ? { instructions } : {}) });
+      await done;
+      const usage = await cliTurnUsage(this.upstream);
+      return { compacted: this.compactions > before, metadata: this.lastCompaction, usage, providerCalls: this.upstream.calls };
+    } catch (error) {
+      this.fail(error instanceof Error ? error : new Error()); throw error;
+    } finally {
+      this.compactWaiter = undefined; this.upstream.active = false;
+      this.busy = false; this.lastUsed = Date.now();
     }
   }
   commit(messages: JsonObject[]): void {
     if (!this.message) throw new CliBackendError("incomplete_cli_stream", "The CLI message is incomplete.", 502);
     this.pending = new Set(this.message.content.filter((block: JsonObject) => block.type === "tool_use").map((block: JsonObject) => block.id));
     this.upstream.active = false; this.busy = false; this.lastUsed = Date.now();
-    this.index = cliHash([this.scope, cliMessages([...messages, { role: "assistant", content: this.message.content }])]);
+    const history = cliMessages([...messages, { role: "assistant", content: this.message.content }]);
+    this.historyHash = cliHash(history); this.historyLength = history.length;
+    this.index = cliHash([this.scope, history]);
     const matches = this.owner.index.get(this.index) ?? new Set<Session>();
     matches.add(this); this.owner.index.set(this.index, matches);
+    for (const old of this.retired.splice(0)) {
+      if (!old.session.closed && !old.session.busy && old.session.historyHash === old.historyHash &&
+          old.session.pending.size === old.pending.length && old.pending.every(id => old.session.pending.has(id))) old.session.close();
+    }
   }
   fail(error: Error): void {
     if (this.closed) return;
     this.readyReject(error); this.completedReject?.(error); this.queue.fail(error);
+    this.compactWaiter?.reject(error);
     for (const waiter of this.options.values()) waiter.reject(error);
     this.options.clear(); this.close();
   }
@@ -254,31 +311,45 @@ class Registry {
     }
     const scope = cliHash([principal, upstreamStateScope(ANTHROPIC_BASE_URL, credential), body.model,
       system.blocks, tools, body.max_tokens, body.thinking ?? null, body.tool_choice ?? null]);
+    const origin = cliHash([principal, upstreamStateScope(ANTHROPIC_BASE_URL, credential)]);
     let pivot = messages.length - 1;
     while (pivot >= 0 && messages[pivot].role === "user") pivot--;
     const history = messages.slice(0, pivot + 1), next = messages.slice(pivot + 1);
     let session: Session | undefined;
+    let imported = false;
     if (history.length) {
       const key = cliHash([scope, history]);
       const matches = this.index.get(key);
       session = matches && [...matches].find(value => !value.closed && !value.busy);
       if (!session && matches?.size) throw new CliBackendError("cli_session_busy", "Matching CLI conversations already have active requests.", 409);
-      if (!session || session.closed) throw new CliBackendError("cli_session_history_mismatch",
-        "This history has no live CLI session. Start a new conversation after restart, expiry, branching or prefix changes.", 409);
-      if (session.busy) throw new CliBackendError("cli_session_busy", "This CLI conversation already has an active request.", 409);
-      validateNextInput(next, session.pending);
-      matches!.delete(session);
-      if (!matches!.size) this.index.delete(key);
-      session.index = undefined;
-    } else {
+      if (session) {
+        validateNextInput(next, session.pending);
+        matches!.delete(session);
+        if (!matches!.size) this.index.delete(key);
+        session.index = undefined;
+      }
+    }
+    if (!session) {
+      imported = history.length > 0;
+      if (!imported) {
       validateNextInput(next, new Set());
+      }
       if (this.sessions.size >= CLAUDE_CLI_MAX_SESSIONS) {
         const idle = [...this.sessions.values()].filter(value => !value.busy && !value.pending.size)
           .sort((a, b) => a.lastUsed - b.lastUsed)[0];
         if (idle) idle.close();
         else throw new CliBackendError("cli_capacity", "All CLI sessions currently have active or pending caller work.", 503);
       }
-      session = new Session(scope, body.model, { ...body, system: system.blocks, tools: body.tool_choice?.type === "none" ? [] : tools }, this);
+      const retired: { session: Session; historyHash: string; pending: string[] }[] = [];
+      if (imported) for (const old of this.sessions.values()) {
+        if (old.closed || old.busy || !old.pending.size || old.origin !== origin || !old.historyHash || old.historyLength >= messages.length) continue;
+        if (cliHash(messages.slice(0, old.historyLength)) !== old.historyHash) continue;
+        const results = messages.slice(old.historyLength).flatMap(message => message.content)
+          .filter(block => block.type === "tool_result").map(block => block.tool_use_id);
+        if ([...old.pending].every(id => results.includes(id))) retired.push({ session: old, historyHash: old.historyHash, pending: [...old.pending] });
+      }
+      session = new Session(scope, body.model, { ...body, system: system.blocks, tools: body.tool_choice?.type === "none" ? [] : tools }, this,
+        imported ? messages : undefined, origin, retired);
       this.sessions.set(session.id, session);
       session.busy = true;
     }
@@ -300,7 +371,7 @@ class Registry {
       }, 30000);
       this.timer.unref();
     }
-    try { await session.begin(next, body.output_config?.effort); }
+    try { await session.begin(imported ? [] : next, body.output_config?.effort); }
     catch (error) { detach(); session.fail(error instanceof Error ? error : new Error()); throw error; }
     return { session, messages, detach };
   }

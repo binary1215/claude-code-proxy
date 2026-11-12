@@ -114,6 +114,8 @@ test('the same private forwarder nonce and scope survive a coordinated OAuth ref
     assert.equal(providerCalls.at(-1).path, '/v1/messages');
 
     turn.calls = 0;
+    turn.inferenceCalls = 0;
+    turn.requests = [];
     refreshState('refreshing');
     const second = request(registration);
     await until(() => turn.calls === 1, 'Forwarder must enter its credential refresh wait');

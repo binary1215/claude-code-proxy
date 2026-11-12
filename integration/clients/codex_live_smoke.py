@@ -91,8 +91,9 @@ class HarnessFailure(Exception):
 
 
 class State:
-    def __init__(self, gateway_key, relay_key=None, gateway_target=None):
+    def __init__(self, gateway_key, relay_key=None, gateway_target=None, model=MODEL):
         self.phase = 'initial'
+        self.model = model
         self.gateway_key = gateway_key
         self.relay_key = relay_key
         self.gateway_target = gateway_target
@@ -118,7 +119,7 @@ class QuietServer(ThreadingHTTPServer):
 
 
 class Observer(BaseHTTPRequestHandler):
-    """Forward received bytes once; gateway mode never contacts .64 directly."""
+    """Forward received bytes once to the explicitly selected endpoint."""
     def log_message(self, *_):
         pass
 
@@ -146,7 +147,7 @@ class Observer(BaseHTTPRequestHandler):
                 raise HarnessFailure('observer_request_shape_failed')
             raw = self.rfile.read(size)
             request = json.loads(raw)
-            if len(raw) != size or not isinstance(request, dict) or request.get('model') != MODEL:
+            if len(raw) != size or not isinstance(request, dict) or request.get('model') != state.model:
                 raise HarnessFailure('observer_request_shape_failed')
             if self.headers.get('x-claude-proxy-native-options') != NATIVE_OPTIONS:
                 raise HarnessFailure('caller_cache_header_changed')
@@ -425,7 +426,7 @@ def start_observer(state, leg):
 def gateway_target(base_url):
     """Parse an explicit base URL; credentials must be supplied by env only."""
     parsed = urlsplit(base_url)
-    if (parsed.scheme not in {'http', 'https'} or not parsed.hostname or parsed.hostname == REMOTE_HOST or parsed.username is not None
+    if (parsed.scheme not in {'http', 'https'} or not parsed.hostname or parsed.username is not None
             or parsed.password is not None or parsed.query or parsed.fragment
             or not parsed.path.rstrip('/').endswith('/v1')
             or any(ord(char) < 33 for char in base_url)):
@@ -433,12 +434,19 @@ def gateway_target(base_url):
     return parsed.scheme, parsed.hostname, parsed.port or (443 if parsed.scheme == 'https' else 80), parsed.path.rstrip('/') + '/responses'
 
 
+def native_model(value):
+    if not re.fullmatch(r'claude-[A-Za-z0-9][A-Za-z0-9._-]{0,126}', value):
+        raise argparse.ArgumentTypeError('Use a native Claude model ID')
+    return value
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--live', action='store_true', help='Required explicit opt-in for at most five live outbound requests')
     parser.add_argument('--codex', type=Path, required=True, help='Existing Codex 0.160.0 executable')
+    parser.add_argument('--model', type=native_model, default=MODEL, help='Native model ID; default preserves the original Haiku4.5 check')
     parser.add_argument('--relay-key-env', default='CODEX_LIVE_RELAY_KEY', help='Environment variable NAME only; never put a key in an argument')
-    parser.add_argument('--gateway-base-url', help='Existing gateway base URL, e.g. http://192.168.0.7:4000/claude-responses/v1; skips local LiteLLM')
+    parser.add_argument('--gateway-base-url', help='Explicit gateway or validation-relay base ending in /v1; skips local LiteLLM')
     parser.add_argument('--gateway-key-env', default='CODEX_LIVE_GATEWAY_KEY', help='Existing gateway credential environment variable NAME only')
     parser.add_argument('--cache-fixture', action='store_true', help='Add stable inert catalog reference text for a roughly 6k-input-token cache test; same five-call cap')
     parser.add_argument('--output', type=Path, required=True, help='NEW directory under system temp, outside the repository')
@@ -452,6 +460,8 @@ def main(argv=None):
         except ValueError:
             parser.error('--gateway-base-url must be an HTTP(S) base ending in /v1, without credentials, query or fragment')
     gateway_mode = target is not None
+    direct_mode = gateway_mode and target[1] == REMOTE_HOST
+    model = args.model
     key_env = args.gateway_key_env if gateway_mode else args.relay_key_env
     if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]{0,127}', key_env):
         parser.error('The selected key environment argument must be a variable name')
@@ -465,9 +475,11 @@ def main(argv=None):
     home = output / 'codex-state'
     home.mkdir()
     cache_reference = cache_fixture_text() if args.cache_fixture else ''
-    report = {'scope': 'actual Codex -> existing gateway -> configured relay -> real Haiku' if gateway_mode else 'actual Codex -> temporary local stock LiteLLM -> .64 relay -> real Haiku',
-              'mode': 'existing_gateway' if gateway_mode else 'local_stock',
-              'actual_dot7_gateway_tested': False, 'live_opt_in': True, 'model': MODEL,
+    report = {'scope': 'actual Codex -> explicit validation relay -> selected real Claude model' if direct_mode else
+                      'actual Codex -> existing gateway -> configured relay -> selected real Claude model' if gateway_mode else
+                      'actual Codex -> temporary local stock LiteLLM -> .64 relay -> selected real Claude model',
+              'mode': 'direct_relay' if direct_mode else 'existing_gateway' if gateway_mode else 'local_stock',
+              'actual_dot7_gateway_tested': False, 'live_opt_in': True, 'model': model,
               'local_litellm_started': False, 'gateway_internals_observed': False,
               'relay_ingress_observed': False, 'gateway_retry_configuration_observed': not gateway_mode,
               'temporary_codex_session_history_retained': True, 'observer_raw_data_persisted': False,
@@ -500,9 +512,9 @@ def main(argv=None):
         if not selected_key or not selected_key.isascii() or not all(33 <= ord(c) <= 126 for c in selected_key) or len(selected_key) > 4096:
             raise HarnessFailure('gateway_key_environment_missing_or_invalid' if gateway_mode else 'relay_key_environment_missing_or_invalid')
         if gateway_mode:
-            state = State(selected_key, gateway_target=target)
+            state = State(selected_key, gateway_target=target, model=model)
         else:
-            state = State('sk-local-live-' + secrets.token_hex(24), selected_key)
+            state = State('sk-local-live-' + secrets.token_hex(24), selected_key, model=model)
             remote, remote_thread = start_observer(state, 'remote')
             servers.append((remote, remote_thread))
             config = {'litellm_settings': {'telemetry': False, 'num_retries': 0, 'callbacks': [], 'request_timeout': HTTP_TIMEOUT},
@@ -536,7 +548,7 @@ def main(argv=None):
             observer.target_port = port
         servers.append((observer, observer_thread))
         # A bounded client test profile, NOT official Claude capability metadata.
-        catalog = {'models': [{'slug': MODEL, 'display_name': 'Live Haiku limited test profile (NOT official Claude metadata)',
+        catalog = {'models': [{'slug': model, 'display_name': 'Live Claude limited test profile (NOT official Claude metadata)',
             'supported_reasoning_levels': [], 'shell_type': 'disabled', 'visibility': 'list', 'supported_in_api': True, 'priority': 0,
             'support_verbosity': False, 'apply_patch_tool_type': None, 'truncation_policy': {'mode': 'bytes', 'limit': 100000},
             'experimental_supported_tools': [], 'base_instructions': 'Protocol smoke test. Use only the no-I/O get_goal tool when requested. Do not create or update goals. Never access files, commands, network, search, agents or external tools. Follow requested final response markers.' + cache_reference,
@@ -545,11 +557,11 @@ def main(argv=None):
         catalog_path.write_text(json.dumps(catalog, indent=2), encoding='utf-8')
         client_env = clean_env(output)
         client_env.update(CODEX_HOME=str(home), CODEX_LIVE_GATEWAY_KEY=state.gateway_key, RUST_LOG='off')
-        overrides = {'model_provider': 'live_relay', 'model': MODEL, 'model_catalog_json': str(catalog_path),
+        overrides = {'model_provider': 'live_relay', 'model': model, 'model_catalog_json': str(catalog_path),
             'sandbox_mode': 'read-only', 'approval_policy': 'never', 'web_search': 'disabled',
             'analytics.enabled': False, 'feedback.enabled': False, 'check_for_update_on_startup': False,
             'otel.exporter': 'none', 'otel.trace_exporter': 'none', 'agents.enabled': False, 'cli_auth_credentials_store': 'file',
-            'model_providers.live_relay.name': 'Existing gateway live smoke' if gateway_mode else 'Temporary stock LiteLLM to .64 live relay',
+            'model_providers.live_relay.name': 'Explicit validation relay live smoke' if direct_mode else 'Existing gateway live smoke' if gateway_mode else 'Temporary stock LiteLLM to .64 live relay',
             'model_providers.live_relay.base_url': 'http://127.0.0.1:' + str(observer.server_port) + state.client_path.removesuffix('/responses'),
             'model_providers.live_relay.wire_api': 'responses', 'model_providers.live_relay.env_key': 'CODEX_LIVE_GATEWAY_KEY',
             'model_providers.live_relay.requires_openai_auth': False, 'model_providers.live_relay.supports_websockets': False,
@@ -563,7 +575,7 @@ def main(argv=None):
         rpc.request(0, 'initialize', {'clientInfo': {'name': 'codex_live_smoke', 'title': 'Bounded live relay smoke', 'version': '1.0'},
                                      'capabilities': {'experimentalApi': True}})
         rpc.send({'method': 'initialized', 'params': {}})
-        thread = rpc.request(1, 'thread/start', {'model': MODEL, 'modelProvider': 'live_relay', 'cwd': str(workspace),
+        thread = rpc.request(1, 'thread/start', {'model': model, 'modelProvider': 'live_relay', 'cwd': str(workspace),
                                                'approvalPolicy': 'never', 'sandbox': 'read-only', 'ephemeral': False})
         thread_id = thread['thread']['id']
         for request_id, phase in enumerate(PHASE_LIMITS, start=2):
@@ -612,8 +624,9 @@ def main(argv=None):
                 report['stock_guarded_sources_unchanged'] = False
         report['workspace_file_count'] = sum(1 for path in workspace.rglob('*') if path.is_file())
         report['remote_request_attempts'] = None if gateway_mode else state.remote_attempts if state else 0
-        report['gateway_request_attempts'] = state.gateway_attempts if state and gateway_mode else None
-        report['direct_relay_request_attempts'] = state.remote_attempts if state else 0
+        report['endpoint_request_attempts'] = state.gateway_attempts if state and gateway_mode else None
+        report['gateway_request_attempts'] = state.gateway_attempts if state and gateway_mode and not direct_mode else None
+        report['direct_relay_request_attempts'] = state.gateway_attempts if state and direct_mode else state.remote_attempts if state else 0
         report['actual_dot7_gateway_tested'] = bool(state and state.gateway_attempts and target == ('http', '192.168.0.7', 4000, '/claude-responses/v1/responses'))
         report['observer_failure_code'] = state.failure if state else None
         report['client_request_count'] = len(state.records['client']) if state else 0
@@ -627,7 +640,7 @@ def main(argv=None):
                     evidence = phase_evidence(state, phase)
                     evidence.update(terminal_status='unobserved', **{'pass': False})
                     report['phases'][phase] = evidence
-        report['observed_no_retries'] = (report['gateway_request_attempts'] == report['client_request_count'] == 5 if gateway_mode else
+        report['observed_no_retries'] = (report['endpoint_request_attempts'] == report['client_request_count'] == 5 if gateway_mode else
             report['remote_request_attempts'] == report['client_request_count'] == report['remote_request_count'] == 5) and all(
             report['phases'].get(phase, {}).get('expected_request_count') for phase in PHASE_LIMITS)
         report['no_hidden_retries'] = None if gateway_mode else report['observed_no_retries']
