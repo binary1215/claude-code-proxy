@@ -61,7 +61,11 @@ preserves user/assistant roles, thinking/signatures/redacted blocks and complete
 tool pairs. It does not turn the conversation into a textual user prompt.
 Historical tools are renamed to their deterministic MCP transport names and
 arguments are wrapped, but those tools are not registered merely because they
-appear in history. An empty, guarded continuation triggers the resumed inference.
+appear in history. A guarded private continuation triggers the resumed inference.
+The forwarder removes its exact nonce and associated CLI-generated
+`No response requested.` assistant row on every replay. Those are resume
+bookkeeping, not caller history: forwarding them would incorrectly mark the
+caller's last request as answered. The current caller input appears only once.
 
 This importer uses the SDK's alpha `SessionStore.load` resume transport and a
 **pinned internal CLI transcript-entry format**. It is not an officially stable

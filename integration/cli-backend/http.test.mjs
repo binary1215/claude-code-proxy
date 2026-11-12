@@ -482,8 +482,13 @@ test('native environment system records preserve order, cache blocks and caller-
     .some(block=>block.type==='text'&&(exact?block.text===text:block.text?.includes(text)));
   const locate=(actual,marker)=>actual.messages.findIndex(message=>message.role==='system'&&Array.isArray(message.content)
     &&message.content.some(block=>block.type==='text'&&block.text.includes(marker)));
-  const verify=(actual,activeEphemeral=false)=>{
+  const verify=(actual,activeEphemeral=false,currentUserText=userText)=>{
     assert.ok(!JSON.stringify(actual).includes('[claude-proxy-system:'),'Private import carrier markers must never reach the provider');
+    assert.ok(!JSON.stringify(actual).includes('[claude-proxy-resume:'),'Private resume trigger markers must never reach the provider');
+    const currentUser=actual.messages.findIndex(message=>message.role==='user'&&textMatches(message,currentUserText,true));
+    assert.ok(currentUser>=0,'The current real caller user turn must reach the provider');
+    assert.ok(!actual.messages.slice(currentUser+1).some(message=>message.role==='assistant'),
+      'No synthetic assistant may mark the current caller request answered before the provider infers');
     const userIndex=actual.messages.findIndex(message=>message.role==='user'&&textMatches(message,userText,true));
     const persistentIndex=locate(actual,'NATIVE_ENV_PERSISTENT\n');
     const ephemeralIndex=locate(actual,'NATIVE_ENV_THIS_TURN_ONLY');
@@ -513,7 +518,7 @@ test('native environment system records preserve order, cache blocks and caller-
   assert.equal(second.status,200,second.text);
   assert.equal(second.cliSession,first.cliSession,'Unchanged native system history must reuse the indexed SDK session');
   const secondWire=calls.at(-1).body;
-  const retained=verify(secondWire);
+  const retained=verify(secondWire,false,'NATIVE_ENV_SECOND_USER Return CLI_HTTP_OK.');
   const laterUser=secondWire.messages.findIndex(message=>message.role==='user'
     &&textMatches(message,'NATIVE_ENV_SECOND_USER'));
   assert.ok(laterUser>retained.persistentIndex,'Persistent system text must remain before the later real caller user');
@@ -525,7 +530,7 @@ test('native environment system records preserve order, cache blocks and caller-
   assert.equal(third.status,200,third.text);
   assert.notEqual(third.cliSession,second.cliSession,'New native system content must import the complete updated history');
   const thirdWire=calls.at(-1).body;
-  verify(thirdWire);
+  verify(thirdWire,false,'NATIVE_ENV_THIRD_USER Return CLI_HTTP_OK.');
   const replacementIndex=locate(thirdWire,'NATIVE_ENV_CHANGED_AFTER_ASSISTANT');
   assert.deepEqual(thirdWire.messages[replacementIndex],replacement);
   assert.ok(thirdWire.messages.findIndex(message=>message.role==='user'
@@ -666,6 +671,12 @@ test('cold history ending in a completed caller tool result imports the real res
     .find(block=>block.type==='tool_result'&&block.tool_use_id===toolId);
   assert.ok(result);assert.ok(JSON.stringify(result).includes('REAL_COMPLETED_CALLER_RESULT_42'));
   assert.ok(!JSON.stringify(result).toLowerCase().includes('interrupted'));
+  const resultIndex=actual.messages.findIndex(message=>message.role==='user'&&Array.isArray(message.content)
+    &&message.content.some(block=>block.type==='tool_result'&&block.tool_use_id===toolId));
+  assert.ok(resultIndex>=0);
+  assert.ok(!actual.messages.slice(resultIndex+1).some(message=>message.role==='assistant'),
+    'No synthetic assistant may mark an imported completed caller result answered before inference');
+  assert.ok(!JSON.stringify(actual).includes('[claude-proxy-resume:'));
   assert.ok(!(actual.tools??[]).some(tool=>tool.name.startsWith('mcp__caller__')));
 });
 
@@ -758,6 +769,8 @@ test('disconnect aborts the held provider request and never starts an extra mode
 });
 
 test('outer history counts each actual model call once and excludes conversations, signatures and auth',()=>{
+  assert.ok(calls.every(call=>!JSON.stringify(call.body).includes('[claude-proxy-resume:')),
+    'Private resume trigger markers must remain absent across all imported and live provider replays');
   const rows=db.prepare('SELECT * FROM request_log ORDER BY id').all();
   assert.equal(rows.length,calls.length+validationRejections);
   const observed=rows.filter(row=>row.upstream_http_status!==null);

@@ -86,6 +86,7 @@ class Session {
     readonly retired: { session: Session; historyHash: string; pending: string[] }[] = []) {
     this.effort = body.output_config?.effort;
     this.upstream = { active: false, calls: 0, scope: "", model };
+    if (importedHistory) this.upstream.importContinuation = `[claude-proxy-resume:${randomUUID()}]`;
     this.upstream.nativeSystems = importedHistory?.flatMap((message, index) => message.role === "system" ? [{
       index, marker: `[claude-proxy-system:${cliHash([this.id, index, message])}]`, message,
     }] : []);
@@ -174,7 +175,8 @@ class Session {
     }
     const content = messages.flatMap(message => message.content);
     const results = content.filter(block => block.type === "tool_result");
-    const prompt = content.filter(block => block.type !== "tool_result");
+    const prompt = !messages.length && this.upstream.importContinuation ?
+      [{ type: "text", text: this.upstream.importContinuation }] : content.filter(block => block.type !== "tool_result");
     if (this.pending.size) {
       if (results.length !== this.pending.size || new Set(results.map(r => r.tool_use_id)).size !== this.pending.size ||
           results.some(result => !this.pending.has(result.tool_use_id))) {

@@ -30,6 +30,7 @@ export interface CliUpstreamTurn {
   thinkingDisplay?: "updates";
   nativeSystems?: { index: number; marker: string; message: Record<string, unknown>; wireMessage?: Record<string, unknown> | null }[];
   nativeSystemReplay?: boolean;
+  importContinuation?: string;
 }
 
 /** Sum actual provider calls, including CLI compaction, without double-counting
@@ -81,6 +82,26 @@ export async function registerCliUpstream(turn: CliUpstreamTurn): Promise<{ base
           return;
         }
         if (messages) { owner.calls++; if (!owner.compacting) owner.inferenceCalls = (owner.inferenceCalls ?? 0) + 1; }
+        // Resuming a caller history ends in an unanswered caller turn. The
+        // pinned CLI inserts an inert assistant reply before its stdin trigger.
+        // Remove only the exact pair associated with this private nonce, on
+        // every replay; otherwise the model sees the caller request as finished.
+        if (messages && owner.importContinuation && Array.isArray(body?.messages)) {
+          const marker = owner.importContinuation;
+          const index = body.messages.findIndex((message: Record<string, any>) => message.role === "user" &&
+            (message.content === marker || Array.isArray(message.content) && message.content.some((block: Record<string, any>) => block.type === "text" && block.text === marker)));
+          if (index >= 0) {
+            const message = body.messages[index];
+            const remaining = typeof message.content === "string" ? [] : message.content.filter((block: Record<string, any>) => !(block.type === "text" && block.text === marker));
+            if (remaining.length) message.content = remaining;
+            else body.messages.splice(index, 1);
+            const previous = body.messages[index - 1];
+            const synthetic = previous?.role === "assistant" && (previous.content === "No response requested." ||
+              Array.isArray(previous.content) && previous.content.length === 1 && previous.content[0].type === "text" && previous.content[0].text === "No response requested.");
+            if (synthetic) body.messages.splice(index - 1, 1);
+            bytes = Buffer.from(JSON.stringify(body));
+          }
+        }
         // The pinned CLI resume transport renders caller-owned system text via
         // attachment rows but cannot retain their native cache/lifetime fields.
         // Restore ONLY our exact role:system carrier, in place, before any model
