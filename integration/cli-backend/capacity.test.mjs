@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { once } from 'node:events';
+import { EventEmitter, once } from 'node:events';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve, sep } from 'node:path';
@@ -12,6 +12,8 @@ import { after, afterEach, test } from 'node:test';
 // eviction must preserve full-history continuation without executing a tool.
 const runtime = mkdtempSync(join(tmpdir(), 'claude-cli-capacity-'));
 const calls = [];
+const heldRequests = new Map();
+const holdEvents = new EventEmitter();
 const model = 'claude-haiku-5-5';
 const signed = { type: 'thinking', thinking: 'Synthetic exact caller reasoning.', signature: 'synthetic-capacity-signature' };
 const emit = (type, rest = {}) => `event: ${type}\ndata: ${JSON.stringify({ type, ...rest })}\n\n`;
@@ -33,7 +35,11 @@ const provider = http.createServer(async (req, res) => {
   res.writeHead(200, { 'content-type': 'text/event-stream' });
   res.write(emit('message_start', { message: { id: `msg_capacity_${calls.length}`, type: 'message', role: 'assistant', model,
     content: [], stop_reason: null, stop_sequence: null, usage: { ...usage, output_tokens: 0 } } }));
-  if (hold) return; // Keep the real upstream stream active until owned cleanup.
+  if (hold) {
+    const label = contents.find(block => block.type === 'text' && block.text?.includes('HOLD_ACTIVE_LEASE')).text.match(/HOLD_ACTIVE_LEASE_[AB]/)[0];
+    heldRequests.set(label, res); holdEvents.emit(label);
+    return; // Keep the real upstream stream active until owned cleanup.
+  }
   for (const [index, block] of blocks.entries()) {
     const start = block.type === 'thinking' ? { ...block, thinking: '', signature: '' } : block.type === 'tool_use' ? { ...block, input: {} } : { ...block, text: '' };
     res.write(emit('content_block_start', { index, content_block: start }));
@@ -74,6 +80,16 @@ function continuation(body, previous, value) {
   return { ...body, messages: [...body.messages, { role: 'assistant', content: previous.message.content },
     { role: 'user', content: [{ type: 'tool_result', tool_use_id: tool.id, content: value }] }] };
 }
+async function heldProviderRequest(label) {
+  // Some pinned CLI transports buffer message_start until a content block.
+  // Observe the real provider socket instead of depending on that buffering.
+  if (!heldRequests.has(label)) await once(holdEvents, label, { signal: AbortSignal.timeout(15000) });
+  const response = heldRequests.get(label);
+  assert.equal(response.headersSent, true);
+  assert.equal(response.writableEnded, false);
+  assert.equal(response.destroyed, false);
+  return response;
+}
 afterEach(async () => { await closeCliSessions(); });
 after(async () => {
   provider.closeAllConnections(); await new Promise(done => provider.close(done)); db.close();
@@ -112,20 +128,21 @@ test('idle pending workers are LRU caches and evicted tool histories resume loss
 test('capacity eviction never closes an active inference lease and still rejects genuine overload', { timeout: 90000 }, async () => {
   const pending = await turn(request('IDLE_PENDING'));
   const active = await acquireCliSession(request('HOLD_ACTIVE_LEASE_A'), 'capacity-fixture', credential);
-  const next = active.session.events();
   try {
-    assert.equal((await next.next()).value.type, 'message_start');
+    const activeResponse = await heldProviderRequest('HOLD_ACTIVE_LEASE_A');
     const newest = await acquireCliSession(request('HOLD_ACTIVE_LEASE_B'), 'capacity-fixture', credential);
-    const newestEvents = newest.session.events();
     try {
-      assert.equal((await newestEvents.next()).value.type, 'message_start');
+      const newestResponse = await heldProviderRequest('HOLD_ACTIVE_LEASE_B');
       assert.equal(pending.session.closed, true);
       assert.equal(active.session.closed, false); assert.equal(active.session.busy, true); assert.equal(active.session.upstream.active, true);
+      assert.equal(activeResponse.destroyed, false); assert.equal(activeResponse.writableEnded, false);
+      assert.equal(newest.session.busy, true); assert.equal(newest.session.upstream.active, true);
       assert.equal(newest.session.closed, false); assert.equal(cliSessionCount(), 2);
       const before = calls.length;
       await assert.rejects(acquireCliSession(request('OVER_CAPACITY'), 'capacity-fixture', credential), { code: 'cli_capacity', status: 503 });
       assert.equal(calls.length, before, 'Rejected overload must not make a provider call');
       assert.equal(active.session.closed, false); assert.equal(newest.session.closed, false);
-    } finally { newest.detach(); await newestEvents.return(); }
-  } finally { active.detach(); await next.return(); }
+      assert.equal(activeResponse.destroyed, false); assert.equal(newestResponse.destroyed, false);
+    } finally { newest.detach(); }
+  } finally { active.detach(); }
 });
