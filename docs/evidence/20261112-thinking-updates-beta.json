@@ -1,0 +1,61 @@
+{
+  "date_kst": "2026-11-12",
+  "branch": "codex/thinking-updates-beta",
+  "source_base": "865dc377238deb95dc1fb8a7bd67a2ef3f89ecaf",
+  "purpose": "Complete the documented thinking display updates feature contract without rewriting caller system instructions.",
+  "changes": [
+    "Explicit native adaptive/enabled display=updates supplies thinking-display-updates-2026-08-18 in API-key and OAuth modes.",
+    "Responses known adaptive policies accept updates from the body extension or native-options header.",
+    "Responses header derivation reads the prepared native body, including header-supplied options.",
+    "Other betas remain present, required flags are not added twice, and other display modes are unchanged."
+  ],
+  "validation": {
+    "typescript_build": "passed",
+    "targeted_backend": { "passed": 65, "failed": 0 },
+    "windows_node": "24.22.1",
+    "windows_backend": { "total": 209, "passed": 208, "failed": 0, "skipped": 1 },
+    "linux_node": "22.23.3",
+    "linux_backend": { "total": 209, "passed": 209, "failed": 0, "skipped": 0 },
+    "linux_fixture_initial_failures": [
+      "Runtime image omitted the TypeScript development dependency and admin helper sources required by the test suite.",
+      "Test tmpfs execution settings prevented the CLI stub from taking precedence; the network-disabled fixture was corrected."
+    ],
+    "linux_fixture_final": "Existing production image with read-only candidate code/test/dependency mounts, no network or production credentials, temporary container removed.",
+    "wire_assertions": [
+      "Fake upstream rejects updates without its feature beta; patched native and Responses requests succeed.",
+      "Raw native system, signed history and formatted request bytes are unchanged.",
+      "OAuth and API-key authentication retain their existing separation.",
+      "Body and native-options header both supply the required beta.",
+      "Signed-empty and progress-update blocks replay exactly through Responses capsules."
+    ],
+    "live_candidate": {
+      "model": "claude-haiku-5-5",
+      "method": "Actual official CLI emits its own request; observer removes only the updates feature beta. Existing and candidate proxies use the same provider account.",
+      "unchanged_proxy": { "http": 400, "error_type": "invalid_request_error", "expected_text_present": false },
+      "patched_candidate": { "http": 200, "expected_text_present": true },
+      "ordinary_responses_patched_candidate": { "http": 429, "error_type": "rate_limit_error" },
+      "model_requests": 3,
+      "retries": 0,
+      "new_client_identity_added": false,
+      "production_changed": false,
+      "temporary_containers_remaining": 0
+    }
+  },
+  "provider_observations": {
+    "preceding_differential_requests": 20,
+    "preceding_statuses": { "200": 13, "429": 5, "400": 2 },
+    "system_content_discriminator_reproduced_on": ["claude-fable-5-2", "claude-haiku-5-5"],
+    "generic_claude_description_control": { "model": "claude-haiku-5-5", "http": 429 },
+    "updates_without_feature_beta": 400,
+    "updates_with_only_feature_beta": 429,
+    "private_provider_acceptance_rule": "unconfirmed"
+  },
+  "limits": [
+    "The beta fix resolves a configuration400 and local adapter rejection; generic-client429 remains unresolved.",
+    "Offline signature replay is not a fresh live-provider Responses acceptance result.",
+    "No CLI identity/system prefix injection, model/account fallback or provider retry was introduced.",
+    "No production container, gateway model/credential configuration or client source was changed."
+  ],
+  "production_deployed": false,
+  "primary_source": "https://platform.claude.com/docs/en/build-with-claude/thinking#controlling-thinking-display"
+}

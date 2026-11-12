@@ -256,6 +256,14 @@ with matching `model_reasoning_effort="high"`. Set the latter before the TOML
 provider table. Body `anthropic` and this header are mutually exclusive; they are
 never merged with an implicit precedence. Header options are validated by the
 same closed schema and are not forwarded as an HTTP header to Anthropic.
+For known adaptive models, `anthropic.thinking` also accepts
+`{"type":"adaptive","display":"updates"}`. The translated native request
+automatically receives the public `thinking-display-updates-2026-08-18` beta,
+whether the option came from the body or this header. Native Messages supplies
+the same feature beta when explicitly requested. Other client betas are kept.
+Empty reasoning and readable progress-update blocks retain their original
+signatures in capsules; no system text is added. See
+[display behavior and limits](MODEL-COMPATIBILITY.md#progress-update-display).
 Codex's [official configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference)
 documents custom provider headers.
 

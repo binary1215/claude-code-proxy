@@ -59,7 +59,8 @@ without guessing a token budget or requiring duplicate extension fields:
 This produces native `thinking: {"type":"adaptive"}` and
 `output_config: {"effort":"low"}`. Explicit native options remain available;
 conflicting efforts fail rather than silently overriding a caller's choice.
-Known adaptive policies also accept `display: "summarized"` or `"omitted"`.
+Known adaptive policies accept `display: "summarized"`, `"omitted"` or
+`"updates"`.
 
 `reasoning.effort: "none"` emits a real native `thinking: {"type":"disabled"}`
 where the model supports it. Always-on models reject it. Sonnet 5.5's
@@ -71,6 +72,36 @@ Forced tool choices remain model-specific. Fable/Mythos 5.2/5.1, Opus 5.5 and
 Sonnet 5.5 require `auto` or `none`. Verified other adaptive policies accept forced
 tools; manual enabled thinking retains the previous restriction. Client tools
 continue to execute only in the client.
+
+### Progress-update display
+
+For example, request progress-update display through Responses with:
+
+```json
+{
+  "model": "claude-fable-5-2",
+  "input": "Explain this change.",
+  "reasoning": { "effort": "low" },
+  "anthropic": { "thinking": { "type": "adaptive", "display": "updates" } },
+  "max_output_tokens": 4096,
+  "store": false
+}
+```
+
+The relay derives the required `thinking-display-updates-2026-08-18` beta from
+the translated native body, including when options arrive through
+`x-claude-proxy-native-options`. Native Messages also supplies this beta when its
+own adaptive/enabled thinking explicitly requests `display: "updates"`.
+Existing client betas and OAuth authentication are retained without adding a
+duplicate required flag. Other display modes do not enable the feature.
+
+Under updates, reasoning text is omitted and supported models can return readable
+progress-update thinking blocks. Empty and progress blocks keep their original
+signatures in Responses capsules. Display does not reduce billed thinking tokens
+or guarantee a progress block on each turn; see the official
+[display contract](https://platform.claude.com/docs/en/build-with-claude/thinking#controlling-thinking-display).
+The system prompt and native request bytes are not rewritten to enable this
+feature. Its beta fixes a configuration400, not the independently observed429.
 
 ## Replay and migration limits
 
@@ -144,3 +175,37 @@ Messages path. It does not certify Codex, the separate Responses route, tools,
 automatic compaction or long repository work. The observer captured only the
 client/gateway wire, so gateway/Han byte identity is not inferred. See the
 [sanitized actual-client receipt](evidence/20261112-han-managed-client-tests.json).
+
+## System-content differential and beta fix on 2026-11-12
+
+Fresh, tools-disabled official CLI requests went directly through Han while an
+isolated observer made one deliberate change per phase. Fable5.2 and Haiku5.5
+original requests returned200. Replacing only system text with neutral text,
+retaining the block count, per-block character lengths and cache-control
+structure, returned429 on both models. On Fable, JSON reserialization and
+individual removal of User-Agent, metadata, billing block, context management,
+cache markers or the Claude Code beta each retained200. These individual results
+do not establish acceptance of every combination of removals.
+
+This isolates system content as a discriminator under the tested OAuth context.
+Provider-side request qualification is an inference; the private matching rule
+and its purpose remain unknown. It is not a proven native system-loss bug or a
+general quota-exhaustion diagnosis. A further ordinary Haiku request with a
+truthful generic Claude description also returned429. The relay continues to
+preserve caller system text.
+
+Separately, `display: "updates"` without its documented feature beta returned400;
+the feature beta removed that validation error but left the ordinary429. The
+proxy change completes this public feature contract in Messages and Responses.
+Offline fake-provider tests enforce the beta requirement and verify exact native
+system/history bytes and signed-empty/progress replay. All209 Linux backend
+tests pass, with208 passed and one Linux-only skip on Windows. Production Han
+and LiteLLM were not redeployed.
+
+A temporary loopback-only candidate also ran a live before/after comparison:
+an actual official CLI Haiku5.5 request with only the updates feature beta removed
+returned400 through the unchanged Han proxy, then200 and the expected answer
+through the patched candidate. Ordinary Responses through the candidate still
+returned429. All three live requests were single attempts, and the temporary
+proxy/client containers were removed. See the
+[beta-fix receipt](evidence/20261112-thinking-updates-beta.json).

@@ -77,7 +77,7 @@ export async function relayResponses(req: Request, res: Response): Promise<void>
     sendError(res, 413, "request_too_large", "Translated request exceeds the supported size.");
     return;
   }
-  const headers = upstreamHeaders(req, credential);
+  const headers = upstreamHeaders(req, credential, prepared.nativeBody);
   headers["content-type"] = "application/json";
   headers.accept = prepared.stream ? "text/event-stream" : "application/json";
   headers["content-length"] = body.length;

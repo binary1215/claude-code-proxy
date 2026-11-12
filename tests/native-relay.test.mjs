@@ -270,6 +270,32 @@ test('raw request/reply and next-turn thinking, signature, redacted/tool/future 
   assert.deepEqual(received.at(-1).body, followupBytes);
 });
 
+test('OAuth updates adds its public beta once while preserving raw caller system and signed history', async () => {
+  const input = messages({ model: 'claude-fable-5-2', max_tokens: 1024,
+    thinking: { type: 'adaptive', display: 'updates' },
+    system: [{ type: 'text', text: 'Caller system stays unchanged 한글🙂', cache_control: { type: 'ephemeral' } }],
+    messages: [{ role: 'user', content: 'Synthetic first turn' },
+      { role: 'assistant', content: [{ type: 'thinking', thinking: '', signature: 'synthetic-original-signed-empty' },
+        { type: 'text', text: 'Synthetic earlier response' }] },
+      { role: 'user', content: 'Continue' }] });
+  const raw = Buffer.from(` \n${JSON.stringify(input, null, 2)}\n`);
+  const beta = 'thinking-display-updates-2026-08-18';
+  for (const provided of ['future-beta-2099-01-01', `future-beta-2099-01-01,${beta}`]) {
+    const before = received.length;
+    const response = await request('/v1/messages', raw, { ...auth(), 'anthropic-beta': provided });
+    assert.equal(response.status, 200);
+    assert.equal(received.length, before + 1);
+    const call = received.at(-1);
+    assert.deepEqual(call.body, raw);
+    const betas = call.headers['anthropic-beta'].split(',');
+    assert.equal(betas.filter(value => value === beta).length, 1);
+    assert.equal(betas.filter(value => value === 'oauth-2025-04-20').length, 1);
+    assert.ok(betas.includes('future-beta-2099-01-01'));
+    assert.ok(!betas.some(value => value.startsWith('claude-code-')));
+    assert.equal(call.headers.authorization, `Bearer ${process.env.CLAUDE_CODE_OAUTH_TOKEN}`);
+  }
+});
+
 test('native nonstream cache counters are persisted, unknown price remains NULL', async () => {
   assert.equal((await request('/v1/messages', messages())).status, 200);
   await until(() => latestLog().status !== 'pending', 'nonstream history completion');

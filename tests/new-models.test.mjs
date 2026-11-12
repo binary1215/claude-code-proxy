@@ -142,14 +142,14 @@ test('modern models reject manual budgets with an actionable policy error', () =
   }
 });
 
-test('known adaptive display values are preserved while beta display and binding controls stay explicit rejects', () => {
+test('known adaptive display values include updates while unknown display and binding controls remain rejected', () => {
   for (const model of knownModels) {
-    for (const display of ['summarized', 'omitted']) {
+    for (const display of ['summarized', 'omitted', 'updates']) {
       const native = prepare(model, { anthropic: { thinking: { type: 'adaptive', display } } }).nativeBody;
       assert.deepEqual(native.thinking, { type: 'adaptive', display });
     }
     for (const thinking of [
-      { type: 'adaptive', display: 'updates' }, { type: 'adaptive', block_binding: 'none' },
+      { type: 'adaptive', display: 'unknown-display' }, { type: 'adaptive', block_binding: 'none' },
     ]) assert.throws(() => prepare(model, { anthropic: { thinking } }), { code: 'unsupported_parameter', status: 400 });
   }
   assert.throws(() => prepare('synthetic-future-model', {
@@ -297,6 +297,12 @@ process.env.RESPONSES_THINKING_BUDGET_TOKENS = '1024';
 process.env.RESPONSES_APPLY_PATCH_MODE = 'reject';
 process.env.RESPONSES_DEVELOPER_MESSAGE_MODE = 'reject';
 const received = [];
+const updatesBeta = 'thinking-display-updates-2026-08-18';
+const updatesBlocks = [
+  { type: 'thinking', thinking: '', signature: 'synthetic-signed-empty-update-state' },
+  { type: 'thinking', thinking: 'Synthetic progress update', signature: 'synthetic-signed-progress-state' },
+  { type: 'text', text: 'Synthetic local result' },
+];
 const catalog = Buffer.from(` \n${JSON.stringify({ data: [...knownModels, 'claude-fable-6-unknown'].map(id =>
   ({ id, type: 'model', display_name: id, future_model_metadata: { untouched: true } })),
   has_more: true, first_id: knownModels[0], last_id: 'claude-fable-6-unknown', future_catalog_field: '한글🙂' }, null, 2)}\n`);
@@ -308,9 +314,14 @@ const upstream = http.createServer(async (req, res) => {
   received.push({ method: req.method, url: req.url, headers: req.headers, bytes, body });
   res.setHeader('content-type', 'application/json');
   if (req.url.startsWith('/v1/models')) return res.end(catalog);
+  if (body?.thinking?.display === 'updates' && !String(req.headers['anthropic-beta']).split(',').map(s => s.trim()).includes(updatesBeta)) {
+    res.statusCode = 400;
+    return res.end(JSON.stringify({ type: 'error', error: { type: 'invalid_request_error',
+      message: 'thinking.adaptive.display requires the updates feature beta' } }));
+  }
   if (req.url.startsWith('/v1/messages/count_tokens')) return res.end('{"input_tokens":7,"future_count":true}\n');
   res.end(JSON.stringify({ id: 'msg_synthetic_new_model', type: 'message', role: 'assistant', model: body.model,
-    content: [{ type: 'text', text: 'Synthetic local result' }], stop_reason: 'end_turn', stop_sequence: null,
+    content: body?.thinking?.display === 'updates' ? updatesBlocks : [{ type: 'text', text: 'Synthetic local result' }], stop_reason: 'end_turn', stop_sequence: null,
     usage: { input_tokens: 2, output_tokens: 3 } }));
 });
 upstream.listen(0, '127.0.0.1');
@@ -333,12 +344,13 @@ keys.updateApiKey(key.id, { rate_limit_rpm: 200 });
 const server = app.listen(0, '127.0.0.1');
 await once(server, 'listening');
 const base = `http://127.0.0.1:${server.address().port}`;
-function request(path, payload) {
+function request(path, payload, extraHeaders = {}) {
   const bytes = payload === undefined ? undefined : Buffer.isBuffer(payload) ? payload : Buffer.from(JSON.stringify(payload));
   return new Promise((resolve, reject) => {
     const req = http.request(base + path, { method: bytes ? 'POST' : 'GET', headers: {
       authorization: `Bearer ${key.key}`,
       ...(bytes ? { 'content-type': 'application/json', 'content-length': bytes.length } : {}),
+      ...extraHeaders,
     } }, res => {
       const chunks = [];
       res.on('data', chunk => chunks.push(chunk));
@@ -407,5 +419,77 @@ test('HTTP Responses selects modern adaptive policy and rejects forbidden disabl
     assert.equal(failed.status, 400);
     assert.equal(JSON.parse(failed.body).error.code, 'unsupported_parameter');
     assert.equal(received.length, before + 1);
+  }
+});
+
+test('native updates supplies the required public beta with API-key auth and preserves raw system/history bytes', async () => {
+  for (const thinking of [{ type: 'adaptive', display: 'updates' },
+    { type: 'enabled', budget_tokens: 1024, display: 'updates' }]) {
+    const body = { model: thinking.type === 'adaptive' ? 'claude-fable-5-2' : 'claude-haiku-4-5-20251001',
+      max_tokens: 2048, thinking, system: [{ type: 'text', text: 'Caller system 한글🙂', cache_control: { type: 'ephemeral' } }],
+      messages: [{ role: 'user', content: 'Synthetic seed' }] };
+    const raw = Buffer.from(` \n${JSON.stringify(body, null, 2)}\n`);
+    const before = received.length;
+    const response = await request('/v1/messages', raw);
+    assert.equal(response.status, 200, response.body.toString());
+    assert.equal(received.length, before + 1);
+    const call = received.at(-1);
+    assert.deepEqual(call.bytes, raw);
+    assert.deepEqual(call.body.system, body.system);
+    assert.deepEqual(call.body.thinking, thinking);
+    assert.equal(call.headers['anthropic-beta'], updatesBeta);
+    assert.equal(call.headers.authorization, undefined);
+    assert.equal(call.headers['x-api-key'], process.env.ANTHROPIC_API_KEY);
+  }
+});
+
+test('Responses updates works from body or native-options header and replays empty/progress signatures unchanged', async () => {
+  const extension = { thinking: { type: 'adaptive', display: 'updates' } };
+  const instructions = 'Caller instructions stay in their original order. 한글🙂';
+  for (const source of ['body', 'header']) {
+    const extra = source === 'body' ? { anthropic: extension } : {};
+    const headers = source === 'header' ? { 'x-claude-proxy-native-options': JSON.stringify(extension) } : {};
+    const body = { model: 'claude-fable-5-2', input: 'Synthetic seed', instructions, store: false,
+      max_output_tokens: 1024, ...extra };
+    const snapshot = structuredClone(body);
+    const before = received.length;
+    const first = await request('/v1/responses', body, headers);
+    assert.equal(first.status, 200, first.body.toString());
+    assert.equal(received.length, before + 1);
+    const call = received.at(-1);
+    assert.deepEqual(call.body.thinking, extension.thinking);
+    assert.deepEqual(call.body.system, [{ type: 'text', text: instructions }]);
+    assert.equal(call.headers['anthropic-beta'], updatesBeta);
+    assert.equal(call.headers['x-claude-proxy-native-options'], undefined);
+    assert.deepEqual(body, snapshot);
+    const response = JSON.parse(first.body);
+    assert.equal(response.status, 'completed');
+    const reasoning = response.output.filter(item => item.type === 'reasoning');
+    assert.equal(reasoning.length, 2);
+    assert.ok(reasoning.every(item => typeof item.encrypted_content === 'string'));
+    assert.ok(!JSON.stringify(response).includes('synthetic-signed-'));
+    const replay = await request('/v1/responses', { ...body, input: [
+      { role: 'user', content: 'Synthetic seed' }, ...response.output,
+      { role: 'user', content: 'Continue the synthetic fixture' },
+    ] }, headers);
+    assert.equal(replay.status, 200, replay.body.toString());
+    assert.equal(received.length, before + 2);
+    assert.deepEqual(received.at(-1).body.messages[1], { role: 'assistant', content: updatesBlocks });
+    assert.deepEqual(received.at(-1).body.system, call.body.system);
+    assert.equal(received.at(-1).headers['anthropic-beta'], updatesBeta);
+  }
+});
+
+test('feature beta merging retains caller flags without duplicates or enabling updates on other policies', async () => {
+  for (const display of ['updates', 'summarized', 'omitted', undefined]) {
+    const provided = display === 'updates' ? `future-beta-2099-01-01, ${updatesBeta}` : 'future-beta-2099-01-01';
+    const response = await request('/v1/messages', { model: 'claude-fable-5-2', max_tokens: 1024,
+      messages: [{ role: 'user', content: 'Synthetic seed' }], thinking: { type: 'adaptive', ...(display ? { display } : {}) } },
+      { 'anthropic-beta': provided });
+    assert.equal(response.status, 200, response.body.toString());
+    const betas = received.at(-1).headers['anthropic-beta'].split(',').map(s => s.trim());
+    assert.ok(betas.includes('future-beta-2099-01-01'));
+    assert.equal(betas.filter(beta => beta === updatesBeta).length, display === 'updates' ? 1 : 0);
+    assert.ok(!betas.some(beta => beta.startsWith('claude-code-')));
   }
 });

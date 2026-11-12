@@ -28,7 +28,8 @@ export function upstreamUrl(base: string, path: string, query = ""): URL {
   return url;
 }
 
-export function upstreamHeaders(req: Request, credential: { token: string; kind: "oauth" | "api_key" }): http.OutgoingHttpHeaders {
+export function upstreamHeaders(req: Request, credential: { token: string; kind: "oauth" | "api_key" },
+  nativeBody: unknown = req.body): http.OutgoingHttpHeaders {
   const excluded = excludedHeaders(req.headers);
   const headers: http.OutgoingHttpHeaders = {};
   for (const [name, value] of Object.entries(req.headers)) {
@@ -39,11 +40,22 @@ export function upstreamHeaders(req: Request, credential: { token: string; kind:
   }
   headers["anthropic-version"] ??= "2023-06-01";
   headers["accept-encoding"] = "identity";
+  const value = nativeBody && typeof nativeBody === "object" && !Array.isArray(nativeBody)
+    ? (nativeBody as Record<string, unknown>).thinking : undefined;
+  const thinking = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown> : undefined;
+  // The caller explicitly selected this public feature. Complete its documented
+  // wire contract without changing system text, thinking policy or request bytes.
+  const updates = thinking && (thinking.type === "adaptive" || thinking.type === "enabled") &&
+    thinking.display === "updates";
+  if (credential.kind === "oauth" || updates) {
+    const betas = String(headers["anthropic-beta"] || "").split(",").map(s => s.trim()).filter(Boolean);
+    if (credential.kind === "oauth" && !betas.includes("oauth-2025-04-20")) betas.push("oauth-2025-04-20");
+    if (updates && !betas.includes("thinking-display-updates-2026-08-18")) betas.push("thinking-display-updates-2026-08-18");
+    headers["anthropic-beta"] = betas.join(",");
+  }
   if (credential.kind === "oauth") {
     headers.authorization = `Bearer ${credential.token}`;
-    const betas = String(headers["anthropic-beta"] || "").split(",").map(s => s.trim()).filter(Boolean);
-    if (!betas.includes("oauth-2025-04-20")) betas.push("oauth-2025-04-20");
-    headers["anthropic-beta"] = betas.join(",");
   } else headers["x-api-key"] = credential.token;
   return headers;
 }

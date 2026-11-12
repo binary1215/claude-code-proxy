@@ -133,9 +133,9 @@ function thinkingPolicy(request: JsonObject, extension: JsonObject, options: Req
       integer(thinking.budget_tokens, 1024, Math.min(MAX_MANUAL_THINKING_BUDGET, maxTokens - 1));
     } else if (thinking.type === "adaptive" && policy) {
       keys(thinking, ["type", "display"]);
-      // These non-beta values are documented for adaptive thinking. Beta
-      // display/binding controls keep their explicit unsupported behavior.
-      if (own(thinking, "display") && !["summarized", "omitted"].includes(thinking.display)) fail("unsupported_parameter");
+      // Updates use the same signed thinking blocks; transport supplies its
+      // public feature beta. Binding controls remain a separate unsupported API.
+      if (own(thinking, "display") && !["summarized", "omitted", "updates"].includes(thinking.display)) fail("unsupported_parameter");
     } else if (["disabled", "adaptive"].includes(thinking.type) || (thinking.type === "between_tools" && policy)) {
       keys(thinking, ["type"]);
     } else fail("unsupported_parameter");

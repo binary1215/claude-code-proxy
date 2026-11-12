@@ -10,6 +10,24 @@ Codex / Responses     -> stock LiteLLM pass-through -> opt-in /v1/responses
 
 No automatic SDK fallback, tool execution, invented thinking, conversation storage, or provider/account failover is included. The caller owns conversation history and executes its client tools. Upstream-native server-tool definitions are forwarded on the native route; they are not executed on the proxy host. The new [Responses adapter](docs/RESPONSES-ADAPTER.md) is disabled by default and supports a deliberately bounded client-tool subset.
 
+## Thinking progress-update compatibility — 2026-11-12
+
+Explicit `thinking.display: "updates"` now supplies its required public
+`thinking-display-updates-2026-08-18` beta automatically on native Messages.
+The Responses adapter accepts the same option under `anthropic.thinking` or
+`x-claude-proxy-native-options` for known adaptive model policies. Existing beta
+flags are retained; native system/history bytes and signed-state replay remain
+unchanged. See [usage and limits](docs/MODEL-COMPATIBILITY.md#progress-update-display).
+
+This fixes the missing-feature-beta400 and the adapter's previous local rejection
+of updates. A real official CLI request with only the updates feature beta
+removed returned400 through the existing proxy and200 with the expected reply
+through a temporary patched candidate. The separately reproduced
+**system-content-dependent upstream429**
+remains unresolved. Tests pass **209/209 on Linux** and **208 plus one Linux-only
+skip on Windows**. This branch has not been deployed to Han. See the
+[verification receipt](docs/evidence/20261112-thinking-updates-beta.json).
+
 ## Current model compatibility — 2026-11-11
 
 The dynamic upstream catalogue includes **Fable 5.2, Haiku 5.5, Sonnet 5.5 and
@@ -118,7 +136,7 @@ zeros, when assessing consumption.
 ## Native Messages preservation contract
 
 - JSON request bytes and upstream response/SSE bytes are forwarded unchanged, including unknown fields, thinking/signatures, redacted thinking, tool results, `is_error`, cache markers and TTLs. The proxy does not rename models or inject a system prompt.
-- `anthropic-*`, content type, accept, caller user-agent, request IDs and idempotency headers are forwarded, except hop-by-hop headers. Proxy caller credentials are **replaced**, not passed upstream. The default Anthropic API version is added if absent. OAuth mode adds the OAuth beta flag, but no Claude Code identity or system-prompt emulation.
+- `anthropic-*`, content type, accept, caller user-agent, request IDs and idempotency headers are forwarded, except hop-by-hop headers. Proxy caller credentials are **replaced**, not passed upstream. The default Anthropic API version is added if absent. OAuth mode adds the OAuth beta flag. Explicit thinking display `updates` adds its public feature beta in either authentication mode; no Claude Code identity or system-prompt emulation is added.
 - No redirect following, retry, signature repair, or removal of thinking on errors. HTTP errors and SSE error events remain upstream errors.
 - Backpressure and cancellation propagate to the upstream HTTP request. Administrative cancellation is supported. A configurable total request deadline prevents orphaned connections.
 - Bounded observers read usage and safe diagnostics separately from transport. Cache read/write and 5-minute/1-hour creation counts remain distinct. Missing or incomplete usage and unknown billed USD are **not zero**. Encoded responses remain byte-identical; usage is unknown if the observer cannot decode them. Large observation buffers are abandoned without stopping delivery.
