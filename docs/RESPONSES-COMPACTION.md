@@ -134,7 +134,10 @@ rather than append a second copy of its instructions.
 ## Native context and state boundaries
 
 The backend invokes the official CLI's compaction operation and extracts the
-reduced native transcript. The capsule contains that context plus any retained
+reduced native transcript. Hook summaries receive the pinned CLI's own
+analysis/summary-tag normalization before matching the persisted summary. This
+normalization applies only to the generated compact summary, never to retained
+native thinking blocks. The capsule contains that context plus any retained
 tail, including exact signed/redacted thinking and tool blocks when present.
 It does not disguise an unchanged full transcript as a compaction result or
 construct a summary from public reasoning text. Information summarized away by
@@ -196,14 +199,41 @@ of every project detail, a future cache hit, or a particular billing outcome.
 
 ## Verification status
 
-Pure state/request regressions cover cold-process replay, signed and redacted
-blocks, expiry and context binding, repeated compaction, canonical instructions,
-historical tool identities and pending-tail continuation. The implementation is
-also designed for genuine pinned CLI compaction tests against a scripted
-provider.
+Verified on 2026-11-13 with deployed source `72fc811`, Claude Opus5.5, pinned
+SDK `0.3.322` / CLI `2.1.322`, and the existing LiteLLM `1.109.0` OpenAI Responses
+model route. Neither LiteLLM configuration/source nor client source was changed.
+The [numeric receipt](evidence/20261113-responses-compact.json) preserves failed
+attempts and the successful final case without original text or ciphertext.
 
-Real Opus calls, replay after worker/process replacement and the intended
-LiteLLM compact route require their own recorded checks. Earlier successful
-automatic/local compaction and project-edit results are not evidence that this
-new endpoint passed those checks. Record the actual endpoint evidence here when
-available.
+| Check | Observed result |
+|---|---|
+| Linux regressions | 63 genuine CLI/worker tests + 236 HTTP/state/admin tests; 299 passed, zero failed |
+| Gateway workflow | Six HTTP200 responses: tool call, result, compact, replay, compact again, cold replay |
+| First compact window | JSON input 24,869 bytes to canonical output 3,444 bytes; approximately 86% smaller |
+| Output-only replay | Original input discarded; exact project identifier, tool-supplied ledger checksum and item count recovered |
+| Process restart | Proxy restarted after the second compact; zero CLI sessions observed before exact cold replay |
+| Post-compact input usage | First replay 2,862 tokens; cold replay 3,001 tokens, including cached input |
+| Post-compact cache reads | 1,653 tokens on each replay, including after restart |
+
+The second compact window grew slightly, 3,909 to 3,976 JSON bytes. Compaction
+does not guarantee that an already-small window becomes smaller every time.
+The compaction passes themselves consumed model input/output; the reported
+replay input reduction is not a claim of universal invoice savings.
+
+This live fixture emitted no signed reasoning items before compaction. It proves
+tool-fact retention and restart replay, not a live signed-thinking round trip.
+Separate scripted tests cover exact signed/redacted state, completed and pending
+tool tails, unfinished user input, identity/expiry, actual and partial usage,
+cancellation, repeated compact and cold workers.
+
+The live checks exposed and fixed three compatibility defects: LiteLLM's
+`namespace: null` on function calls, `phase: null` on assistant messages, and
+raw hook summary text differing from the CLI's normalized transcript. The last
+one was reproduced with tagged output against the genuine SDK before the fix.
+
+The first failing 502 was retried by the gateway, producing three Han compact
+requests from one client HTTP request. The final harness explicitly used
+`--litellm-no-retries`, which sends `num_retries: 0` and
+`disable_fallbacks: true` to LiteLLM for that test only. Omit that flag when
+calling the proxy directly. A six-request client limit alone does not bound
+gateway retries or every internal model call.

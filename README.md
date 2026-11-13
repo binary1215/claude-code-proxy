@@ -36,6 +36,11 @@ ID is required. Existing system/developer input items remain visible, and any
 top-level `instructions` must be supplied unchanged on replay. This endpoint is
 separate from CLI automatic compaction and Codex's client-local summarization.
 See [the compaction contract, examples and verification status](docs/RESPONSES-COMPACTION.md).
+The 2026-11-13 Opus check passed all six requests through the existing LiteLLM
+route, including output-only replay, repeated compact and exact fact recovery
+after a proxy restart. Linux regression coverage passed **299/299**.
+See the [standalone compact receipt](docs/evidence/20261113-responses-compact.json);
+this does not make Codex automatically select the standalone compact endpoint.
 
 The earlier optional-stage Linux image passed **248/248** tests. Three real Haiku5.5
 requests passed: tool intent, caller-result continuation and Responses SSE;

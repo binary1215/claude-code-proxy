@@ -10,6 +10,25 @@ support-scope decisions. The November12 user decision explicitly restores genuin
 SDK/CLI inference as the default. Do not silently switch models/accounts/backends,
 spoof an official client, remove rejected thinking, or modify LiteLLM source/license flags.
 
+## Stateless Responses compact — 2026-11-13
+
+The standalone `/v1/responses/compact` milestone now passes through the existing
+LiteLLM route with Opus5.5: six HTTP200 requests, completed caller tool round trip,
+canonical-output-only fact recall, repeated compact, then exact replay after a
+proxy restart with zero live CLI sessions. The first JSON window shrank from
+24,869 to 3,444 bytes; the already-small second window grew slightly. Both replay
+turns reported 1,653 cache-read tokens. Linux tests passed 299/299.
+
+This run did not emit pre-compact signed reasoning; signed/redacted preservation
+is covered by separate scripted tests. Nullable gateway fields and tagged CLI
+summary normalization were fixed using the recorded failed attempts. No LiteLLM
+configuration/source or client source was modified. This adds the standalone
+compact contract, not stored responses or inline compaction, and does not alter
+Codex 0.160.0's custom-provider compaction selection.
+
+See [contract and limits](RESPONSES-COMPACTION.md) and
+[numeric evidence](evidence/20261113-responses-compact.json).
+
 ## Real Opus project work and automatic compaction — 2026-11-12
 
 The requested bounded acceptance cases now pass. Genuine Codex completes two

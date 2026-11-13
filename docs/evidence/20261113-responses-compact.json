@@ -1,0 +1,374 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-13",
+  "source_commit": "72fc811816261fcc426bb80e5c4674e93cebf6a1",
+  "runtime_image": "sha256:0fe93e330d2acc2272d4021e7ccf1b10bfe4e6d0e66dcf8fad9ba958c3a37298",
+  "model": "claude-opus-5-5",
+  "gateway": "LiteLLM 1.109.0",
+  "sdk_version": "0.3.322",
+  "cli_version": "2.1.322",
+  "gateway_or_client_source_modified": false,
+  "gateway_configuration_changed": false,
+  "production_deployed": true,
+  "offline": {
+    "linux_final": {
+      "cli_pass": 63,
+      "http_and_admin_pass": 236,
+      "unique_pass": 299
+    },
+    "linux_baseline": {
+      "cli_pass": 61,
+      "http_and_admin_pass": 234,
+      "unique_pass": 295
+    },
+    "namespace_fix_linux": {
+      "cli_compact_pass": 12,
+      "responses_pass": 45
+    },
+    "phase_fix_linux": {
+      "cli_compact_pass": 12,
+      "responses_pass": 46
+    },
+    "test_packaging_corrections": [
+      "Test-only build context excluded admin helpers; corrected test Dockerfile context.",
+      "Three initial HTTP test failures were missing repository fixtures; supplied fixtures and all twelve affected cases passed."
+    ],
+    "covered": [
+      "genuine CLI compact without ordinary inference",
+      "summary and retained native tail",
+      "pending tools and unfinished user suffix",
+      "signed and redacted native state",
+      "historical tools without current definitions",
+      "repeated compaction",
+      "cold worker replay",
+      "actual and partial usage accounting",
+      "cancellation and cleanup",
+      "gateway nullable metadata"
+    ]
+  },
+  "live": {
+    "functional_pass": true,
+    "requests": [
+      {
+        "phase": "tool_request",
+        "path": "/v1/responses",
+        "input_items": 1,
+        "input_counts": {
+          "message": 0,
+          "reasoning": 0,
+          "function_call": 0,
+          "function_call_output": 0,
+          "compaction": 0
+        },
+        "replayed_reasoning_capsules": 0,
+        "http_status": 200,
+        "output_items": 1,
+        "output_counts": {
+          "message": 0,
+          "reasoning": 0,
+          "function_call": 1,
+          "function_call_output": 0,
+          "compaction": 0
+        },
+        "returned_reasoning_capsules": 0,
+        "usage": {
+          "input_tokens": 9660,
+          "output_tokens": 71,
+          "total_tokens": 9731,
+          "input_tokens_details": {
+            "cached_tokens": 0,
+            "cache_write_tokens": 9658
+          }
+        },
+        "input_window_bytes": 24274,
+        "output_window_bytes": 188,
+        "null_tool_fields": {
+          "namespace": 1,
+          "id": 0,
+          "status": 0,
+          "phase": 0,
+          "created_by": 0
+        },
+        "elapsed_seconds": 6.047
+      },
+      {
+        "phase": "tool_result",
+        "path": "/v1/responses",
+        "input_items": 3,
+        "input_counts": {
+          "message": 0,
+          "reasoning": 0,
+          "function_call": 1,
+          "function_call_output": 1,
+          "compaction": 0
+        },
+        "replayed_reasoning_capsules": 0,
+        "http_status": 200,
+        "output_items": 1,
+        "output_counts": {
+          "message": 1,
+          "reasoning": 0,
+          "function_call": 0,
+          "function_call_output": 0,
+          "compaction": 0
+        },
+        "returned_reasoning_capsules": 0,
+        "usage": {
+          "input_tokens": 9773,
+          "output_tokens": 24,
+          "total_tokens": 9797,
+          "input_tokens_details": {
+            "cached_tokens": 9658,
+            "cache_write_tokens": 113
+          }
+        },
+        "input_window_bytes": 24618,
+        "output_window_bytes": 252,
+        "null_tool_fields": {
+          "namespace": 0,
+          "id": 0,
+          "status": 0,
+          "phase": 0,
+          "created_by": 0
+        },
+        "elapsed_seconds": 1.016
+      },
+      {
+        "phase": "compact_first",
+        "path": "/v1/responses/compact",
+        "input_items": 4,
+        "input_counts": {
+          "message": 1,
+          "reasoning": 0,
+          "function_call": 1,
+          "function_call_output": 1,
+          "compaction": 0
+        },
+        "replayed_reasoning_capsules": 0,
+        "http_status": 200,
+        "output_items": 1,
+        "output_counts": {
+          "message": 0,
+          "reasoning": 0,
+          "function_call": 0,
+          "function_call_output": 0,
+          "compaction": 1
+        },
+        "returned_reasoning_capsules": 0,
+        "usage": {
+          "input_tokens": 11030,
+          "output_tokens": 961,
+          "total_tokens": 11991,
+          "input_tokens_details": {
+            "cached_tokens": 0,
+            "cache_write_tokens": 8978
+          }
+        },
+        "input_window_bytes": 24869,
+        "output_window_bytes": 3444,
+        "null_tool_fields": {
+          "namespace": 0,
+          "id": 0,
+          "status": 0,
+          "phase": 0,
+          "created_by": 0
+        },
+        "elapsed_seconds": 9.187
+      },
+      {
+        "phase": "replay_first",
+        "path": "/v1/responses",
+        "input_items": 2,
+        "input_counts": {
+          "message": 0,
+          "reasoning": 0,
+          "function_call": 0,
+          "function_call_output": 0,
+          "compaction": 1
+        },
+        "replayed_reasoning_capsules": 0,
+        "http_status": 200,
+        "output_items": 1,
+        "output_counts": {
+          "message": 1,
+          "reasoning": 0,
+          "function_call": 0,
+          "function_call_output": 0,
+          "compaction": 0
+        },
+        "returned_reasoning_capsules": 0,
+        "usage": {
+          "input_tokens": 2862,
+          "output_tokens": 53,
+          "total_tokens": 2915,
+          "input_tokens_details": {
+            "cached_tokens": 1653,
+            "cache_write_tokens": 1207
+          }
+        },
+        "input_window_bytes": 3608,
+        "output_window_bytes": 302,
+        "null_tool_fields": {
+          "namespace": 0,
+          "id": 0,
+          "status": 0,
+          "phase": 0,
+          "created_by": 0
+        },
+        "elapsed_seconds": 1.735
+      },
+      {
+        "phase": "compact_second",
+        "path": "/v1/responses/compact",
+        "input_items": 3,
+        "input_counts": {
+          "message": 1,
+          "reasoning": 0,
+          "function_call": 0,
+          "function_call_output": 0,
+          "compaction": 1
+        },
+        "replayed_reasoning_capsules": 0,
+        "http_status": 200,
+        "output_items": 1,
+        "output_counts": {
+          "message": 0,
+          "reasoning": 0,
+          "function_call": 0,
+          "function_call_output": 0,
+          "compaction": 1
+        },
+        "returned_reasoning_capsules": 0,
+        "usage": {
+          "input_tokens": 4116,
+          "output_tokens": 1092,
+          "total_tokens": 5208,
+          "input_tokens_details": {
+            "cached_tokens": 1285,
+            "cache_write_tokens": 777
+          }
+        },
+        "input_window_bytes": 3909,
+        "output_window_bytes": 3976,
+        "null_tool_fields": {
+          "namespace": 0,
+          "id": 0,
+          "status": 0,
+          "phase": 0,
+          "created_by": 0
+        },
+        "elapsed_seconds": 9.578
+      },
+      {
+        "phase": "replay_second",
+        "path": "/v1/responses",
+        "input_items": 2,
+        "input_counts": {
+          "message": 0,
+          "reasoning": 0,
+          "function_call": 0,
+          "function_call_output": 0,
+          "compaction": 1
+        },
+        "replayed_reasoning_capsules": 0,
+        "http_status": 200,
+        "output_items": 1,
+        "output_counts": {
+          "message": 1,
+          "reasoning": 0,
+          "function_call": 0,
+          "function_call_output": 0,
+          "compaction": 0
+        },
+        "returned_reasoning_capsules": 0,
+        "usage": {
+          "input_tokens": 3001,
+          "output_tokens": 53,
+          "total_tokens": 3054,
+          "input_tokens_details": {
+            "cached_tokens": 1653,
+            "cache_write_tokens": 1346
+          }
+        },
+        "input_window_bytes": 4137,
+        "output_window_bytes": 302,
+        "null_tool_fields": {
+          "namespace": 0,
+          "id": 0,
+          "status": 0,
+          "phase": 0,
+          "created_by": 0
+        },
+        "elapsed_seconds": 2.265
+      }
+    ],
+    "checks": {
+      "tool_pair_completed": true,
+      "signed_reasoning_observed": false,
+      "signed_reasoning_replayed": false,
+      "first_compaction_returned": true,
+      "first_window_smaller": true,
+      "first_recall_exact": true,
+      "second_compaction_returned": true,
+      "second_recall_exact": true
+    },
+    "han_request_log_crosscheck": {
+      "successful_requests": 6,
+      "compact_requests": 2,
+      "inference_requests": 4,
+      "usage_complete_for_all": true,
+      "wire_cache_inclusive_usage_matches_recorded_counters": true
+    },
+    "gateway_retries_disabled_in_request": true,
+    "proxy_process_restarted_between_second_compact_and_replay": true,
+    "cli_sessions_after_restart": 0,
+    "same_image_after_restart": true,
+    "original_history_discarded_before_replay": true,
+    "raw_history_or_ciphertext_persisted": false
+  },
+  "prior_live_attempts": [
+    {
+      "case": "initial",
+      "statuses": [
+        200,
+        400
+      ],
+      "stopped_before_compact": true,
+      "cause": "A serialized function call added namespace:null; omitted and null namespaces now have identical identity."
+    },
+    {
+      "case": "namespace_fix",
+      "statuses": [
+        200,
+        200,
+        400
+      ],
+      "compaction_provider_calls": 0,
+      "cause": "A serialized assistant message added phase:null; the no-phase value is now accepted."
+    },
+    {
+      "case": "phase_fix",
+      "statuses": [
+        200,
+        200,
+        502
+      ],
+      "han_compact_requests": 3,
+      "gateway_retried_one_client_compact_request": true,
+      "recorded_compact_usage": {
+        "fresh_input_tokens": 6150,
+        "output_tokens": 2694,
+        "cache_read_input_tokens": 17956,
+        "cache_creation_input_tokens": 8978
+      },
+      "cause": "PostCompact hook text was compared before the pinned CLI analysis/summary-tag normalization. Tagged-output regression reproduced failure and passed after matching CLI normalization."
+    }
+  ],
+  "limits": [
+    "Standalone compaction API qualification; stock Codex 0.160.0 custom-provider configuration continues client-local compaction.",
+    "Not inline context_management, stored responses, previous_response_id or universal Responses API support.",
+    "Model summaries may lose information; these bounded project facts do not establish universal semantic retention.",
+    "Prompt-cache hits and invoice equivalence are not guaranteed. State replay requires the same key/model/principal/account scope and an unexpired capsule.",
+    "Pre-compaction signed thinking in this live fixture is observed only when the checks report it; exact signed/redacted preservation has separate scripted tests."
+  ]
+}
