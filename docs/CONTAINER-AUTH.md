@@ -1,16 +1,20 @@
-# Container login with the official CLI
+# claudemock container login with the official CLI
 
-The optional `cli-auth` image target includes pinned, unmodified Claude Code
-2.1.318 for **authentication only**. All Messages and Responses
-requests still use this project's native HTTP relay. Model requests never start
-the CLI. The optional background worker invokes its auth command independently.
-LiteLLM requires no source/configuration changes.
+The default image includes pinned, unmodified Claude Code 2.1.322 and Agent SDK
+0.3.322. With the default CLI inference backend, the CLI handles model requests
+as well as the supported login/authentication commands. The optional background
+refresh worker invokes authentication commands independently of inference.
+Credential-store selection and inference-backend selection are separate settings.
 
 ## Build and persist login
 
-Build with `docker build --target cli-auth -t claude-proxy:cli-auth .` or use the
-`docker-compose.cli-auth.yml` overlay alongside the existing Compose file.
-The default image target remains CLI-free.
+For the full CLI inference image, use the `docker-compose.cli-auth.yml` overlay
+alongside `docker-compose.yml`; the overlay selects the `default` build target
+and a persistent auth volume for service `app`.
+
+For explicit HTTP inference with CLI authentication only, build
+`docker build --target cli-auth -t claudemock:cli-auth .`. That target defaults to
+the HTTP backend. The separate `http` target is CLI-free; the default image is not.
 
 The auth target sets `UPSTREAM_AUTH_SOURCE=claude_cli` and
 `CLAUDE_CONFIG_DIR=/home/node/.claude`. Mount a **separate named volume** at that
